@@ -109,15 +109,23 @@ studioTabs.push((() => {
       onPick: (item) => { const m = moments.find((x) => `${x.play}#${x.n}` === item.id); showMoment(ctx, game.path, m.play, m.n); } }),
       shown ? momentView(ctx, shown) : null) : null;
 
+    // Its folder, short: the whole path is the title.
+    const short = game.path.split(/[\\/]/).filter(Boolean).slice(-2).join("/");
+    const stat = (n, what) => el("div", { class: "stat" }, el("b", {}, String(n)), el("span", {}, what));
+    const count = plays && plays.plays ? plays.plays.length : null, marked = (plays && plays.plays || []).reduce((n, p) => n + (p.moments || []).length, 0);
     return el("div", {},
       el("div", { class: thumb ? "hero" : "hero bare" },
         thumb ? el("img", { class: "hero-thumb", src: thumb, alt: "" }) : null,
         el("div", { class: "hero-text" }, el("h1", {}, game.name),
-          el("span", { class: "meta", title: game.path }, `${game.path} · ${game.opened ? "opened " + kit.ago(game.opened) : "never opened"}`)),
+          el("span", { class: "meta", title: game.path }, `…/${short} · ${game.opened ? "opened " + kit.ago(game.opened) : "never opened"}`)),
         el("div", { class: "hero-actions" },
-          can ? el("div", {}, ctx.projectActions(game, { primary: true })) : null,
-          el("div", {}, ctx.ask({ title: game.name, thumb, question: `Let's work on my game ${game.name}.`,
-            text: `The game ${game.name} (${game.path}): ${(game.scenes || []).length} scenes. open_game it to work on it.` })))),
+          can ? ctx.projectActions(game, { primary: true }) : null,
+          ctx.ask({ title: game.name, thumb, question: `Let's work on my game ${game.name}.`,
+            text: `The game ${game.name} (${game.path}): ${(game.scenes || []).length} scenes. open_game it to work on it.` }))),
+      el("div", { class: "stats" }, stat((game.scenes || []).length, "scenes"),
+        count !== null ? stat(count, count === 1 ? "play" : "plays") : null,
+        count !== null ? stat(marked, marked === 1 ? "moment" : "moments") : null,
+        count ? stat(length(plays.plays[0].seconds), "last play") : null),
       kit.split("overview", scenes, el("div", {}, playList, momentList), { ratio: 0.5 }));
   };
 

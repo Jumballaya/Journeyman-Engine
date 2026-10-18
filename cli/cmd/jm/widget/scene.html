@@ -20,7 +20,7 @@
     font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
   .wrap { padding: 14px 16px; }
   header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-  h1 { font-size: 15px; font-weight: 650; margin: 0; }
+  h1 { font-size: 17px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
   .meta { color: var(--muted); }
   .main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; }
   @media (max-width: 700px) { .main { grid-template-columns: 1fr; } }
@@ -30,16 +30,18 @@
   .view .shape.prefab { fill: var(--prefab); stroke: var(--prefab); }
   .view .shape.on { fill: var(--accent); fill-opacity: .6; stroke: var(--accent); }
   .side { display: grid; gap: 10px; align-content: start; min-width: 0; }
-  .list { max-height: 220px; overflow: auto; background: var(--panel); border-radius: 8px; padding: 4px; }
+  .list { max-height: 240px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
   .list button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 3px 6px; border-radius: 6px;
     font: inherit; color: var(--text); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list button:hover { background: var(--panel); }
   .list button.on { background: var(--accent-soft); color: var(--accent); }
-  .inspector { background: var(--panel); border-radius: 8px; padding: 8px 10px; display: grid; gap: 6px; }
+  .inspector { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; }
   .inspector h2 { font-size: 13px; margin: 0; }
   .asks { display: flex; gap: 6px; flex-wrap: wrap; }
-  .asks button { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 3px 10px; cursor: pointer; }
-  .asks button:hover { border-color: var(--muted); }
-  .inspector h3 { font-size: 11px; font-weight: 600; color: var(--muted); margin: 6px 0 0; text-transform: uppercase; letter-spacing: .04em; }
+  .asks button { font: inherit; font-weight: 500; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+    padding: 4px 10px; min-height: 28px; cursor: pointer; }
+  .asks button:hover { background: var(--panel); border-color: var(--muted); }
+  .inspector h3 { font-size: 12px; font-weight: 600; color: var(--text); margin: 8px 0 0; }
   .field { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 6px; align-items: center; }
   .field label { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .field .vals { display: flex; gap: 4px; min-width: 0; }
@@ -48,7 +50,7 @@
   input[type="checkbox"] { width: auto; }
   pre { margin: 0; font-size: 11px; white-space: pre-wrap; word-break: break-word; color: var(--muted); max-height: 240px; overflow: auto; }
   .status { color: var(--muted); font-size: 12px; min-height: 16px; }
-  .none { color: var(--muted); padding: 30px 0; text-align: center; }
+  .none { color: var(--muted); padding: 28px 16px; text-align: center; border: 1px dashed var(--line); border-radius: 12px; }
 </style>
 </head>
 <body>

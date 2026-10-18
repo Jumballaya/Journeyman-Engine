@@ -23,6 +23,19 @@ test('with no game open the Studio starts on the games; the game tabs wait for o
   assert.equal(tab('Overview').disabled, true);
 });
 
+test('the tabs go by group, and Alt+number follows the order shown; File shows only with no game or while open', async () => {
+  const s = await studio(listing('/g/neon'), { answers: { plays_list: plays } });
+  const titles = () => s.find((e) => e.attributes.role === 'tab').map((e) => e.text.trim());
+  assert.deepEqual(titles().slice(0, 4), ['Games', 'Overview', 'Play', 'Editor']);
+  assert.ok(!titles().includes('File'));
+  const groups = s.find((e) => e.attributes.class === 'group').map((e) => e.text.trim());
+  assert.deepEqual(groups.slice(0, 2), ['Game', 'Design']);
+  await s.key({ altKey: true, code: 'Digit3' });
+  assert.equal(s.current(), 'Play');
+  const none = await studio(listing(''));
+  assert.ok(none.find((e) => e.attributes.role === 'tab').some((e) => e.text.trim() === 'File'));
+});
+
 test('with a game open it starts on its overview: scenes by folder, recent plays, the editor first', async () => {
   const { app, current, find, calls, button } = await studio(listing('/g/neon'), { answers: { plays_list: plays } });
   assert.equal(current(), 'Overview');

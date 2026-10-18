@@ -20,12 +20,14 @@ const kit = (() => {
   };
 
   // The host's look on the page: theme, its style variables and fonts, safe
-  // areas (--safe-*), and the display mode (data-mode) for the layout.
+  // areas (--safe-*), the display mode (data-mode), and where the tabs go
+  // (data-bar: a side bar, or a row on top when inline or narrow).
   let fonts = "";
   const theme = (host) => {
     const root = document.documentElement, c = host.context || {};
     root.dataset.theme = host.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     root.dataset.mode = host.displayMode || "inline";
+    root.dataset.bar = root.dataset.mode === "inline" || matchMedia("(max-width: 760px)").matches ? "top" : "side";
     const vars = (c.styles && c.styles.variables) || {};
     for (const [k, v] of Object.entries(vars)) if (k.startsWith("--") && typeof v === "string") root.style.setProperty(k, v);
     const css = c.styles && c.styles.css && c.styles.css.fonts;
