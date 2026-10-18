@@ -21,13 +21,13 @@ TEST(Moments, NumbersSitAtTheirPicks) {
   EXPECT_EQ(pick_tags::numberAt(Kind::Point, {90, 90}, {110, 110}, tag, screen), glm::vec2(84, 84));
   EXPECT_EQ(pick_tags::numberAt(Kind::Point, {-7, -7}, {13, 13}, tag, screen), glm::vec2(7, 7));
   // Off to the side and above: the line goes from the tag's corner to the box's.
-  auto [from, to] = pick_tags::leader({10, 10, 40, 20}, {100, 100}, {120, 120});
-  EXPECT_EQ(from, glm::vec2(50, 30));
-  EXPECT_EQ(to, glm::vec2(100, 100));
+  const auto aside = pick_tags::leader({10, 10, 40, 20}, {100, 100}, {120, 120});
+  EXPECT_EQ(aside[0], glm::vec2(50, 30));
+  EXPECT_EQ(aside[1], glm::vec2(100, 100));
   // Straight above: down from the tag's bottom to the box's top, where they overlap.
-  std::tie(from, to) = pick_tags::leader({90, 10, 40, 20}, {100, 100}, {120, 120});
-  EXPECT_EQ(from, glm::vec2(110, 30));
-  EXPECT_EQ(to, glm::vec2(110, 100));
+  const auto above = pick_tags::leader({90, 10, 40, 20}, {100, 100}, {120, 120});
+  EXPECT_EQ(above[0], glm::vec2(110, 30));
+  EXPECT_EQ(above[1], glm::vec2(110, 100));
 }
 
 // A note typed while held: UTF-8 a code point at a time, capped; commit

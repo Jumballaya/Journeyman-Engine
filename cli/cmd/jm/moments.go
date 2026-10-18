@@ -33,6 +33,7 @@ func momentPicture(p *plays.Play, m plays.Marker) image.Image {
 	inGame := img.SubImage(game).(*image.RGBA) // tags stay in the game, off the letterbox bars
 	var taken []image.Rectangle                // what the legend keeps off: the marks and their numbers
 	var legend []string
+	var numbers []image.Rectangle // each pick's, drawn once all are outlined
 	for i, pick := range m.Picks {
 		if len(pick.Rect) != 4 {
 			continue
@@ -53,14 +54,15 @@ func momentPicture(p *plays.Play, m plays.Marker) image.Image {
 		r = r.Inset(-scale).Intersect(img.Bounds()) // around it, not over its edge
 		outline(img, r.Inset(-1), scale+2, color.RGBA{0, 0, 0, 0xFF})
 		outline(img, r, scale, momentInk)
-		n := []string{fmt.Sprint(i + 1)}
-		tag := numberPlace(pick.Kind, r, labelSize(n, scale), game)
-		label(inGame, tag, n, scale)
-		taken = append(taken, r, tag)
+		numbers = append(numbers, numberPlace(pick.Kind, r, labelSize([]string{fmt.Sprint(i + 1)}, scale), game))
+		taken = append(taken, r, numbers[len(numbers)-1])
 		legend = append(legend, fmt.Sprintf("%d %s", i+1, pick.Name()))
 		if pick.Note != "" {
 			legend[len(legend)-1] += ": " + pick.Note
 		}
+	}
+	for i, at := range numbers {
+		label(inGame, at, []string{strings.Fields(legend[i])[0]}, scale)
 	}
 	// The legend: a line a pick ("2 point: this gap is too wide"), cut to 3/5
 	// of the game's width, in the corner least on the marks (the agent has the full text).
