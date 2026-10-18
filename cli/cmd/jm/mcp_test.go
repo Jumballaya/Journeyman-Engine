@@ -498,3 +498,19 @@ func TestPlaybooks(t *testing.T) {
 		t.Errorf("prompts/list: %s", text)
 	}
 }
+
+// Two notes of one title complete by their paths, each one usable.
+func TestPlaybookCompletionsTellNotesApart(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{"North", "South"} {
+		os.MkdirAll(filepath.Join(root, "design", f), 0o755)
+		os.WriteFile(filepath.Join(root, "design", f, "Harbor.md"), []byte("---\ntype: location\n---\n# Harbor\n"), 0o644)
+	}
+	os.WriteFile(filepath.Join(root, "design", "Pitch.md"), []byte("# Pitch\n"), 0o644)
+	if got := strings.Join(knowledgeValues(root, "note"), ","); got != "Pitch,design/North/Harbor.md,design/South/Harbor.md" {
+		t.Errorf("notes: %s", got)
+	}
+	if got := strings.Join(knowledgeValues(root, "place"), ","); got != "design/North/Harbor.md,design/South/Harbor.md" {
+		t.Errorf("places: %s", got)
+	}
+}

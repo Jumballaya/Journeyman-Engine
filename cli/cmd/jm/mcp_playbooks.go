@@ -163,9 +163,17 @@ func knowledgeValues(root, name string) []string {
 			out = append(out, k.Name)
 		}
 	case "note", "place":
-		for _, n := range memory.Notes(root) {
+		notes, titles := memory.Notes(root), map[string]int{}
+		for _, n := range notes {
+			titles[strings.ToLower(n.Title)]++
+		}
+		for _, n := range notes {
 			if name == "note" || n.Type == "location" {
-				out = append(out, n.Title)
+				if titles[strings.ToLower(n.Title)] > 1 {
+					out = append(out, n.Path) // two notes of one title: each by its path
+				} else {
+					out = append(out, n.Title)
+				}
 			}
 		}
 	}

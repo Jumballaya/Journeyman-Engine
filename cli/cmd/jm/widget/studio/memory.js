@@ -55,7 +55,7 @@ studioTabs.push((() => {
     [ctx.host.text(`${label}: follow the playbook ${name} (playbook {"name": "${name}", "args": ${JSON.stringify(args)}}).`)], { send: false }) }, label);
 
   // How the note connects: each tie once, either end a link; names linked with no note yet, to write.
-  const world = (ctx, title, w) => {
+  const world = (ctx, path, w) => {
     const { el } = ctx.kit, unwritten = (w && w.unwritten) || [], seen = new Set();
     // A tie stated from both ends alike (road_to both ways, located_in and its contains) is one: its key, read from either end.
     const tie = (e) => {
@@ -64,10 +64,11 @@ studioTabs.push((() => {
     };
     const edges = ((w && w.edges) || []).filter((e) => !seen.has(tie(e)) && seen.add(tie(e)));
     if (!edges.length && !unwritten.length) return null;
-    const end = (name) => name === title ? el("b", {}, name) : el("button", { class: "mem-link", onclick: () => open(ctx, name) }, name);
+    // An end opens by its note's path (two notes may share a title: North/Harbor); an unwritten one by its name.
+    const end = (name, at) => at && at === path ? el("b", {}, name) : el("button", { class: "mem-link", onclick: () => open(ctx, at || name) }, name);
     const details = (e) => Object.entries(e.attrs || {}).map(([k, v]) => `${k}: ${v}`).join(", ");
     return el("div", { class: "mem-world" }, el("h3", { class: "mem-h" }, "World"),
-      el("ul", { class: "mem-list" }, edges.map((e) => el("li", {}, end(e.from), ` ${e.type.replace(/_/g, " ")} `, end(e.to),
+      el("ul", { class: "mem-list" }, edges.map((e) => el("li", {}, end(e.from, e.fromPath), ` ${e.type.replace(/_/g, " ")} `, end(e.to, e.toPath),
         details(e) ? el("span", { class: "meta" }, ` (${details(e)})`) : null))),
       unwritten.length ? el("div", { class: "meta" }, "Linked, no note yet: ", unwritten.flatMap((u, i) => [i ? ", " : "",
         el("button", { class: "mem-link", onclick: () => ctx.host.message([ctx.host.text(`Write a dossier for ${u}, from what links to it (dossier_new).`)], { send: false }) }, u)])) : null);
@@ -207,7 +208,7 @@ studioTabs.push((() => {
       state.form ? forms(ctx, note.title) : null,
       props(ctx, note.props),
       body(ctx, n.text || ""),
-      world(ctx, note.title, r.world),
+      world(ctx, note.path, r.world),
       (n.backlinks || []).length ? el("div", { class: "meta mem-back" }, "Linked from ", n.backlinks.flatMap((b, i) =>
         [i ? ", " : "", el("button", { class: "mem-link", onclick: () => open(ctx, b) }, b)])) : null);
   };

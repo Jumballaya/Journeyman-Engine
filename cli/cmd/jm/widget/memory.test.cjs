@@ -208,3 +208,14 @@ test('no notes yet: the facts kept still show, and forget', async () => {
   await settle(6);
   assert.deepEqual(s.calls().find((c) => c.name === 'forget').arguments, { id: 'f9', scope: 'you', game: '/g/pip' });
 });
+
+test('a world end opens by its note path: two notes may share a title', async () => {
+  const listed = { structuredContent: { notes: [note('Harbor', 'design/North/Harbor.md', 'location'), note('Harbor', 'design/South/Harbor.md', 'location')] } };
+  const s = await open({
+    memory: ({ note: t }) => t ? { structuredContent: { note: { title: 'Harbor', path: t.startsWith('design/') ? t : 'design/North/Harbor.md', type: 'location' }, text: '# Harbor\n', backlinks: [] } } : listed,
+    world_context: () => ({ structuredContent: { edges: [{ from: 'North/Harbor', fromPath: 'design/North/Harbor.md', type: 'ferry_to', to: 'South/Harbor', toPath: 'design/South/Harbor.md' }] } }),
+  });
+  s.button('South/Harbor').fire('click');
+  await settle(6);
+  assert.equal(s.calls().filter((c) => c.name === 'memory' && c.arguments.note).at(-1).arguments.note, 'design/South/Harbor.md');
+});
