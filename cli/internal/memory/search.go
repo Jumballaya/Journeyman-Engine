@@ -5,16 +5,20 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/blevesearch/bleve/v2"
 	"github.com/blevesearch/bleve/v2/analysis/analyzer/custom"
 	"github.com/blevesearch/bleve/v2/analysis/analyzer/keyword"
 	"github.com/blevesearch/bleve/v2/analysis/lang/en"
 	"github.com/blevesearch/bleve/v2/analysis/token/lowercase"
-	"github.com/blevesearch/bleve/v2/analysis/tokenizer/unicode"
+	unicodetok "github.com/blevesearch/bleve/v2/analysis/tokenizer/unicode"
+	"github.com/blevesearch/bleve/v2/index/scorch"
 	"github.com/blevesearch/bleve/v2/mapping"
 	"github.com/blevesearch/bleve/v2/search"
 	"github.com/blevesearch/bleve/v2/search/query"
+	bleveindex "github.com/blevesearch/bleve_index_api"
 )
 
 // Hit is a note a search found, best first: the line that matched best
@@ -62,17 +66,17 @@ func Search(root, text string) []Hit {
 	return out
 }
 
-// queryOf is a search's query: its "phrases" matched as written (every
-// word, in order, none stemmed), and the rest as a query string.
+// queryOf is a search's query: its standalone "phrases" matched as written
+// (every word, in order, none stemmed), and the rest as a query string. A
+// query that isn't one is all plain words.
 func queryOf(text string) query.Query {
+	if _, err := bleve.NewQueryStringQuery(text).Parse(); err != nil {
+		return bleve.NewMatchQuery(text)
+	}
 	rest, phrases := phrasesOf(text)
 	var parts []query.Query
 	if strings.TrimSpace(rest) != "" {
-		q := query.Query(bleve.NewQueryStringQuery(rest))
-		if _, err := q.(*query.QueryStringQuery).Parse(); err != nil {
-			q = bleve.NewMatchQuery(rest)
-		}
-		parts = append(parts, q)
+		parts = append(parts, bleve.NewQueryStringQuery(rest))
 	}
 	for _, p := range phrases {
 		inText, inTitle := bleve.NewMatchPhraseQuery(p), bleve.NewMatchPhraseQuery(p)
@@ -87,36 +91,70 @@ func queryOf(text string) query.Query {
 	return bleve.NewConjunctionQuery(parts...)
 }
 
-// phrasesOf takes a query's "phrases" out of it: the quoted ones that stand
-// alone (field:"x", +"x" and -"x" stay in the query string).
+// phrasesOf takes a query's standalone "phrases" out of it: not a field's
+// name or value ("home region":x, title: "x"), +"x", -"x", "x"^2 or "x"~1,
+// which stay in the query string. It reads the query as Bleve's lexer does:
+// \ escapes the next character; a word ends at a space, :, ^ or ~.
 func phrasesOf(text string) (string, []string) {
-	var rest strings.Builder
-	var phrases []string
-	for {
-		open := strings.IndexByte(text, '"')
-		if open < 0 {
-			break
-		}
-		end := open + 1 // the closing quote: one not escaped (\")
-		for end < len(text) && (text[end] != '"' || text[end-1] == '\\') {
-			end++
-		}
-		if end >= len(text) {
-			break
-		}
-		if open > 0 && strings.ContainsRune(":+-", rune(text[open-1])) {
-			rest.WriteString(text[:end+1])
-		} else {
-			rest.WriteString(text[:open] + " ")
-			if p := strings.TrimSpace(strings.ReplaceAll(text[open+1:end], `\"`, `"`)); p != "" {
-				phrases = append(phrases, p)
+	type token struct {
+		kind       byte // '"' a phrase, 'w' a word, else the operator
+		start, end int
+		phrase     string
+	}
+	var toks []token
+	for i := 0; i < len(text); {
+		r, size := utf8.DecodeRuneInString(text[i:])
+		t := token{kind: text[i], start: i}
+		switch {
+		case unicode.IsSpace(r):
+			i += size
+			continue
+		case t.kind == '"':
+			var b strings.Builder
+			for i++; i < len(text) && text[i] != '"'; i++ {
+				if text[i] == '\\' && i+1 < len(text) {
+					if i++; !strings.ContainsRune(reservedChars, rune(text[i])) {
+						b.WriteByte('\\')
+					}
+				}
+				b.WriteByte(text[i])
+			}
+			t.phrase = strings.TrimSpace(b.String())
+			i++
+		case strings.IndexByte("+-:<>=", t.kind) >= 0:
+			i++
+		default: // a word, ^boost or ~fuzziness
+			if t.kind != '^' && t.kind != '~' {
+				t.kind = 'w'
+			}
+			for i++; i < len(text) && (t.kind != 'w' || strings.IndexByte(":^~", text[i]) < 0) && text[i] != ' '; i++ {
+				if text[i] == '\\' {
+					i++
+				}
 			}
 		}
-		text = text[end+1:]
+		t.end = min(i, len(text))
+		toks = append(toks, t)
 	}
-	rest.WriteString(text)
+	var rest strings.Builder
+	var phrases []string
+	last := 0
+	for k, t := range toks {
+		if t.kind != '"' || k > 0 && strings.IndexByte("+-:<>=", toks[k-1].kind) >= 0 || k+1 < len(toks) && strings.IndexByte(":^~", toks[k+1].kind) >= 0 {
+			continue
+		}
+		rest.WriteString(text[last:t.start] + " ")
+		last = t.end
+		if t.phrase != "" {
+			phrases = append(phrases, t.phrase)
+		}
+	}
+	rest.WriteString(text[last:])
 	return rest.String(), phrases
 }
+
+// reservedChars are those \ escapes in a query (Bleve's); before another, \ is kept.
+const reservedChars = "+-=&|><!(){}[]^\"~*?:\\/ "
 
 // bestLine is the line (from 1) holding the most of a note's matched terms; 0: none.
 func bestLine(text string, fields ...search.TermLocationMap) int {
@@ -172,7 +210,8 @@ func indexOf(root string) (bleve.Index, map[string]Note, error) {
 			props[key] = true
 		}
 	}
-	idx, err := bleve.NewMemOnly(noteMapping(props))
+	idx, err := bleve.NewUsing("", noteMapping(props), scorch.Name, bleve.Config.DefaultMemKVStore, nil) // in memory: Scorch (BM25 needs its field statistics), no path
+
 	if err != nil {
 		return nil, nil, err
 	}
@@ -215,7 +254,7 @@ func reserved(key string) bool {
 // text also as written ("exact", for phrases); a note's type whole.
 func noteMapping(props map[string]bool) mapping.IndexMapping {
 	m := bleve.NewIndexMapping()
-	m.AddCustomAnalyzer("words", map[string]any{"type": custom.Name, "tokenizer": unicode.Name, "token_filters": []string{lowercase.Name}})
+	m.AddCustomAnalyzer("words", map[string]any{"type": custom.Name, "tokenizer": unicodetok.Name, "token_filters": []string{lowercase.Name}})
 	field := func(analyzer, name string, inAll bool) *mapping.FieldMapping {
 		f := bleve.NewTextFieldMapping()
 		f.Analyzer, f.Name, f.IncludeInAll = analyzer, name, inAll
@@ -233,5 +272,6 @@ func noteMapping(props map[string]bool) mapping.IndexMapping {
 	}
 	m.DefaultMapping = doc
 	m.DefaultAnalyzer = en.AnalyzerName
+	m.ScoringModel = bleveindex.BM25Scoring
 	return m
 }

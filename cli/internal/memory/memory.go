@@ -15,7 +15,6 @@ import (
 	"regexp"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -249,9 +248,9 @@ func parse(path, text string) Note {
 	for _, p := range front {
 		switch p.key {
 		case "title":
-			n.Title = yamlScalar(p.value)
+			n.Title = p.text()
 		case "type":
-			n.Type = yamlScalar(p.value)
+			n.Type = p.text()
 		}
 	}
 	if props := propsOf(front); len(props) > 0 {
@@ -459,39 +458,6 @@ func blankSpans(text string) string {
 		i = end
 	}
 	return string(b)
-}
-
-// yamlScalar is a frontmatter value as YAML reads it: "double" (escapes),
-// 'single' (” is '), or plain.
-func yamlScalar(value string) string {
-	v := strings.TrimSpace(value)
-	switch {
-	case strings.HasPrefix(v, `"`):
-		for i := 1; i < len(v); i++ {
-			if v[i] == '\\' {
-				i++
-			} else if v[i] == '"' {
-				if t, err := strconv.Unquote(v[:i+1]); err == nil {
-					return t
-				}
-				break
-			}
-		}
-	case strings.HasPrefix(v, "'"):
-		for i := 1; i < len(v); i++ {
-			if v[i] == '\'' && i+1 < len(v) && v[i+1] == '\'' {
-				i++
-			} else if v[i] == '\'' {
-				return strings.ReplaceAll(v[1:i], "''", "'")
-			}
-		}
-	}
-	for at := 1; at < len(v); at++ { // a comment: the first # after a space or tab ("C#" isn't one)
-		if v[at] == '#' && (v[at-1] == ' ' || v[at-1] == '\t') {
-			return strings.TrimSpace(v[:at])
-		}
-	}
-	return v
 }
 
 // page is a note's text: frontmatter (with extra lines), heading, body and sections.
