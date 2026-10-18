@@ -205,6 +205,13 @@ func TestADossierIsMadeFromTheTemplateThere(t *testing.T) {
 	if _, err := NewDossier(root, "boat", "Skiff", "", nil); err == nil {
 		t.Error("a dossier from an indented template") // its lines under ours wouldn't be YAML
 	}
+	os.WriteFile(filepath.Join(dir, "Ships.md"), []byte("---\nhome: &h \"[[Port]]\"\nseat: *h\n---\n"), 0o644)
+	if _, err := NewDossier(root, "ships", "Gull", "", map[string]string{"home": "[[Bay]]"}); err == nil {
+		t.Error("a dossier with an alias of nothing")
+	}
+	if _, err := os.Stat(filepath.Join(root, Dir, "Ships.base")); err == nil {
+		t.Error("a base for a dossier not written")
+	}
 	n, err := NewDossier(root, "character", "Mara", "", nil)
 	if err != nil || n.Props["class"] != "rogue" || !strings.Contains(n.Text, "## Tricks") {
 		t.Errorf("readable again: %+v %v", n, err)

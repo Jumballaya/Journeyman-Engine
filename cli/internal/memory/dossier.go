@@ -194,6 +194,10 @@ func NewDossier(root, kind, name, summary string, props map[string]string) (Note
 		return Note{}, fmt.Errorf("a note can't be read (%v): it may be this one, so nothing was written", unread)
 	}
 	k := kindOf(file.folder, file.text)
+	text := fill(file.text, k.Name, title, strings.TrimSpace(summary), props)
+	if _, _, err := frontmatter(text); err != nil { // a template's alias of a property set, say
+		return Note{}, fmt.Errorf("%s/%s/%s.md filled in %v: nothing was written", Dir, Templates, file.folder, err)
+	}
 	for _, own := range []struct{ rel, text string }{
 		{Dir + "/" + Templates + "/" + file.folder + ".md", file.text},
 		{Dir + "/" + file.folder + ".base", base(k)},
@@ -204,7 +208,6 @@ func NewDossier(root, kind, name, summary string, props map[string]string) (Note
 			}
 		}
 	}
-	text := fill(file.text, k.Name, title, strings.TrimSpace(summary), props)
 	if err := write(root, path, text); err != nil {
 		return Note{}, err
 	}
