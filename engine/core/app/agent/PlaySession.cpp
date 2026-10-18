@@ -6,8 +6,8 @@
 #include <exception>
 #include <stdexcept>
 
-#include "../logger/logging.hpp"
-#include "Platform.hpp"
+#include "../../logger/logging.hpp"
+#include "../Platform.hpp"
 
 namespace session {
 namespace {

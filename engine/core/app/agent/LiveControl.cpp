@@ -4,9 +4,9 @@
 #include <fstream>
 #include <iterator>
 
-#include "Engine.hpp"
-#include "Platform.hpp"
-#include "../logger/logging.hpp"
+#include "../Engine.hpp"
+#include "../Platform.hpp"
+#include "../../logger/logging.hpp"
 
 namespace fs = std::filesystem;
 
@@ -73,7 +73,7 @@ nlohmann::json LiveControl::run(Engine& engine, const std::string& command) {
     return status(engine);
   }
   if (command == "status") return status(engine);
-  nlohmann::json answer = engine.command(command);
+  nlohmann::json answer = engine.agent().command(command);
   return answer.is_null() ? nlohmann::json{{"ok", false}, {"error", "no command"}} : answer;
 }
 

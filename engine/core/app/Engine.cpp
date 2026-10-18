@@ -2,9 +2,6 @@
 
 #include <algorithm>
 #include <exception>
-#include <cstdio>
-#include <fstream>
-#include <iostream>
 #include <nlohmann/json.hpp>
 #include <random>
 #include <string>
@@ -16,27 +13,16 @@
 #include "../scripting/ScriptSystem.hpp"
 #include "ApplicationEvents.hpp"
 #include "WindowEvents.hpp"
-#include "LiveControl.hpp"
 #include "Platform.hpp"
-
-namespace {
-
-// JM_PLAY_SESSION's recording; throws (the run can't start) if it can't be read.
-std::unique_ptr<session::Playback> openPlayback(const DevOptions& dev) {
-  if (dev.playSession.empty()) return nullptr;
-  return std::make_unique<session::Playback>(dev.playSession);
-}
-
-}  // namespace
 
 Engine::Engine(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath, EngineOptions options)
     : _options(std::move(options)),
-      _playback(openPlayback(_options.dev)),
+      _agent(AgentTools::make(*this, _options.dev)),
       _manifestPath(manifestPath),
       _assetManager(rootDir),
       _sceneManager(_world, _assetManager, _eventBus),
-      _seeds(_playback ? _playback->meta().value("seed", uint64_t{1})
-                       : _options.dev.seed.value_or((uint64_t{std::random_device{}()} << 32) | std::random_device{}())),
+      _seeds(_agent->seed() ? *_agent->seed()
+                            : _options.dev.seed.value_or((uint64_t{std::random_device{}()} << 32) | std::random_device{}())),
       _spawner(_world, _assetManager, _sceneManager) {
   for (const auto& add : ModuleCatalog()) add(_modules);
 }
@@ -44,10 +30,7 @@ Engine::Engine(const std::filesystem::path& rootDir, const std::filesystem::path
 Engine::~Engine() { shutdown(); }
 
 std::optional<bool> Engine::launchFullscreen() const {
-  if (!_playback) return _options.dev.fullscreen;
-  const auto it = _playback->meta().find("fullscreen");
-  if (it == _playback->meta().end() || !it->is_boolean()) return std::nullopt;
-  return it->get<bool>();
+  return _agent->fullscreen();
 }
 
 void Engine::initialize() {
@@ -60,17 +43,8 @@ void Engine::initialize() {
   _initialized = true;  // from here on, shutdown has modules to stop
   JM_LOG_INFO("[Engine] seed {} (JM_SEED={} repeats this run's randomness)", _seeds.seed(), _seeds.seed());
   loadManifest();
-  auto saveDir = _options.dev.saveDir.empty() ? platform::userDataDir(_manifest.name) : _options.dev.saveDir;
-  if (_playback && _options.dev.saveDir.empty()) {
-    // A replay starts from the save the player had, and never touches theirs.
-    saveDir = std::filesystem::temp_directory_path() /
-              ("jm-replay-" + std::to_string(std::random_device{}()) + std::to_string(std::random_device{}()));
-    std::filesystem::create_directories(saveDir);
-    _replaySaveDir = saveDir;
-    std::error_code ec;
-    std::filesystem::copy_file(_options.dev.playSession / "save.json", saveDir / "save.json", ec);
-  }
-  _save = std::make_unique<GameState>(saveDir / "save.json");
+  const auto saveDir = _options.dev.saveDir.empty() ? platform::userDataDir(_manifest.name) : _options.dev.saveDir;
+  _save = std::make_unique<GameState>(_agent->saveDir(saveDir) / "save.json");
 
   // Scene entries' "if" / "unless" read the session's game state.
   _sceneManager.setCondition([this](const std::string& key) {
@@ -89,13 +63,10 @@ void Engine::initialize() {
   _scriptManager.setStubMissingImports(_options.server);
   _modules.initializeModules(*this);
   preloadAssets();
-  loadSessionFile();  // before the entry scene: its entries' if/unless read the session
   _eventBus.subscribe<events::WindowResized>(EVT_WindowResize, [this](const events::WindowResized& e) {
     setFramebufferSize(e.width, e.height);
   });
-  setProfiling(_options.dev.drive || !_options.dev.profileOut.empty());
-  startReplay();
-  startRecording();
+  _agent->start();  // before the entry scene: its entries' if/unless read the session
   if (_options.loadEntryScene) loadEntryScene();
 
   // A pause never leaks into the next scene (e.g. "Main Menu" from a pause menu).
@@ -116,12 +87,9 @@ void Engine::run() {
   const bool paced = (_options.server && !fixed) || (_options.dev.realtime && fixed);
   const auto tick = std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(1.0 / tickRate));
   auto nextTick = start;
-  if (_options.dev.drive) drive(std::cin, std::cout);
-  std::unique_ptr<LiveControl> live;
-  if (!_options.dev.control.empty() && !_options.dev.drive) live = std::make_unique<LiveControl>(_options.dev.control);
-  while (_running && !_options.dev.drive) {
-    if (live) live->poll(*this);
-    const float scale = live ? live->timeScale() : 1.0f;
+  const bool driven = _agent->runStarts();
+  while (_running && !driven) {
+    const float scale = _agent->beforeFrame();
     const auto now = Clock::now();
     const float measured = std::chrono::duration<float>(now - previous).count();
     previous = now;
@@ -136,12 +104,7 @@ void Engine::run() {
     }
   }
 
-  dumpState("state_exit.json");
-  if (_profiler && !_options.dev.profileOut.empty()) {
-    std::string error;
-    if (!platform::writeAtomically(_options.dev.profileOut, _profiler->report().dump(2) + "\n", error))
-      JM_LOG_ERROR("[Engine] JM_PROFILE: {}", error);
-  }
+  _agent->runEnds();
   const double seconds = std::chrono::duration<double>(Clock::now() - start).count();
   if (_frames > 0) {
     JM_LOG_INFO("[Engine] {} frames in {:.1f}s ({:.2f} ms/frame avg)", _frames, seconds, seconds * 1000.0 / _frames);
@@ -168,14 +131,7 @@ std::vector<std::string> Engine::reloadAssets(bool restartScene) {
   }
   if (_sceneToRestart.empty()) _assetManager.keepReloads();  // no scene to restart: nothing to undo
   if (!reloaded.paths.empty() || restartScene) _restartWaits = false;  // something new to try with
-  if (_recorder && (!reloaded.paths.empty() || !_sceneToRestart.empty())) {
-    // A replay needs the files the play ran with: the recording ends here, replayable up to now.
-    const auto last = stateJson(false);
-    _recorder->end(&last);
-    _recorder.reset();
-    _notRecordingNotice = "No marker: the recording ended at a reload. Play again to record.";
-    JM_LOG_INFO("[Session] the recorded play ends at this reload");
-  }
+  if (!reloaded.paths.empty() || !_sceneToRestart.empty()) _agent->assetsReloaded();
   restartSceneWhenReady();
   return reloaded.paths;
 }
@@ -239,18 +195,13 @@ void Engine::stepOnce() {
 }
 
 void Engine::step() {
-  float dt = _stepSeconds;
-  if (replaying()) {
-    // The recorded run's steps, whatever this one's (older plays kept a hitch unclamped).
-    dt = std::min(_playback->dt(_frames), kMaxDeltaTime);
-    // What the driver gave between frames, before the frame starts as it was then.
-    replay(_playback->eventsBefore(_frames));
-  }
+  // A replay's dt is the recording's (older plays kept a hitch unclamped).
+  const float dt = std::min(_agent->stepDue(_stepSeconds), kMaxDeltaTime);
   // Scene changes asked for last step take effect, so what's drawn after a step is its systems' work.
   _sceneManager.tick(_clock.unscaledDt());
   _eventBus.dispatch();  // what came between steps (a marker then is of the last step)
   _inStep = true;
-  if (_recorder) _recorder->frameStarts(_frames, windowFocused());
+  _agent->stepBegun();
   _clock.advance(dt);
 
   // Everything runs on this thread, in the same order every step: systems
@@ -258,30 +209,20 @@ void Engine::step() {
   _world.runSystems(_clock.dt(), SystemStage::Input, SystemStage::PostPhysics, timed(Profiler::Kind::System));
   _spawner.flush();
   _entityStores.prune(_world);
-  if (replaying()) replay(_playback->eventsAt(_frames));  // where the window's events come in
+  _agent->devicesDue();  // where the window's events come in
   _modules.stepModules(*this, _clock.unscaledDt(), timed(Profiler::Kind::Module));
   _eventBus.dispatch();
   _save->flush();
-  sessionFrameDone(dt);
+  _agent->stepDone(dt);
   ++_frames;
   _inStep = false;
-  // The run ends at its frame, whatever the drawing rate.
-  if (_options.dev.drive) return;
-  const bool replayEnded = _playback && _options.dev.afterReplay == DevOptions::AfterReplay::Stop && !replaying();
-  if ((_options.dev.exitAfterFrames > 0 && _frames >= _options.dev.exitAfterFrames) || replayEnded) _running = false;
 }
 
 void Engine::draw(float dt, uint64_t firstStep, Clock::time_point started) {
   const double fraction = 1.0 + _owed / _stepSeconds;
   _drawFraction = static_cast<float>(std::clamp(fraction, 0.0, 1.0));
   _modules.drawModules(*this, dt, timed(Profiler::Kind::Module));
-  // The frames as drawn (and captured), for JM_DUMP_FRAMES.
-  for (const uint64_t f : _options.dev.dumpFrames) {
-    if (_options.dev.dumpDir.empty() || f < firstStep || f >= _frames) continue;
-    char name[32];
-    std::snprintf(name, sizeof(name), "state_%05llu.json", static_cast<unsigned long long>(f));
-    dumpState(name);
-  }
+  _agent->frameDrawn(firstStep);
   if (!_simulating) {
     _eventBus.dispatch();  // an edit preview runs no steps: its events are delivered here
     _save->flush();
@@ -316,21 +257,12 @@ void Engine::shutdown() {
   _initialized = false;
   _running = false;
   JM_LOG_INFO("[Engine] Shutting down");
-  if (_recorder && std::uncaught_exceptions() > 0) {
-    _recorder->end();  // a crash unwinding: the state may be half made, and a throw here would abort
-  } else if (_recorder) {
-    const auto last = stateJson(false);
-    _recorder->end(&last);
-  }
+  _agent->shutdown();
   // Entities first: their destroy hooks reach into modules.
   _sceneManager.unload();
   _eventBus.dispatch();
   if (_save) _save->flush();
   _modules.shutdownModules(*this);
-  if (!_replaySaveDir.empty()) {
-    std::error_code ec;
-    std::filesystem::remove_all(_replaySaveDir, ec);
-  }
 }
 
 void Engine::loadManifest() {
@@ -362,161 +294,15 @@ void Engine::preloadAssets() {
   }
 }
 
-void Engine::startRecording() {
-  if (_options.dev.recordDir.empty()) return;
-  std::string startingSave;
-  if (std::ifstream in(_save->file()); in) startingSave.assign(std::istreambuf_iterator<char>(in), {});
-  const nlohmann::json config = _manifest.config.is_object() ? _manifest.config : nlohmann::json::object();
-  nlohmann::json meta = {{"game", _manifest.name},
-                         {"gameVersion", _manifest.version},
-                         {"seed", _seeds.seed()},
-                         {"entryScene", entrySceneName()},
-                         {"sessionValues", _session.values()},
-                         {"window", config.value("window", nlohmann::json::object())},
-                         {"framebuffer", {_framebuffer.width, _framebuffer.height}},
-                         {"gamepad", false}};
-  if (_playback) meta["replayOf"] = _options.dev.playSession.filename().string();
-  if (const auto fullscreen = launchFullscreen()) meta["fullscreen"] = *fullscreen;  // a replay launches the same
-  try {
-    _recorder = std::make_unique<session::Recorder>(_options.dev.recordDir, std::move(meta), startingSave);
-  } catch (const std::exception& e) {
-    JM_LOG_ERROR("[Session] not recording: {}", e.what());
-    _notRecordingNotice = std::string("No marker: recording couldn't start: ") + e.what();
-    return;
-  }
-  JM_LOG_INFO("[Session] recording to {} (F8 drops a marker)", _options.dev.recordDir.string());
-
-  // The pointer, wheel and window, at the frame the game sees them (dispatch).
-  // Keys are recorded by the inputs module, by name: scancodes differ
-  // between machines, a key's name doesn't.
-  auto record = [this](nlohmann::json event) {
-    if (_recorder) _recorder->input(std::move(event));  // gone once a reload ended the recording
-  };
-  _eventBus.subscribe<events::MouseMove>(EVT_MouseMove, [record](const events::MouseMove& e) {
-    record({{"type", "move"}, {"x", e.x}, {"y", e.y}});
-  });
-  _eventBus.subscribe<events::MouseButton>(EVT_MouseButton, [record](const events::MouseButton& e) {
-    record({{"type", "button"}, {"button", e.button}, {"down", e.down}});
-  });
-  _eventBus.subscribe<events::MouseWheel>(EVT_MouseWheel, [record](const events::MouseWheel& e) {
-    record({{"type", "wheel"}, {"dx", e.dx}, {"dy", e.dy}});
-  });
-  _eventBus.subscribe<events::WindowResized>(EVT_WindowResize, [record](const events::WindowResized& e) {
-    record({{"type", "resize"}, {"w", e.width}, {"h", e.height}});
-  });
-}
-
-void Engine::startReplay() {
-  if (!_playback) return;
-  // The recording's size, before the first frame: pointer positions are in its pixels.
-  const nlohmann::json size = _playback->meta().value("framebuffer", nlohmann::json());
-  const int w = size.is_array() && size.size() == 2 && size[0].is_number_integer() ? size[0].get<int>() : 0;
-  const int h = w > 0 && size[1].is_number_integer() ? size[1].get<int>() : 0;
-  if (w <= 0 || h <= 0) return;
-  _eventBus.emit(EVT_WindowResize, events::WindowResized{w, h});
-  _eventBus.dispatch();
-}
-
-void Engine::replay(const std::vector<nlohmann::json>& events) {
-  // Floats went through JSON as doubles: they come back bit for bit.
-  for (const nlohmann::json& e : events) {
-    const std::string type = e.value("type", "");
-    if (type == "move") _eventBus.emit(EVT_MouseMove, events::MouseMove{e.value("x", 0.0f), e.value("y", 0.0f)});
-    else if (type == "button") _eventBus.emit(EVT_MouseButton, events::MouseButton{e.value("button", 0), e.value("down", false)});
-    else if (type == "wheel") _eventBus.emit(EVT_MouseWheel, events::MouseWheel{e.value("dx", 0.0f), e.value("dy", 0.0f)});
-    else if (type == "resize") _eventBus.emit(EVT_WindowResize, events::WindowResized{e.value("w", 0), e.value("h", 0)});
-    else if (type == "set" || type == "scene") giveInput(e);
-    else if (type == "key") {
-      events::NamedKey key{{}, e.value("down", false)};
-      const std::string name = e.value("name", "");
-      name.copy(key.name, sizeof(key.name) - 1);
-      _eventBus.emit(EVT_NamedKey, key);
-    }
-  }
-}
-
-void Engine::giveInput(const nlohmann::json& event) {
-  // The driver's, or a replay of one: done, and recorded, the same either way.
-  if (event.value("type", "") == "set") _session.setJson(event.value("key", ""), event.value("value", nlohmann::json()));
-  else _sceneManager.loadScene(event.value("path", ""));
-  recordInput(event);
-}
-
-void Engine::sessionFrameDone(float dt) {
-  std::optional<nlohmann::json> core;  // made at most once, for whichever needs it
-  const session::LazyState state = [&]() -> const nlohmann::json& {
-    if (!core) core = stateJson(false);
-    return *core;
-  };
-  if (_recorder) recordFrame(dt, state);
-  if (replaying()) verifyFrame(state);
-}
-
-void Engine::recordFrame(float dt, const session::LazyState& state) {
-  if (auto thumb = _recorder->frameDone(_frames, dt, state)) requestCapture({*thumb, session::kThumbWidth});
-}
-
-void Engine::verifyFrame(const session::LazyState& state) {
-  if (_divergedAt) return;
-  const auto matches = _playback->matchesAt(_frames, state);
-  if (!matches) return;
-  if (*matches) {
-    _matchedAt = _frames;
-    return;
-  }
-  _divergedAt = _frames;
-  JM_LOG_WARN("[Session] this replay differs from its recording from frame {} on (by frame {} at the latest)",
-              _matchedAt ? *_matchedAt + 1 : 0, _frames);
-}
-
-void Engine::recordInput(nlohmann::json event) {
-  if (_recorder) _recorder->input(std::move(event));
-}
-
-bool Engine::windowFocused() const {
-  return replaying() ? _playback->focusedAt(_frames) : _windowFocused;
-}
-
-bool Engine::devicesMuted() const {
-  return _options.dev.drive || !_options.dev.inputReplay.empty() || replaying();
-}
-
-bool Engine::replaying() const {
-  return _playback && _playback->covers(_frames) && (!_options.dev.playUntil || _frames < *_options.dev.playUntil);
-}
-
-bool Engine::fastForwarding() const {
-  return _options.dev.afterReplay == DevOptions::AfterReplay::Live && replaying();
-}
+bool Engine::windowFocused() const { return _agent->windowFocused().value_or(_windowFocused); }
 
 void Engine::notify(std::string message) {
   _notice = std::move(message);
   _noticeUntil = _frames + 150;
 }
 
-int Engine::dropMarker(const std::string& note) {
-  if (!_recorder) {
-    if (!_notRecordingNotice.empty()) notify(_notRecordingNotice);
-    return 0;
-  }
-  const nlohmann::json state = stateJson();
-  // The frame the marker is about: the one running (F8, seen as it ends), or
-  // between frames (the driver's marker) the last one run, as the state says.
-  const uint64_t frame = state.value("frame", uint64_t{0});
-  const auto marker = _recorder->marker(frame, _clock.unscaledElapsed(), state, note);
-  if (_inStep) {
-    requestCapture({marker.image});
-  } else {  // between steps (the driver's): the frame on screen, now
-    nlohmann::json reply;
-    _modules.driveCommand(*this, "capture", marker.image.string(), reply);
-  }
-  notify("marker " + std::to_string(marker.n) + " saved");
-  JM_LOG_INFO("[Session] marker {} at frame {}", marker.n, frame);
-  return marker.n;
-}
-
 std::string Engine::entrySceneName() const {
-  if (_playback) return _playback->meta().value("entryScene", _manifest.entryScene);
+  if (auto scene = _agent->entryScene()) return *scene;
   std::string scene = _options.dev.entryScene.empty() ? _manifest.entryScene : _options.dev.entryScene;
   if (_options.server && _options.dev.entryScene.empty()) {
     const nlohmann::json server = _manifest.net.value("server", nlohmann::json::object());
@@ -532,28 +318,6 @@ void Engine::loadEntryScene() {
     return;
   }
   _sceneManager.loadScene(scene);
-}
-
-void Engine::loadSessionFile() {
-  if (_playback) {  // the values the recorded run started with
-    // A named copy: items() of the temporary value() returns would outlive it.
-    const nlohmann::json values = _playback->meta().value("sessionValues", nlohmann::json::object());
-    for (const auto& [key, value] : values.items()) {
-      _session.setJson(key, value);
-    }
-    return;
-  }
-  const auto& path = _options.dev.sessionFile;
-  if (path.empty()) return;
-  std::ifstream in(path);
-  const nlohmann::json values = nlohmann::json::parse(in, nullptr, false);
-  if (!in.is_open() || !values.is_object()) {
-    JM_REPORT_ERROR((ErrorSource{path.generic_string()}), "[Engine] JM_SESSION: '{}' isn't a readable JSON object",
-                    path.string());
-    return;
-  }
-  for (const auto& [key, value] : values.items()) _session.setJson(key, value);
-  JM_LOG_INFO("[Engine] session: {} values from {}", values.size(), path.string());
 }
 
 void Engine::declare() {

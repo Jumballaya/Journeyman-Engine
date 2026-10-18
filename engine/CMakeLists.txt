@@ -46,8 +46,8 @@ foreach(program journeyman_engine journeyman_player)
     target_link_options(${program} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/ENTRY:mainCRTStartup>)
   endif()
 endforeach()
-target_link_libraries(journeyman_engine PRIVATE engine_dev_options)
-target_link_libraries(journeyman_player PRIVATE engine_dev_options_player)
+target_link_libraries(journeyman_engine PRIVATE engine_agent_tools)
+target_link_libraries(journeyman_player PRIVATE engine_agent_tools_none)
 
 # The dedicated server: the same engine, linked without the frontend modules
 # (window, renderer, UI, audio). A module is in a build when it's linked
@@ -64,7 +64,7 @@ target_link_libraries(journeyman_server
         engine_scripting
         engine_inputs
         engine_inputs_nodevices
-        engine_dev_options
+        engine_agent_tools
         engine_physics_2d
         engine_tilemap
         engine_net

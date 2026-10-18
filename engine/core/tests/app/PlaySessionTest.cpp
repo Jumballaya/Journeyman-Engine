@@ -147,7 +147,7 @@ std::string driveGame(const TempDir& game, const std::string& commands, Engine::
   if (setup) setup(engine);
   std::istringstream in(commands);
   std::ostringstream out;
-  engine.drive(in, out);
+  engine.agent().drive(in, out);
   return out.str();
 }
 
@@ -383,7 +383,7 @@ TEST(PlaySession, AKeyGivenBeforeTheFirstFrameReplaysBeforeIt) {
   writeOneSceneGame(game);
   const auto play = game.path() / "play";
   driveGame(game, "step 2\n", {640, 360}, play, {}, [](Engine& e) {
-    e.recordInput({{"type", "key"}, {"name", "Enter"}, {"down", true}});  // as the inputs module does on `down Enter`
+    e.agent().recordInput({{"type", "key"}, {"name", "Enter"}, {"down", true}});  // as the inputs module does on `down Enter`
   });
   auto arrived = std::make_shared<bool>(false);
   auto seen = std::make_shared<std::vector<bool>>();
@@ -445,7 +445,7 @@ TEST(PlaySession, AMarkerWithoutARecordingSaysWhy) {
     driveGame(game, "", {640, 360}, record, {}, [&](Engine& engine) {  // the notice, read before shutdown
       std::istringstream in(commands);
       std::ostringstream out;
-      engine.drive(in, out);
+      engine.agent().drive(in, out);
       notice = engine.notice();
     });
     return notice;
@@ -535,7 +535,7 @@ TEST(PlaySession, APlayIsTheSameAtAnyDisplayRate) {
       events::NamedKey right{{}, true};
       std::string("Right").copy(right.name, sizeof(right.name) - 1);
       engine.getEventBus().emit(EVT_NamedKey, right);
-      engine.recordInput({{"type", "key"}, {"name", "Right"}, {"down", true}});
+      engine.agent().recordInput({{"type", "key"}, {"name", "Right"}, {"down", true}});
     }
     engine.run();
     return fileText(game.path() / name / "timeline.jsonl");

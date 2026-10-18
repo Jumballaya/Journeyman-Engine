@@ -2,7 +2,6 @@
 
 #include <chrono>
 #include <filesystem>
-#include <iosfwd>
 #include <memory>
 #include <optional>
 #include <string>
@@ -13,6 +12,7 @@
 #include "../ecs/World.hpp"
 #include "../events/EventBus.hpp"
 #include "../scripting/ScriptManager.hpp"
+#include "AgentTools.hpp"
 #include "DevOptions.hpp"
 #include "Seeds.hpp"
 #include "EntitySpawner.hpp"
@@ -21,7 +21,6 @@
 #include "GameManifest.hpp"
 #include "GameState.hpp"
 #include "ModuleRegistry.hpp"
-#include "PlaySession.hpp"
 #include "Profiler.hpp"
 #include "SceneManager.hpp"
 
@@ -71,6 +70,8 @@ class Engine {
   bool running() const { return _running; }
   // Ends run() after the current frame.
   void quit() { _running = false; }
+  // Inside a step (its systems and modules running): frameCount() is its own.
+  bool stepping() const { return _inStep; }
   // Steps run: the game's frame number.
   uint64_t frameCount() const { return _frames; }
   // Seconds per step: 1 / .jm.json's config.stepRate (60 a second).
@@ -78,22 +79,15 @@ class Engine {
   // While drawing: where the frame lies between the last two steps, 0 the
   // earlier, 1 the last as it ended.
   float drawFraction() const { return _drawFraction; }
-  // The game's state as data, for tools (JM_DUMP_DIR; EngineState.cpp): frame,
+  // The game's state as data, for tools (state dumps, the driver; EngineState.cpp): frame,
   // scene, every entity's tags, parent and components (with their script
   // fields' values), the session and save stores, and modules' parts (UI).
   // withModules = false leaves out modules' parts (UI, the draw list): the
   // cheap core (what play sessions sample and hash).
   nlohmann::json stateJson(bool withModules = true);
-  // The stepped driver (JM_DRIVE; EngineDriver.cpp): reads commands from `in`
-  // and answers each with one JSON line on `out`, advancing only when told.
-  // run() uses it when driving. Returns at "quit", end of input, or a Quit.
-  void drive(std::istream& in, std::ostream& out);
-  // One driver command line ("step 60", "get session.score"), answered as the
-  // driver answers it; null for a blank line or a comment. A live run takes
-  // them too (JM_CONTROL: LiveControl.hpp).
-  nlohmann::json command(std::string line);
-  // Errors the run logs, reported in the driver's next reply (Application).
-  void noteError(nlohmann::json error) { _driverErrors.push_back(std::move(error)); }
+  // The driver, live control, play recording and replay (AgentTools.hpp):
+  // nothing at all in journeyman_player.
+  AgentTools& agent() { return *_agent; }
 
   // Where frames' time goes (Profiler.hpp): on in a driven run (`profile`),
   // with JM_PROFILE (written there at exit), or when a host turns it on.
@@ -129,19 +123,10 @@ class Engine {
   bool windowFocused() const;
   // Input devices are ignored: the run is driven, or replays a recording
   // (the window module drops their events; the recording's come instead).
-  bool devicesMuted() const;
-  // A session replay is playing its recording (JM_PLAY_SESSION, up to
-  // JM_PLAY_UNTIL); fast-forwarding when the player takes over after it
+  bool devicesMuted() const { return _agent->devicesMuted(); }
+  // Catching up with a session replay before the player takes over after it
   // (JM_PLAY_THEN=live): nothing is drawn, presented or heard until then.
-  bool replaying() const;
-  bool fastForwarding() const;
-  // Play sessions, for the modules that record their own input (the inputs
-  // module's keys, by name; a replay gives them back as EVT_NamedKey).
-  void recordInput(nlohmann::json event);
-  // A gamepad was read this frame (sessions note it: pads aren't recorded).
-  void noteGamepadUsed() {
-    if (_recorder) _recorder->gamepadUsed();
-  }
+  bool fastForwarding() const { return _agent->fastForwarding(); }
 
   // An image of the step now running, written by the renderer once it's drawn
   // (a .png, or a .jpg scaled down to maxWidth when that's set). Without
@@ -158,10 +143,6 @@ class Engine {
   // The current notice, "" once its moment has passed.
   std::string notice() const { return _frames < _noticeUntil ? _notice : std::string(); }
 
-  // Marks this moment in the recorded session (F8 while playing): its number,
-  // or 0 when the run isn't recorded.
-  int dropMarker(const std::string& note = {});
-
   World& getWorld() { return _world; }
   AssetManager& getAssetManager() { return _assetManager; }
   ScriptManager& getScriptManager() { return _scriptManager; }
@@ -173,26 +154,23 @@ class Engine {
   const GameManifest& getManifest() const { return _manifest; }
   const DevOptions& getDevOptions() const { return _options.dev; }
   ModuleRegistry& getModules() { return _modules; }
-  // Scripts' stores: the session's (GameState in scripts) and each entity's (entity.data).
+  // JM_ENTRY_SCENE, a replay's, the server's or the manifest's.
+  std::string entrySceneName() const;
+  // Reloads assets whose files changed and restarts the scene when one needs
+  // it (or always, with `restartScene`). The paths it reloaded.
+  std::vector<std::string> reloadAssets(bool restartScene);
+  // Scripts' stores: the session's (GameState in scripts), the save's and each entity's (entity.data).
   GameState& getSession() { return _session; }
+  GameState& getSave() { return *_save; }
   EntityStores& getEntityStores() { return _entityStores; }
 
  private:
-  // The driver's `until <get> <op> <value> [max n]`: steps until a value compares true.
-  nlohmann::json until(std::string_view args);
-  // message with the errors logged since the last one (and those forgotten).
-  nlohmann::json withErrors(nlohmann::json message);
   using Clock = std::chrono::steady_clock;
   static constexpr float kMaxDeltaTime = 0.1f;  // clamp hitches (no tunneling)
 
   EngineOptions _options;
-  // JM_PLAY_SESSION: made first, its seed seeds the run.
-  std::unique_ptr<session::Playback> _playback;
-  std::unique_ptr<session::Recorder> _recorder;  // JM_RECORD_DIR
+  std::unique_ptr<AgentTools> _agent;  // made first: a replay's seed seeds the run
   std::unique_ptr<Profiler> _profiler;
-  std::string _notRecordingNotice;                // F8's toast once a recording failed or ended
-  std::optional<uint64_t> _divergedAt;            // a replay that didn't match its recording
-  std::optional<uint64_t> _matchedAt;             // the last frame it did match at
   bool _windowFocused = true;
   std::vector<CaptureRequest> _captures;
   std::string _notice;
@@ -201,12 +179,10 @@ class Engine {
   GameManifest _manifest;
   bool _initialized = false;
   bool _declared = false;
-  std::vector<nlohmann::json> _driverErrors;
   bool _running = true;
   bool _simulating = true;
   ViewSize _viewSize;
   ViewSize _framebuffer;
-  std::filesystem::path _replaySaveDir;  // a replay's copy of the player's save, deleted at shutdown
   uint64_t _frames = 0;    // steps run; also the next one's number
   bool _inStep = false;    // inside step(): _frames is the current one
   float _stepSeconds = 1.0f / 60.0f;
@@ -220,9 +196,6 @@ class Engine {
   std::function<void(const char*, double)> timed(Profiler::Kind kind);
   Clock::time_point _lastWatch{};  // JM_WATCH: when asset files were last checked
   void reloadChangedAssets();
-  // Reloads assets whose files changed and restarts the scene when one needs
-  // it (or always, with `restartScene`). The paths it reloaded.
-  std::vector<std::string> reloadAssets(bool restartScene);
   void restartSceneWhenReady();
   std::string _sceneToRestart;  // hot reload: the scene to start again once it can
   bool _restartWaits = false;   // it couldn't: wait for the next file change
@@ -243,21 +216,8 @@ class Engine {
   void loadManifest();
   void registerScripting();
   void bindScriptApi();  // EngineScriptApi.cpp
-  // Writes stateJson() to JM_DUMP_DIR/<name> when dumping is on.
-  void dumpState(const std::string& name);
   // An entity's ScriptComponent params, or null if it has no script.
   const nlohmann::json* paramsOf(EntityId id);
   void preloadAssets();
-  void loadSessionFile();  // JM_SESSION
   void loadEntryScene();
-  std::string entrySceneName() const;  // JM_ENTRY_SCENE, a replay's, the server's or the manifest's
-  // PlaySession: starts a replay and recording (JM_RECORD_DIR), and per frame:
-  // feeds a replay's inputs, records, checks a replay against its recording.
-  void startReplay();  // the recording's framebuffer size, before the first frame
-  void startRecording();
-  void replay(const std::vector<nlohmann::json>& events);
-  void giveInput(const nlohmann::json& event);
-  void sessionFrameDone(float dt);
-  void recordFrame(float dt, const session::LazyState& state);
-  void verifyFrame(const session::LazyState& state);  // against the recording's hash, where it has one
 };

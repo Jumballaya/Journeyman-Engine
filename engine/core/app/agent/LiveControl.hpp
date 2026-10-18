@@ -11,7 +11,7 @@ class Engine;
 
 // A game the person plays, steered from outside while it runs (JM_CONTROL=dir;
 // jm mcp's play_live). Requests are lines appended to dir/in, each
-// {"id", "command"}: a driver command (Engine::command), or "pause", "resume",
+// {"id", "command"}: a driver command (AgentTools::command), or "pause", "resume",
 // "speed <0.1..1>", "status". Each answer is written to dir/answers/<id>.json.
 // dir/status.json says the run is live (frame, scene, paused, speed, updated),
 // rewritten on change and every second, and when it started (started: Unix ms,

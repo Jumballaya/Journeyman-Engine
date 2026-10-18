@@ -124,7 +124,7 @@ func (o exportOptions) engineName() string {
 }
 
 // agentBuildMarker is in every agent build of the engine and in no player:
-// only engine_dev_options (dev_options/Environment.cpp) reads it.
+// only engine_agent_tools (agent/Environment.cpp) reads it.
 const agentBuildMarker = "JM_EXIT_AFTER_FRAMES"
 
 func hostTarget() string { return runtime.GOOS + "-" + runtime.GOARCH }
