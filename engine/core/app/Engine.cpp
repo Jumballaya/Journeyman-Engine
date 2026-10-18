@@ -29,6 +29,10 @@ Engine::Engine(const std::filesystem::path& rootDir, const std::filesystem::path
 
 Engine::~Engine() { shutdown(); }
 
+std::optional<bool> Engine::launchFullscreen() const {
+  return _agent->fullscreen();
+}
+
 void Engine::initialize() {
   // Scenes, prefabs and the manifest are read by the engine itself; these
   // no-op archive types just mark them as known.

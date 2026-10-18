@@ -20,6 +20,7 @@ class AgentRun final : public AgentTools {
 
   std::optional<uint64_t> seed() const override;
   std::optional<std::string> entryScene() const override;
+  std::optional<bool> fullscreen() const override;
   std::filesystem::path saveDir(std::filesystem::path usual) override;
   void start() override;
 
