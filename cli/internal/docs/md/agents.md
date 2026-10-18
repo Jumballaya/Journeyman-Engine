@@ -78,6 +78,20 @@ note (`jm memory show Irongate`) is how the world is connected. Read the
 dossiers a new one relates to first, so it agrees with them.
 `design/<Folder>.base` shows a kind as a table in Obsidian.
 
+How the world connects is in those links: a property naming a note
+(`region: "[[Ashvale]]"`), a typed relation in a note's Relations
+(`- road_to [[Duskhold]] (distance: 120 km)`; `jm memory relate Irongate
+road_to Duskhold --with distance="120 km"`, `world_link`), and plain
+mentions. State a relation once: the other side reads it (`located_in` is
+`contains` from the place, `road_to` and `at_war_with` read the same both
+ways; a note named Relations adds `- [inverse] a b` or `- [symmetric] a`).
+Before writing something new, look at what's around it: `jm memory world
+Ashvale` (`world_context`) gives the notes within two steps, the connections
+and the names linked that have no note yet; `jm memory path "Mara Dorne"
+Ost` (`world_path`) how two connect. `health`'s world check finds what the
+notes state twice and differently (a road of two lengths, a place inside
+itself).
+
 The game's history is git (`jm init` makes the first commit). After a change
 that builds and plays right, `vcs_commit` it (`jm vcs commit "Make jumps
 variable height"`). `vcs_status` (`jm vcs`) lists what changed, a scene's per
