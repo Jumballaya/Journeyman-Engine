@@ -40,7 +40,7 @@ class DesignNotes {
   void setNotes(std::vector<Note> notes) { _notes = std::move(notes); }  // poll() does, from jm
   const std::vector<std::string>& facts() const { return _facts; }
   const Note* find(const std::string& path) const;
-  // A [[link]]'s note: by title or file name, any case.
+  // A [[link]]'s note: by title, file name or path in design/ (any case; a #heading in it ignored).
   const Note* resolve(const std::string& link) const;
   void open(const std::string& path);
   const std::optional<Opened>& opened() const { return _opened; }
@@ -60,6 +60,7 @@ class DesignNotes {
   struct Ask {
     std::future<Json> answer;
     std::filesystem::path root;  // another game's answer is dropped
+    std::string note;            // the note asked about, if any
     bool valid() const { return answer.valid(); }
   };
   // Runs `jms` (argument lists) in the game folder; the answer is an array of their JSON.
@@ -75,6 +76,7 @@ class DesignNotes {
   std::vector<Hit> _hits;
   Ask _listing, _opening, _searching;
   std::optional<std::string> _wantOpen, _wantSearch;
+  std::string _query;  // asked again in another game
   bool _wantList = false;
   long long _stamp = -1;
   double _checked = -100;

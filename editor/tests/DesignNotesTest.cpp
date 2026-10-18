@@ -65,4 +65,7 @@ TEST(DesignNotes, FindsTheDossierAboutAnEntity) {
   EXPECT_EQ(notes.dossierFor("Guard 2", "assets/prefabs/guard.prefab.json", "")->title, "Gate Guard");
   EXPECT_EQ(notes.dossierFor("Tree", "", "scenes/ashvale.scene.json")->title, "Ashvale");
   EXPECT_EQ(notes.dossierFor("Pitch", "", "scenes/other.scene.json"), nullptr);  // not a dossier
+  EXPECT_EQ(notes.resolve("Characters/guard#History")->title, "Gate Guard");
+  EXPECT_EQ(notes.resolve("knight.md")->title, "Knight");
+  EXPECT_EQ(notes.resolve("Nobody"), nullptr);
 }

@@ -121,6 +121,7 @@ void DesignNotes::setFolder(const fs::path& root) {
   _root = root;
   _notes.clear(), _facts.clear(), _hits.clear(), _opened.reset();
   _wantOpen.reset(), _wantSearch.reset();
+  if (!_query.empty()) _wantSearch = _query;
   _stamp = -1, _checked = -100;
 }
 
@@ -178,7 +179,11 @@ void DesignNotes::poll(double now) {
       for (const Json& f : (*answer)[1]["facts"]) _facts.push_back(text(f, "text"));
     }
   }
-  if (auto answer = take(_opening)) _opened = parseOpened((*answer)[0], (*answer)[1]);
+  const std::string asked = _opening.note;
+  if (auto answer = take(_opening)) {
+    _opened = parseOpened((*answer)[0], (*answer)[1]);
+    _opened->path = asked;  // also when jm couldn't find it: it isn't asked again
+  }
   if (auto answer = take(_searching)) {
     _hits.clear();
     if ((*answer)[0].contains("hits")) {
@@ -191,6 +196,7 @@ void DesignNotes::poll(double now) {
   }
   if (_wantOpen && !_opening.valid()) {
     _opening = ask({{"memory", "show", *_wantOpen}, {"memory", "world", *_wantOpen, "--steps", "1"}});
+    _opening.note = *_wantOpen;
     _wantOpen.reset();
   }
   if (_wantSearch && !_searching.valid()) {
@@ -206,6 +212,7 @@ void DesignNotes::open(const std::string& path) {
 }
 
 void DesignNotes::search(const std::string& query) {
+  _query = query;
   if (query.empty()) {
     _hits.clear(), _wantSearch.reset();
     return;
@@ -220,9 +227,14 @@ const DesignNotes::Note* DesignNotes::find(const std::string& path) const {
 }
 
 const DesignNotes::Note* DesignNotes::resolve(const std::string& link) const {
-  const std::string want = lower(link);
-  for (const Note& n : _notes)
-    if (lower(n.title) == want || lower(stem(n.path)) == want) return &n;
+  std::string want = lower(link.substr(0, link.find('#')));
+  if (want.ends_with(".md")) want.resize(want.size() - 3);
+  if (want.starts_with("design/")) want.erase(0, 7);
+  for (const Note& n : _notes) {
+    std::string inDesign = lower(n.path.substr(n.path.starts_with("design/") ? 7 : 0));
+    inDesign.resize(inDesign.size() - (inDesign.ends_with(".md") ? 3 : 0));
+    if (lower(n.title) == want || lower(stem(n.path)) == want || inDesign == want) return &n;
+  }
   return nullptr;
 }
 

@@ -182,10 +182,11 @@ void DesignPanel::drawNote(Editor& editor, const DesignNotes& notes) {
     const std::string& line = lines[i];
     if (line.starts_with("# ")) continue;
     if (line.starts_with("#")) {
+      const size_t text = line.find_first_not_of("# ");
       size_t next = i + 1;
       while (next < lines.size() && lines[next].find_first_not_of(" \t") == std::string::npos) ++next;
-      if (next == lines.size() || lines[next].starts_with("#")) continue;
-      ui::sectionLabel(line.substr(line.find_first_not_of("# ")).c_str());
+      if (text == std::string::npos || next == lines.size() || lines[next].starts_with("#")) continue;
+      ui::sectionLabel(line.substr(text).c_str());
     } else if (line.starts_with("- ") || line.starts_with("* ")) {
       // Its wrapped lines stay under its text, not under the bullet.
       const float indent = ImGui::GetFrameHeight();
