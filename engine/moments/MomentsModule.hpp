@@ -48,6 +48,7 @@ class MomentsModule : public EngineModule {
     bool f8 = false, esc = false, enter = false, period = false, click = false;
   } _was;  // last frame's, for presses
   bool _wasHeld = false;
+  bool _saveDue = false;  // Enter as a `.`'s frame was drawn: saved next frame, with that frame's picture
   std::optional<glm::vec2> _pressed;  // where the button went down (logical px), while it's down
   glm::vec2 _pointer{0.0f};
 
