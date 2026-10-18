@@ -1129,7 +1129,7 @@ void InspectorPanel::draw(Editor& editor) {
     ui::badge(multi, theme::accent);
   }
   if (isPrefab) prefabBar(editor, uid, entity);
-  drawDossier(editor, entityName, isRoot ? scene->path() : entity.value("prefab", std::string()), scene->path());
+  drawDossier(editor, entityName, isRoot ? scene->path() : entity.value("prefab", std::string()));
   ImGui::Dummy({0, 4});
 
   // When it spawns: with the scene, with a group, or only under conditions.
@@ -1325,10 +1325,9 @@ void InspectorPanel::draw(Editor& editor) {
   ImGui::Dummy({0, 12});
 }
 
-// With nothing selected: the scene itself. What's in it, its spawn groups,
-// what loads it, and a way to play it.
-void InspectorPanel::drawDossier(Editor& editor, const std::string& name, const std::string& prefab, const std::string& scene) {
-  const DesignNotes::Note* dossier = editor.design().dossierFor(name, prefab, scene);
+// The dossier about the entity (design/), if one is: its title, kind and first line, and a way to it.
+void InspectorPanel::drawDossier(Editor& editor, const std::string& name, const std::string& prefab) {
+  const DesignNotes::Note* dossier = editor.design().dossierFor(name, prefab);
   if (!dossier) return;
   ImGui::Dummy({0, 2});
   ImGui::PushStyleColor(ImGuiCol_ChildBg, theme::bg2);
@@ -1349,6 +1348,8 @@ void InspectorPanel::drawDossier(Editor& editor, const std::string& name, const 
   ImGui::PopStyleColor();
 }
 
+// With nothing selected: the scene itself. What's in it, its spawn groups,
+// what loads it, and a way to play it.
 void InspectorPanel::drawSceneOverview(Editor& editor, SceneDocument& scene) {
   const Project& project = *editor.project();
   ImGui::PushFont(nullptr, 20.0f);

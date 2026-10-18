@@ -247,7 +247,7 @@ const DesignNotes::Note* DesignNotes::resolve(const std::string& link) const {
   return nullptr;
 }
 
-const DesignNotes::Note* DesignNotes::dossierFor(const std::string& name, const std::string& prefab, const std::string& scene) const {
+const DesignNotes::Note* DesignNotes::dossierFor(const std::string& name, const std::string& prefab) const {
   auto first = [&](auto&& matches) -> const Note* {
     for (const Note& n : _notes)
       if (n.dossier() && matches(n)) return &n;
@@ -259,6 +259,5 @@ const DesignNotes::Note* DesignNotes::dossierFor(const std::string& name, const 
   const Note* found = first([&](const Note& n) { return !name.empty() && lower(n.title) == lower(name); });
   if (!found && !prefab.empty()) found = first([&](const Note& n) { return lower(n.title) == lower(stem(prefab)); });
   if (!found) found = first([&](const Note& n) { return names(n, "prefab", prefab); });
-  if (!found) found = first([&](const Note& n) { return names(n, "scene", scene); });
   return found;
 }

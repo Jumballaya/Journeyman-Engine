@@ -60,11 +60,11 @@ TEST(DesignNotes, FindsTheDossierAboutAnEntity) {
                        note("Ashvale", "design/Locations/Ashvale.md", "location", {{"scene", "`scenes/ashvale.scene.json`"}})}}};
   DesignNotes notes;
   notes.setNotes(DesignNotes::parseNotes(list, {}));
-  EXPECT_EQ(notes.dossierFor("kael", "", "")->title, "Kael");
-  EXPECT_EQ(notes.dossierFor("Sir Rob", "assets/prefabs/knight.prefab.json", "")->title, "Knight");
-  EXPECT_EQ(notes.dossierFor("Guard 2", "assets/prefabs/guard.prefab.json", "")->title, "Gate Guard");
-  EXPECT_EQ(notes.dossierFor("Tree", "", "scenes/ashvale.scene.json")->title, "Ashvale");
-  EXPECT_EQ(notes.dossierFor("Pitch", "", "scenes/other.scene.json"), nullptr);  // not a dossier
+  EXPECT_EQ(notes.dossierFor("kael", "")->title, "Kael");
+  EXPECT_EQ(notes.dossierFor("Sir Rob", "assets/prefabs/knight.prefab.json")->title, "Knight");
+  EXPECT_EQ(notes.dossierFor("Guard 2", "assets/prefabs/guard.prefab.json")->title, "Gate Guard");
+  EXPECT_EQ(notes.dossierFor("Tree", ""), nullptr);  // a scene's dossier isn't each entity's
+  EXPECT_EQ(notes.dossierFor("Pitch", ""), nullptr);  // not a dossier
   EXPECT_EQ(notes.resolve("Characters/guard#History")->title, "Gate Guard");
   EXPECT_EQ(notes.resolve("knight.md")->title, "Knight");
   EXPECT_EQ(notes.resolve("Nobody"), nullptr);

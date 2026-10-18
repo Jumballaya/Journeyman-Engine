@@ -47,8 +47,8 @@ class DesignNotes {
   void search(const std::string& query);  // "" clears it
   const std::vector<Hit>& hits() const { return _hits; }
   // The dossier about an entity: titled as its name or its prefab, else one whose
-  // prefab or scene property names its prefab or scene file.
-  const Note* dossierFor(const std::string& name, const std::string& prefab, const std::string& scene) const;
+  // prefab property names its prefab file. (A scene property doesn't: every entity there would match.)
+  const Note* dossierFor(const std::string& name, const std::string& prefab) const;
 
   // jm's JSON answers (tests feed them directly). `root` reads each note's summary.
   static std::vector<Note> parseNotes(const Json& list, const std::filesystem::path& root);

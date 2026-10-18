@@ -76,7 +76,7 @@ class InspectorPanel {
   void prefabBar(Editor& editor, EntityUid uid, const Json& entity);
   void drawLive(Editor& editor, EntityId id);
   // The design note about the entity, if there is one: a line of it, and a way to the Design panel.
-  void drawDossier(Editor& editor, const std::string& name, const std::string& prefab, const std::string& scene);
+  void drawDossier(Editor& editor, const std::string& name, const std::string& prefab);
   void drawSceneOverview(Editor& editor, SceneDocument& scene);
 
   std::string _addFilter;

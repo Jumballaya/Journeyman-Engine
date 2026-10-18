@@ -400,7 +400,7 @@ the way Point Out does.
 When the selected entity has a dossier, the Inspector shows it under the
 entity's name: its title, kind and first line, and **Open in Design**. A
 dossier belongs to an entity when it's titled as the entity or its prefab, or
-when its `prefab` or `scene` property names the entity's prefab or scene file.
+when its `prefab` property names the entity's prefab file.
 The panel reads `design/` again when its files change.
 
 ## Shortcuts
