@@ -59,3 +59,16 @@ func TestOnboardingTellsFeelFromPitchAndKeepsSkips(t *testing.T) {
 		t.Errorf("skip world beside a fact \"world\": %+v", GameFacts(root).All())
 	}
 }
+
+// An answer already remembered under no category of its own takes the step's.
+func TestARememberedAnswerTakesItsStepsCategory(t *testing.T) {
+	root := t.TempDir()
+	plain, _, _ := GameFacts(root).Remember("", "Use 16x16 sprites.", "")
+	art, _, err := GameFacts(root).Remember("art", "Use 16x16 sprites.", "")
+	if err != nil || art.ID != plain.ID || art.Category != "art" || len(GameFacts(root).All()) != 1 || !Onboarding(root, Facts{})[6].Done {
+		t.Errorf("%+v %v %+v", art, err, GameFacts(root).All())
+	}
+	if again, _, _ := GameFacts(root).Remember("", "Use 16x16 sprites.", ""); again.Category != "art" {
+		t.Errorf("a plain remember undid its category: %+v", again)
+	}
+}
