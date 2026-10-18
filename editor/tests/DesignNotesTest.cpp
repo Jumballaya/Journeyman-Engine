@@ -68,4 +68,7 @@ TEST(DesignNotes, FindsTheDossierAboutAnEntity) {
   EXPECT_EQ(notes.resolve("Characters/guard#History")->title, "Gate Guard");
   EXPECT_EQ(notes.resolve("knight.md")->title, "Knight");
   EXPECT_EQ(notes.resolve("Nobody"), nullptr);
+  notes.setNotes(DesignNotes::parseNotes({{"notes", {note("The Doctor", "design/Characters/Dr.Smith.md", "character")}}}, {}));
+  EXPECT_EQ(notes.resolve("Dr.Smith")->title, "The Doctor");
+  EXPECT_EQ(notes.resolve("Dr"), nullptr);
 }

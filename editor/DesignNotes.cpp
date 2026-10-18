@@ -156,7 +156,9 @@ long long DesignNotes::designStamp() const {
   for (auto it = fs::recursive_directory_iterator(_root / "design", fs::directory_options::skip_permission_denied, ec);
        !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
     if (it->path().extension() != ".md") continue;
-    stamp += 1 + it->last_write_time(ec).time_since_epoch().count() % 1000000007;  // a file added, removed or changed
+    // A file added, removed, renamed or changed changes it.
+    const size_t file = std::hash<std::string>{}(it->path().string()) ^ static_cast<size_t>(it->last_write_time(ec).time_since_epoch().count());
+    stamp += static_cast<long long>(file % 1000000007);
   }
   return stamp;
 }
@@ -169,6 +171,7 @@ void DesignNotes::poll(double now) {
       _stamp = stamp;
       _wantList = true;
       if (_opened && !_wantOpen) _wantOpen = _opened->path;  // its text or world may have changed
+      if (!_query.empty()) _wantSearch = _query;
     }
   }
   if (auto answer = take(_listing)) {
@@ -233,7 +236,8 @@ const DesignNotes::Note* DesignNotes::resolve(const std::string& link) const {
   for (const Note& n : _notes) {
     std::string inDesign = lower(n.path.substr(n.path.starts_with("design/") ? 7 : 0));
     inDesign.resize(inDesign.size() - (inDesign.ends_with(".md") ? 3 : 0));
-    if (lower(n.title) == want || lower(stem(n.path)) == want || inDesign == want) return &n;
+    const std::string name = inDesign.substr(inDesign.rfind('/') + 1);  // npos + 1: all of it
+    if (lower(n.title) == want || name == want || inDesign == want) return &n;
   }
   return nullptr;
 }
