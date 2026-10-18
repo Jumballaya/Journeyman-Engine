@@ -7,6 +7,7 @@ add_subdirectory(inputs)
 add_subdirectory(physics2d)
 add_subdirectory(tilemap)
 add_subdirectory(net)
+add_subdirectory(moments)
 
 # The game, as jm runs it (journeyman_engine: every JM_* switch, for tools and
 # agents) and as `jm export` ships it (journeyman_player: none of them). The
@@ -46,7 +47,7 @@ foreach(program journeyman_engine journeyman_player)
     target_link_options(${program} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/ENTRY:mainCRTStartup>)
   endif()
 endforeach()
-target_link_libraries(journeyman_engine PRIVATE engine_agent_tools)
+target_link_libraries(journeyman_engine PRIVATE engine_agent_tools engine_moments)
 target_link_libraries(journeyman_player PRIVATE engine_agent_tools_none)
 
 # The dedicated server: the same engine, linked without the frontend modules

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <iterator>
 #include <random>
+#include <utility>
 
 #include "../../logger/logging.hpp"
 #include "../Engine.hpp"
@@ -49,6 +50,7 @@ std::filesystem::path AgentRun::saveDir(std::filesystem::path usual) {
 }
 
 void AgentRun::start() {
+  trackOrigins();
   startSession();
   if (_dev.drive || !_dev.profileOut.empty()) _engine.setProfiling(true);
   startReplay();
@@ -140,9 +142,10 @@ bool AgentRun::runStarts() {
 }
 
 float AgentRun::beforeFrame() {
-  if (!_live) return 1.0f;
-  _live->poll(_engine);
-  return _live->timeScale();
+  if (_live) _live->poll(_engine);
+  if (std::exchange(_stepHeld, false) && _held) _engine.stepOnce();
+  if (_held) return 0.0f;  // live control's pause, as F8's moment holds it
+  return _live ? _live->timeScale() : 1.0f;
 }
 
 void AgentRun::runEnds() {
@@ -190,6 +193,7 @@ void AgentRun::stepDone(float dt) {
                   _matchedAt ? *_matchedAt + 1 : 0, frame);
     }
   }
+  if (_held) _cleanPending = true;  // `.`: the marker's picture is of this frame now
   // The run ends at its frame, whatever the drawing rate.
   if (_dev.drive) return;
   const uint64_t ran = frame + 1;
@@ -198,6 +202,12 @@ void AgentRun::stepDone(float dt) {
 }
 
 void AgentRun::frameDrawn(uint64_t firstStep) {
+  // The held frame, drawn without the moment's marks: the picture a saved moment gets.
+  if (std::exchange(_cleanPending, false) && _held) {
+    nlohmann::json reply;
+    if (_recorder) _engine.getModules().driveCommand(_engine, "capture", heldImage().string(), reply);
+    if (_dev.drive) _engine.frame(0.0f);  // and with them: a driven run draws only when told
+  }
   // The frames as drawn (and captured), for JM_DUMP_FRAMES.
   for (const uint64_t f : _dev.dumpFrames) {
     if (_dev.dumpDir.empty() || f < firstStep || f >= _engine.frameCount()) continue;
@@ -227,13 +237,23 @@ void AgentRun::shutdown() {
 }
 
 void AgentRun::describeState(nlohmann::json& state) {
+  for (nlohmann::json& entity : state["entities"]) {
+    const nlohmann::json& id = entity["id"];
+    const auto origin = _origins.find(EntityId{id[0].get<uint32_t>(), id[1].get<uint32_t>()});
+    if (origin != _origins.end()) entity["origin"] = origin->second;
+  }
+  if (_held) {
+    nlohmann::json picked = nlohmann::json::array();
+    for (const EntityId id : picks()) picked.push_back({id.index, id.generation});
+    state["moment"] = {{"picks", std::move(picked)}};
+  }
   if (!_playback) return;
   state["replay"] = {{"frames", _playback->frames()},
                      {"diverged", _divergedAt ? nlohmann::json(*_divergedAt) : nlohmann::json()}};
 }
 
 bool AgentRun::devicesMuted() const {
-  return _dev.drive || !_dev.inputReplay.empty() || replayingAt(_engine.frameCount());
+  return _dev.drive || !_dev.inputReplay.empty() || _held || replayingAt(_engine.frameCount());
 }
 
 bool AgentRun::fastForwarding() const {
@@ -284,26 +304,7 @@ void AgentRun::gamepadUsed() {
   if (_recorder) _recorder->gamepadUsed();
 }
 
-int AgentRun::dropMarker(const std::string& note) {
-  if (!_recorder) {
-    if (!_notRecordingNotice.empty()) _engine.notify(_notRecordingNotice);
-    return 0;
-  }
-  const nlohmann::json state = _engine.stateJson();
-  // The frame the marker is about: the one running (F8, seen as it ends), or
-  // between frames (the driver's marker) the last one run, as the state says.
-  const uint64_t frame = state.value("frame", uint64_t{0});
-  const auto marker = _recorder->marker(frame, _engine.getClock().unscaledElapsed(), state, note);
-  if (_engine.stepping()) {
-    _engine.requestCapture({marker.image});
-  } else {  // between steps (the driver's): the frame on screen, now
-    nlohmann::json reply;
-    _engine.getModules().driveCommand(_engine, "capture", marker.image.string(), reply);
-  }
-  _engine.notify("marker " + std::to_string(marker.n) + " saved");
-  JM_LOG_INFO("[Session] marker {} at frame {}", marker.n, frame);
-  return marker.n;
-}
+int AgentRun::dropMarker(const std::string& note) { return mark(note, false); }
 
 void AgentRun::noteError(nlohmann::json error) {
   if (_dev.drive) _driverErrors.push_back(std::move(error));

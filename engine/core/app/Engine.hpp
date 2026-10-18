@@ -124,6 +124,9 @@ class Engine {
   // Catching up with a session replay before the player takes over after it
   // (JM_PLAY_THEN=live): nothing is drawn, presented or heard until then.
   bool fastForwarding() const { return _agent->fastForwarding(); }
+  // The agent tools hold the run (F8's moment): no steps and no sound until
+  // they let go; frames are still drawn.
+  bool held() const { return _agent->holding(); }
 
   // An image of the step now running, written by the renderer once it's drawn
   // (a .png, or a .jpg scaled down to maxWidth when that's set). Without
