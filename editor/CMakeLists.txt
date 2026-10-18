@@ -47,6 +47,7 @@ target_link_libraries(journeyman_editor PRIVATE
     engine_ecs
     engine_assets
     engine_app
+    engine_agent_tools
     engine_scripting
     engine_audio
     engine_glfw_window

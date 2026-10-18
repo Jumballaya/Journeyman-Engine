@@ -43,6 +43,7 @@ void AudioManager::audioCallback(ma_device* device, void* output, const void*, m
   auto* self = static_cast<AudioManager*>(device->pUserData);
   VoiceCommand cmd;
   while (self->_commands.try_dequeue(cmd)) self->_voices.apply(cmd);
+  if (self->_held.load(std::memory_order_relaxed)) return;  // the device hands over silence
   self->_voices.mix(static_cast<float*>(output), frameCount, SoundBuffer::kChannels);
   // Skipped while the main thread reads: a stale copy only says more is playing.
   if (std::unique_lock lock(self->_playingMutex, std::try_to_lock); lock) self->_playing = self->_voices.playing();

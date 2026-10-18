@@ -213,6 +213,8 @@ type playListing struct {
 	Ended   string   `json:"ended"`
 	Stale   bool     `json:"stale,omitempty"` // made with a build that played differently
 	Marks   []string `json:"marks,omitempty"` // "m1 0:03.0", plus a driver marker's note
+	// The markers that are moments (picks: what the person pointed at), by number.
+	Moments []int `json:"moments,omitempty"`
 }
 
 // playListings are the plays, and the play folders that can't be read.
@@ -230,12 +232,13 @@ func listPlays(root string) (playListings, error) {
 	listing := playListings{Plays: []playListing{}, Unreadable: plays.Unreadable(root)}
 	for _, p := range all {
 		listing.Plays = append(listing.Plays, playListing{p.ID, p.Meta.Started, p.Meta.Seconds, p.Meta.Frames, len(p.Meta.Markers),
-			p.Meta.Ended, p.DriftFrom(b) == plays.GameChanged, marks(p.Meta.Markers)})
+			p.Meta.Ended, p.DriftFrom(b) == plays.GameChanged, marks(p.Meta.Markers), moments(p.Meta.Markers)})
 	}
 	return listing, nil
 }
 
-// marks are a play's markers as "m1 0:03.0" lines (": note" for a driver's), for listings.
+// marks are a play's markers as "m1 0:03.0" lines (": note" for a driver's,
+// "picked Pip, Cloud" for a moment), for listings.
 func marks(markers []plays.Marker) []string {
 	var out []string
 	for _, m := range markers {
@@ -243,7 +246,20 @@ func marks(markers []plays.Marker) []string {
 		if m.Note != "" {
 			line += ": " + m.Note
 		}
+		if len(m.Picks) > 0 {
+			line += " · picked " + strings.Join(pickNames(m), ", ")
+		}
 		out = append(out, line)
+	}
+	return out
+}
+
+func moments(markers []plays.Marker) []int {
+	var out []int
+	for _, m := range markers {
+		if len(m.Picks) > 0 {
+			out = append(out, m.N)
+		}
 	}
 	return out
 }
@@ -326,6 +342,7 @@ func (o playOverview) text() string {
 		if len(m.Pressed) > 0 {
 			fmt.Fprintf(&out, "    pressed just before: %s\n", pressesText(m.Pressed))
 		}
+		out.WriteString(momentText(m))
 	}
 	fmt.Fprintf(&out, "  %d thumbnails in %s\n", len(o.Thumbs), filepath.Join(o.Dir, "thumbs"))
 	return out.String()

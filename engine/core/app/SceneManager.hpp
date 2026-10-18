@@ -77,6 +77,8 @@ class SceneManager {
   void requestGroup(std::string group, bool spawn);
   // How "if" / "unless" keys are judged (the game state).
   void setCondition(SceneLoader::Condition condition) { _loader.setCondition(std::move(condition)); }
+  // Told about each entity a scene's entries build (SceneLoader::onBuilt).
+  void onEntityBuilt(SceneLoader::Built built) { _loader.onBuilt(std::move(built)); }
   // Destroys the current scene's entities, leaving no scene.
   void unload();
   // True while unload() destroys them: destroy hooks can tell an unload from a gameplay destroy.
