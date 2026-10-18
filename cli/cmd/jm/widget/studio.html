@@ -23,42 +23,70 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
-    font: var(--font-text-sm-size, 13px)/1.4 var(--font-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif); }
+    font: var(--font-text-sm-size, 13px)/1.45 var(--font-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif); }
   body { padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); }
-  button, input, select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
-    border-radius: var(--radius); padding: 4px 10px; }
-  button { cursor: pointer; } button:hover:not(:disabled) { border-color: var(--muted); }
+  button, input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 7px; padding: 4px 10px; min-height: 28px; }
+  input::placeholder { color: var(--muted); }
+  button { cursor: pointer; font-weight: 500; white-space: nowrap; } button:hover:not(:disabled) { background: var(--panel); border-color: var(--muted); }
   button.primary { background: var(--accent); border-color: var(--accent); color: var(--jm-on-accent); }
+  button.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); border-color: var(--accent); }
   button:disabled { opacity: .5; cursor: default; }
   a { color: var(--accent); }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  .studio { display: flex; flex-direction: column; min-height: 100vh; } :root[data-mode="inline"] .studio { min-height: 0; }
-  .top { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--panel);
-    position: sticky; top: 0; z-index: 2; min-width: 0; }
+  /* The page: a side bar (the game, then the tabs by group) beside the view; a bar on top when narrow or inline. */
+  .studio { display: grid; grid-template-columns: 196px minmax(0, 1fr); min-height: 100vh; }
+  .side { display: flex; flex-direction: column; gap: 2px; padding: 10px 8px; background: var(--panel); border-right: 1px solid var(--line);
+    position: sticky; top: 0; height: 100vh; overflow-y: auto; min-width: 0; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 4px 8px 10px; min-width: 0; }
   .mark { width: 18px; height: 18px; flex: none; color: var(--accent); }
-  .tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; min-width: 0; flex: 1; }
-  .tab { border: 0; background: none; border-radius: 6px; padding: 4px 10px; white-space: nowrap; color: var(--muted); }
-  .tab[aria-selected="true"] { background: var(--bg); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
-  .game-name { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30%; }
-  .status { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
-  .update { margin: 10px 16px 0; padding: 8px 12px; border-radius: var(--radius); background: var(--accent-soft); color: var(--text); }
-  .view { flex: 1; padding: 14px 16px; min-width: 0; }
-  :root[data-mode="inline"] .view { max-height: 560px; overflow: auto; }
-  h1 { font-size: 17px; font-weight: 650; margin: 0; }
-  .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .game-name { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tabs { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .group { font-size: 11px; font-weight: 600; color: var(--muted); padding: 12px 10px 4px; }
+  .tab { display: flex; align-items: center; gap: 9px; border: 0; background: none; border-radius: 7px; padding: 5px 10px; min-height: 30px;
+    color: var(--muted); text-align: left; font-weight: 500; }
+  .tab svg { width: 16px; height: 16px; flex: none; }
+  .tab:hover:not(:disabled) { background: var(--raised); color: var(--text); }
+  .tab[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+  .tab:disabled { opacity: .45; }
+  .status { margin-top: auto; padding: 10px 8px 2px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .status:empty { display: none; }
+  /* Inline, or narrow (kit.theme sets data-bar): one row of icons on top, the shown tab named. */
+  :root[data-bar="top"] .studio { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  :root[data-bar="top"] .side { flex-direction: row; align-items: center; height: auto; padding: 4px 8px; border-right: 0;
+    border-bottom: 1px solid var(--line); overflow: visible; z-index: 2; }
+  :root[data-bar="top"] .brand { padding: 0 8px 0 2px; max-width: 30%; }
+  :root[data-bar="top"] .tabs { flex-direction: row; overflow-x: auto; scrollbar-width: none; flex: 1; }
+  :root[data-bar="top"] .group, :root[data-bar="top"] .tab:not([aria-selected="true"]) .tab-label { display: none; }
+  :root[data-bar="top"] .tab { padding: 5px 8px; gap: 6px; }
+  :root[data-bar="top"] .status { margin: 0 0 0 auto; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30%; }
+  :root[data-mode="inline"] .studio { min-height: 0; }
+  .update { margin: 12px 20px 0; padding: 8px 12px; border-radius: var(--radius); background: var(--accent-soft); color: var(--text); }
+  .main { min-width: 0; display: flex; flex-direction: column; }
+  .view { flex: 1; padding: 18px 22px 24px; min-width: 0; }
+  :root[data-mode="inline"] .view { max-height: 560px; overflow: auto; padding: 14px 16px; }
+  h1 { font-size: 20px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
+  .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .head input { flex: 1; min-width: 160px; }
   .spacer { flex: 1; } .meta { color: var(--muted); }
-  .empty { color: var(--muted); padding: 40px 0; text-align: center; display: grid; gap: 10px; justify-items: center; }
-  .section { background: var(--panel); border-radius: var(--radius); padding: 8px; min-width: 0; }
-  .section h2 { font-size: 11px; font-weight: 600; color: var(--muted); margin: 2px 4px 6px; text-transform: uppercase; letter-spacing: .05em; }
-  .hero { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; margin-bottom: 14px; }
+  .empty { color: var(--muted); padding: 28px 16px; text-align: center; display: grid; gap: 10px; justify-items: center;
+    border: 1px dashed var(--line); border-radius: 12px; }
+  .section { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px; min-width: 0; }
+  .section + .section { margin-top: 12px; }
+  .section h2 { font-size: 12px; font-weight: 600; color: var(--text); margin: 0 4px 8px; display: flex; gap: 6px; align-items: baseline; }
+  .section > .meta { padding: 2px 4px; }
+  .hero { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 16px; align-items: center; margin-bottom: 16px; }
   .moment-picture { width: 100%; border-radius: var(--radius); image-rendering: pixelated; display: block; margin: 6px 0; }
   .moment-picks { margin: 0 0 8px; padding-left: 20px; font-size: 12px; }
-  .hero-thumb { width: 128px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius); image-rendering: pixelated; display: block; }
-  .hero-text { display: grid; gap: 2px; min-width: 0; }
+  .hero-thumb { width: 152px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; image-rendering: pixelated; display: block; border: 1px solid var(--line); }
+  .hero-text { display: grid; gap: 4px; min-width: 0; }
   .hero-text .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .hero-actions { display: grid; gap: 6px; justify-items: end; } .hero-actions > div { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .hero-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .hero.bare { grid-template-columns: minmax(0, 1fr) auto; }  /* no picture: the text shrinks before the actions do */
-  @media (max-width: 640px) { .hero { grid-template-columns: auto minmax(0, 1fr); } .hero.bare { grid-template-columns: minmax(0, 1fr); } .hero-actions { grid-column: 1 / -1; justify-items: start; } }
+  @media (max-width: 640px) { .hero { grid-template-columns: auto minmax(0, 1fr); } .hero.bare { grid-template-columns: minmax(0, 1fr); } .hero-actions { grid-column: 1 / -1; justify-content: flex-start; } }
+  .stats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .stat { border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; display: grid; min-width: 96px; }
+  .stat b { font-size: 18px; font-weight: 650; } .stat span { color: var(--muted); font-size: 12px; }
   .form { display: grid; gap: 6px; }
   .field { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 6px; align-items: center; }
   .field label { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -68,22 +96,25 @@
   .tree { display: grid; }
   .tree .row { display: flex; gap: 4px; align-items: baseline; border: 0; background: none; text-align: left; padding: 3px 6px;
     border-radius: 6px; min-width: 0; }
+  .tree .row:hover { background: var(--panel); }
   .tree .row.on { background: var(--accent-soft); color: var(--accent); }
   .tree .twisty { width: 12px; flex: none; color: var(--muted); font-size: 10px; }
   .tree .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tree .meta { margin-left: auto; padding-left: 8px; font-size: 11px; white-space: nowrap; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-  .card { background: var(--panel); border: 2px solid transparent; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
-  .card.on { border-color: var(--accent); } .badge.warn { color: var(--warn); }
+  .card { background: var(--bg); border: 1px solid var(--line); box-shadow: 0 0 0 1px transparent; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+  .card:hover { border-color: var(--muted); } .card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); } .badge.warn { color: var(--warn); }
   .card .pick { all: unset; display: flex; flex-direction: column; cursor: pointer; }
   .card .pick:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 10px; }
   .thumb { aspect-ratio: 16 / 9; background: var(--raised); display: grid; place-items: center; overflow: hidden; }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; image-rendering: pixelated; }
   .thumb .letter { font-size: 40px; font-weight: 700; color: var(--muted); opacity: .6; }
-  .card-body { padding: 8px 10px 10px; display: grid; gap: 2px; }
+  .card-body { padding: 10px 12px 12px; display: grid; gap: 2px; }
   .name { font-weight: 650; font-size: 14px; display: flex; gap: 6px; align-items: baseline; min-width: 0; }
   .name span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .badge { font-size: 11px; padding: 0 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); flex: none; font-weight: 500; }
+  .badge.idle { background: var(--raised); color: var(--muted); }
+  .grid > .section + .section { margin-top: 0; }
   .dense .grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
   .dense .thumb img { object-fit: contain; }
   .dense .name { font-size: 12px; }
@@ -92,7 +123,7 @@
   .split-bar { align-self: stretch; cursor: col-resize; border-radius: 3px; min-height: 40px; }
   .split-bar:hover, .split-bar:focus-visible { background: var(--line); }
   .pane { min-width: 0; display: grid; gap: 10px; }
-  @media (max-width: 700px) { .split { grid-template-columns: 1fr; } .split-bar, .status { display: none; } }
+  @media (max-width: 700px) { .split { grid-template-columns: 1fr; } .split-bar { display: none; } }
 </style>
 </head>
 <body>
@@ -247,15 +278,40 @@ const studioTabs = [];
       .finally(() => { state.sharing = false; if (JSON.stringify(state.context) !== key) share(); });
   };
 
+  // The side bar's groups, by tab id; a tab in none goes last. File shows only
+  // while it's the page (a file is opened from elsewhere). Each tab's icon: 16px strokes.
+  const groups = [["", ["games"]], ["Game", ["game", "play", "editor"]], ["Design", ["memory", "tasks"]],
+                  ["Project", ["files", "file", "index", "git", "variants"]], ["Checks", ["health", "console"]]];
+  const icons = { games: "M2.5 2.5h4.5v4.5H2.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5H2.5zM9 9h4.5v4.5H9z", game: "M2.5 7.5 8 2.5l5.5 5V13.5h-11z",
+    play: "M5 3v10l8-5z", editor: "M2.5 13.5l.6-3L11 2.6l2.4 2.4-7.9 7.9zM9.5 4l2.4 2.4", memory: "M3 2.5h8a1.5 1.5 0 0 1 1.5 1.5v9.5H4.5A1.5 1.5 0 0 1 3 12zM3 12a1.5 1.5 0 0 1 1.5-1.5h8",
+    tasks: "M2.5 4.2l1.2 1.2L6 3.1M8.5 4.5h5M2.5 10.2l1.2 1.2L6 9.1M8.5 10.5h5", files: "M2 4a1 1 0 0 1 1-1h3.5L8 4.5h5a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z",
+    file: "M4 2h5l3 3v9H4zM9 2v3h3", index: "M5 2.5v11M11 2.5v11M2.5 5.5h11M2.5 10.5h11",
+    git: "M5 2.5v11M11 7.5c0 2.5-6 1.5-6 4M12.5 6a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z", variants: "M8 2v4M8 6l-4.5 4v4M8 6l4.5 4v4",
+    health: "M1.5 8.5h3l1.5-4 3 7 1.5-3h4", console: "M2 3h12v10H2zM4.5 6.3 6.5 8l-2 1.7M8 10h3.5" };
+  const icon = (id) => el("svg:svg", { viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", "stroke-width": "1.4", "stroke-linejoin": "round",
+    "stroke-linecap": "round", "aria-hidden": "true" }, el("svg:path", { d: icons[id] || "M4 4h8v8H4z" }));
+  // The tabs as the bar shows them; Alt+1..9 follow this order.
+  const shown = (current) => {
+    const listed = new Set(groups.flatMap(([, ids]) => ids));
+    return [...groups.map(([name, ids]) => [name, ids.map((id) => tabs.find((t) => t.id === id)).filter(Boolean)]),
+      ["More", tabs.filter((t) => !listed.has(t.id))]]
+      .map(([name, list]) => [name, list.filter((t) => t.id !== "file" || t === current)]).filter(([, list]) => list.length);
+  };
   const tabBar = (current, game) => {
-    const buttons = tabs.map((t, i) => el("button", { class: "tab", role: "tab", "data-key": "tab:" + t.id,
-      "aria-selected": t === current ? "true" : "false", disabled: !t.home && !game,
-      title: `${t.title} (${navigator.platform && /Mac/.test(navigator.platform) ? "⌥" : "Alt+"}${i + 1})`,
-      onclick: () => open(t) }, t.title));
-    const bar = el("div", { class: "tabs", role: "tablist", "aria-label": "Studio" }, buttons);
+    const buttons = [];
+    const kids = shown(current).flatMap(([name, list]) => [name ? el("div", { class: "group", "aria-hidden": "true" }, name) : null,
+      list.map((t) => {
+        const b = el("button", { class: "tab", role: "tab", "data-key": "tab:" + t.id,
+          "aria-selected": t === current ? "true" : "false", disabled: !t.home && !game, title: t.title,
+          onclick: () => open(t) }, icon(t.id), el("span", { class: "tab-label" }, t.title));
+        buttons.push(b);
+        return b;
+      })]);
+    const bar = el("div", { class: "tabs", role: "tablist", "aria-label": "Studio" }, kids);
+    buttons.forEach((b, i) => { if (i < 9) b.title += ` (${navigator.platform && /Mac/.test(navigator.platform) ? "⌥" : "Alt+"}${i + 1})`; });
     bar.addEventListener("keydown", (e) => {
       const live = buttons.filter((b) => !b.disabled), at = live.indexOf(e.target);
-      const to = { ArrowLeft: at - 1, ArrowRight: at + 1, Home: 0, End: live.length - 1 }[e.key];
+      const to = { ArrowLeft: at - 1, ArrowUp: at - 1, ArrowRight: at + 1, ArrowDown: at + 1, Home: 0, End: live.length - 1 }[e.key];
       if (to !== undefined && at >= 0) { e.preventDefault(); live[(to + live.length) % live.length].focus(); }
     });
     return bar;
@@ -269,7 +325,7 @@ const studioTabs = [];
   };
   document.addEventListener("keydown", (e) => {
     const n = e.altKey && !e.metaKey && !e.ctrlKey && /^Digit[1-9]$/.test(e.code || "") ? Number(e.code.slice(5)) : 0;
-    const t = tabs[n - 1], g = games();
+    const t = state.route && shown(state.route.tab).flatMap(([, list]) => list)[n - 1], g = games();
     if (t && (t.home || (g && g.open))) { e.preventDefault(); open(t); }
   });
 
@@ -374,15 +430,17 @@ const studioTabs = [];
     let body;
     try { body = tab.render(ctx); } catch (e) { console.error(e); body = kit.empty(`${tab.title} broke: ${e && e.message || e}`); }
     app.replaceChildren(
-      el("header", { class: "top" },
-        el("svg:svg", { class: "mark", viewBox: "0 0 20 20", fill: "none", stroke: "currentColor", "stroke-width": "1.33", "aria-hidden": "true" },
-          el("svg:circle", { cx: "10", cy: "10", r: "5.6" }), el("svg:path", { d: "M10 1.8 11.6 8.4 18.2 10 11.6 11.6 10 18.2 8.4 11.6 1.8 10 8.4 8.4Z" })),
-        game ? el("span", { class: "game-name", title: game.path }, game.name) : null,
+      el("nav", { class: "side" },
+        el("div", { class: "brand" },
+          el("svg:svg", { class: "mark", viewBox: "0 0 20 20", fill: "none", stroke: "currentColor", "stroke-width": "1.33", "aria-hidden": "true" },
+            el("svg:circle", { cx: "10", cy: "10", r: "5.6" }), el("svg:path", { d: "M10 1.8 11.6 8.4 18.2 10 11.6 11.6 10 18.2 8.4 11.6 1.8 10 8.4 8.4Z" })),
+          el("span", { class: "game-name", title: game ? game.path : "Journeyman Studio" }, game ? game.name : "Journeyman")),
         tabBar(tab, game),
-        el("span", { class: "status", role: "status", title: state.notice }, g.cached && !state.notice ? "Updating…" : state.notice)),
-      ...(host.outdated() ? [el("div", { class: "update", role: "note" },
-        "This ChatGPT is older than Journeyman's pages need (26.928.20710): update it for forms, attachments and the file viewer.")] : []),
-      el("main", { class: "view" }, body));
+        el("div", { class: "status", role: "status", title: state.notice }, g.cached && !state.notice ? "Updating…" : state.notice)),
+      el("div", { class: "main" },
+        ...(host.outdated() ? [el("div", { class: "update", role: "note" },
+          "This ChatGPT is older than Journeyman's pages need (26.928.20710): update it for forms, attachments and the file viewer.")] : []),
+        el("main", { class: "view" }, body)));
     if (focused) kit.focusKey(focused);
     share();
     if (host.displayMode === "inline") { try { host.notifyHeight(document.body.scrollHeight); } catch (e) {} }
@@ -390,6 +448,7 @@ const studioTabs = [];
 
   host.onChange(render);
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+  matchMedia("(max-width: 760px)").addEventListener("change", render);  // the tabs move between the side and the top
   render();
 })();
 </script>

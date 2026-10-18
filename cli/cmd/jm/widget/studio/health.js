@@ -31,7 +31,7 @@ studioTabs.push((() => {
     const { kit } = ctx, { el } = kit;
     const running = state.running.has(n);
     const pill = running ? el("span", { class: "badge" }, "running…")
-      : !c ? el("span", { class: "meta" }, "not run")
+      : !c ? el("span", { class: "badge idle" }, "not run")
       : el("span", { class: "badge" + (c.ok && !c.problems.some((p) => p.level === "error") ? "" : " warn") }, c.ok ? "ok" : "failing");
     return kit.section(titles[n],
       el("div", { class: "head", style: { marginBottom: "4px" } }, pill, el("span", { class: "meta" }, c ? c.summary : ""), el("span", { class: "spacer" }),
@@ -53,7 +53,7 @@ studioTabs.push((() => {
     return el("div", {},
       el("div", { class: "head" }, el("h1", {}, "Health"), el("span", { class: "meta" }, "setup, build, tests and goldens: build and goldens take a while"),
         el("span", { class: "spacer" }), el("button", { class: "primary", disabled: state.running.size > 0, onclick: () => run(ctx, names) }, "Check all")),
-      el("div", { class: "grid", style: { gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))" } }, names.map((n) => card(ctx, n, checks[n]))));
+      el("div", { class: "grid", style: { gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" } }, names.map((n) => card(ctx, n, checks[n]))));
   };
 
   // The latest page's ctx, whichever tab: a run sees another game opened.
