@@ -514,3 +514,21 @@ func TestPlaybookCompletionsTellNotesApart(t *testing.T) {
 		t.Errorf("places: %s", got)
 	}
 }
+
+// A prompt asked wrong is an error, not a crash; a note by its path is linked from the vault.
+func TestPromptErrorsAndPathLinks(t *testing.T) {
+	replies := mcpSession(t, `{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"canon_check"}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"prompts/get","params":{"name":"nope"}}`, `{"jsonrpc":"2.0","id":3,"method":"ping"}`)
+	for _, id := range []float64{1, 2} {
+		if replies[id]["error"] == nil || replies[id]["result"] != nil {
+			t.Errorf("%v: %v", id, replies[id])
+		}
+	}
+	if replies[3] == nil {
+		t.Error("the server stopped")
+	}
+	p, _ := findPlaybook("canon_check")
+	if text, _ := p.fill(map[string]string{"note": "design/South/Harbor.md"}); !strings.Contains(text, "Check [[South/Harbor]] against") || !strings.Contains(text, "design/South/Harbor.md") && strings.Contains(text, "{note}") {
+		t.Errorf("by path: %s", text)
+	}
+}

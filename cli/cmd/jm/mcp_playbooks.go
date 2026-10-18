@@ -97,6 +97,9 @@ func (p playbook) fill(args map[string]string) (string, error) {
 		}
 		text = ifGiven(text, "{"+a.name+"?", v != "")
 		text = ifGiven(text, "{"+a.name+"!", v == "")
+		if rel, ok := strings.CutPrefix(v, memory.Dir+"/"); ok && strings.HasSuffix(rel, ".md") { // a note by its path: linked from the vault, as North/Harbor
+			text = strings.ReplaceAll(text, "[[{"+a.name+"}]]", "[["+strings.TrimSuffix(rel, ".md")+"]]")
+		}
 		text = strings.ReplaceAll(text, "{"+a.name+"}", v)
 	}
 	return text, nil

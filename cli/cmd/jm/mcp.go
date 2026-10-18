@@ -450,7 +450,11 @@ func (s *mcpServer) handle(ctx context.Context, method string, params json.RawMe
 			Arguments map[string]string `json:"arguments"`
 		}
 		_ = json.Unmarshal(params, &get)
-		return getPrompt(get.Name, get.Arguments)
+		prompt, err := getPrompt(get.Name, get.Arguments)
+		if err != nil {
+			return nil, err // a nil map in an any isn't nil
+		}
+		return prompt, nil
 	case "resources/list":
 		s.calls.Lock() // resources are the open game's: not while open_game switches it
 		defer s.calls.Unlock()
