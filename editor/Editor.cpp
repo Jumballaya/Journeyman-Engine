@@ -217,6 +217,7 @@ Editor::Editor()
       _gamePanel(std::make_unique<GamePanel>()),
       _assets(std::make_unique<AssetsPanel>()),
       _console(std::make_unique<ConsolePanel>()),
+      _designPanel(std::make_unique<DesignPanel>()),
       _palette(std::make_unique<CommandPalette>()),
       _export(std::make_unique<ExportDialog>()),
       _settings(std::make_unique<SettingsDialog>()),
@@ -241,6 +242,8 @@ void Editor::frame(float dt) {
   syncSession();
   if (auto done = _cli.takeFinished()) onBuildFinished(*done);
   _agents.setFolder(_project ? _project->root() : std::filesystem::path());
+  _design.setFolder(_project ? _project->root() : std::filesystem::path());
+  _design.poll(now());
   if (auto done = _session.takeFinished(); done && !done->ok && !done->cancelled) {
     consoleError("The multiplayer session stopped with an error", done->message);
   }
@@ -698,6 +701,17 @@ void Editor::pointOut(const std::string& note) {
   if (!_editorSession || !_scene) return;
   _editorSession->pointOut(_scene->path(), selectedNames(), note);
   _toasts.show(Toasts::Kind::Success, "Sent to your agent", "Your agent can read it now.");
+}
+
+void Editor::askAbout(const std::string& notePath, const std::string& question) {
+  if (!_editorSession) return;
+  _editorSession->pointOut(_scene ? _scene->path() : std::string(), {}, "About " + notePath + ": " + question);
+  _toasts.show(Toasts::Kind::Success, "Sent to your agent", "Your agent can read it now.");
+}
+
+void Editor::showDesign(const std::string& notePath) {
+  _designPanel->show(notePath);
+  focusPanel("Design");
 }
 
 void Editor::offerRecovery() {

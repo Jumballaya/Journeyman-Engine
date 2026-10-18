@@ -1129,6 +1129,7 @@ void InspectorPanel::draw(Editor& editor) {
     ui::badge(multi, theme::accent);
   }
   if (isPrefab) prefabBar(editor, uid, entity);
+  drawDossier(editor, entityName, isRoot ? scene->path() : entity.value("prefab", std::string()), scene->path());
   ImGui::Dummy({0, 4});
 
   // When it spawns: with the scene, with a group, or only under conditions.
@@ -1326,6 +1327,28 @@ void InspectorPanel::draw(Editor& editor) {
 
 // With nothing selected: the scene itself. What's in it, its spawn groups,
 // what loads it, and a way to play it.
+void InspectorPanel::drawDossier(Editor& editor, const std::string& name, const std::string& prefab, const std::string& scene) {
+  const DesignNotes::Note* dossier = editor.design().dossierFor(name, prefab, scene);
+  if (!dossier) return;
+  ImGui::Dummy({0, 2});
+  ImGui::PushStyleColor(ImGuiCol_ChildBg, theme::bg2);
+  ImGui::BeginChild("##dossier", {0, 0}, ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
+  ImGui::TextColored(theme::info, ICON_IDENTIFICATION_CARD);
+  ImGui::SameLine(0, 6);
+  ImGui::PushFont(theme::fonts().semibold, 0.0f);
+  ImGui::TextUnformatted(dossier->title.c_str());
+  ImGui::PopFont();
+  ImGui::SameLine(0, 8);
+  ui::badge(dossier->type.empty() ? "dossier" : dossier->type.c_str(), theme::info);
+  if (!dossier->summary.empty()) {
+    ImGui::TextColored(theme::textDim, "%s", ui::ellipsize(dossier->summary, ImGui::GetContentRegionAvail().x).c_str());
+    ui::tooltip(dossier->summary.c_str());
+  }
+  if (ui::button(ICON_BOOK_OPEN "  Open in Design")) editor.showDesign(dossier->path);
+  ImGui::EndChild();
+  ImGui::PopStyleColor();
+}
+
 void InspectorPanel::drawSceneOverview(Editor& editor, SceneDocument& scene) {
   const Project& project = *editor.project();
   ImGui::PushFont(nullptr, 20.0f);

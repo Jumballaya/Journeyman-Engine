@@ -110,6 +110,18 @@ bool CliRunner::run(const std::vector<std::string>& args, std::string& output) {
   return process.wait() == 0;
 }
 
+bool CliRunner::run(const fs::path& cwd, const std::vector<std::string>& args, std::string& output) {
+  const std::string command = commandLine(cwd, args);
+  if (command.empty()) {
+    output = "Can't find the jm CLI: put it beside the editor, on PATH, or set JM_CLI.";
+    return false;
+  }
+  shell::Process process;
+  if (!process.start(command)) return false;
+  for (std::string line; process.readLine(line);) output += line + "\n";
+  return process.wait() == 0;
+}
+
 std::string CliRunner::commandLine(const fs::path& cwd, const std::vector<std::string>& args) {
   const fs::path jm = locate();
   if (jm.empty()) return {};

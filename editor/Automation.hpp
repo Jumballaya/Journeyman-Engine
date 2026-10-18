@@ -16,7 +16,7 @@ class Editor;
 //   "@wait frames", "@shot out.png" (after the frame draws), "@done token";
 // plus editor actions: "@select Name", "@open path", "@inspect path",
 // "@reveal path", "@import file", "@add asset", "@apply asset", "@move a b", "@project folder",
-// "@makeprefab", "@live tag". Points are from the window's top-left.
+// "@makeprefab", "@live tag", "@design note" (a design/ path, in the Design panel). Points are from the window's top-left.
 class Automation {
  public:
   // `script`: "frame:step;frame:step" run at those frames (JM_EDITOR_SCRIPT).

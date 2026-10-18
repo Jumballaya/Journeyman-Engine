@@ -35,6 +35,8 @@ class CliRunner {
   // Runs jm with args and waits for it, outside any job: true if it succeeded.
   // output gets what it printed (stdout and stderr), line by line.
   static bool run(const std::vector<std::string>& args, std::string& output);
+  // The same in `cwd` (a game's folder, for the commands that work on the game there).
+  static bool run(const std::filesystem::path& cwd, const std::vector<std::string>& args, std::string& output);
 
   // False when a job is running or jm can't be found (the reason goes to the console).
   bool start(const std::filesystem::path& cwd, const std::vector<std::string>& args, std::string label);
