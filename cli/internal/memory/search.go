@@ -127,6 +127,9 @@ func phrasesOf(text string) (string, []string) {
 			if t.kind != '^' && t.kind != '~' {
 				t.kind = 'w'
 			}
+			if text[i] == '\\' { // an escaped first character is the word's (\: or \\)
+				i++
+			}
 			for i++; i < len(text) && (t.kind != 'w' || strings.IndexByte(":^~", text[i]) < 0) && text[i] != ' '; i++ {
 				if text[i] == '\\' {
 					i++
