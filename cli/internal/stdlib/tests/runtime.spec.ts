@@ -183,6 +183,7 @@ export function timelineMutationAfterTake(): void {
 
 import { Session } from "../runtime/session";
 import { Settings } from "../runtime/settings";
+import { Window } from "../runtime/render";
 import { Screen } from "../runtime/screen";
 
 export function sessions(): void {
@@ -249,6 +250,11 @@ export function restoreSettings(): void {
   const settings = new Settings();
   const crt = settings.effect("crt", "crt");
   settings.open(); near(settings.musicVolume, 0.7); assert(!crt.value && settings.fullscreen);
+}
+export function forcedWindowStays(): void {
+  const settings = new Settings();
+  settings.open(); assert(Window.fullscreenForced && !Window.fullscreen);
+  Window.toggleFullscreen(); assert(Window.fullscreen);
 }
 
 export function shadows(): void {

@@ -2,6 +2,7 @@
 
 #include <GLFW/glfw3.h>
 
+#include <algorithm>
 #include <stdexcept>
 
 #include "../core/app/ApplicationEvents.hpp"
@@ -60,6 +61,32 @@ void onScroll(GLFWwindow* window, double dx, double dy) {
   if (EventBus* bus = busOf(window)) bus->emit(EVT_MouseWheel, events::MouseWheel{static_cast<float>(dx), static_cast<float>(dy)});
 }
 
+// The monitor holding most of the window (the primary one if none does, or
+// where windows don't know their position: Wayland).
+GLFWmonitor* monitorUnder(GLFWwindow* window) {
+  if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) return glfwGetPrimaryMonitor();
+  int x = 0, y = 0, w = 0, h = 0;
+  glfwGetWindowPos(window, &x, &y);
+  glfwGetWindowSize(window, &w, &h);
+  int count = 0;
+  GLFWmonitor** monitors = glfwGetMonitors(&count);
+  GLFWmonitor* best = glfwGetPrimaryMonitor();
+  long bestArea = 0;
+  for (int i = 0; i < count; ++i) {
+    const GLFWvidmode* mode = glfwGetVideoMode(monitors[i]);
+    if (!mode) continue;
+    int mx = 0, my = 0;
+    glfwGetMonitorPos(monitors[i], &mx, &my);
+    const long across = std::max(0, std::min(x + w, mx + mode->width) - std::max(x, mx));
+    const long down = std::max(0, std::min(y + h, my + mode->height) - std::max(y, my));
+    if (across * down > bestArea) {
+      bestArea = across * down;
+      best = monitors[i];
+    }
+  }
+  return best;
+}
+
 void onResize(GLFWwindow* window, int width, int height) {
   if (EventBus* bus = busOf(window)) bus->emit(EVT_WindowResize, events::WindowResized{width, height});
 }
@@ -69,9 +96,11 @@ void onResize(GLFWwindow* window, int width, int height) {
 void GLFWWindowModule::bindScriptApi(Engine& app) {
   ScriptManager& s = app.getScriptManager();
   s.bind("__jmWindowSetFullscreen", [this](bool on) {
-    if (_window) setFullscreen(on);  // embedded (the editor): the host's window isn't the game's to change
+    // Embedded (the editor): the host's window isn't the game's to change.
+    if (_window || _automated) setFullscreen(on);
   });
   s.bind("__jmWindowIsFullscreen", [this]() { return _fullscreen; });
+  s.bind("__jmWindowFullscreenForced", [this]() { return _forced; });
   // Embedded, the host reports its view's focus; with no window at all
   // (JM_RENDERER=none) the game acts focused, like a hidden headless one.
   s.bind("__jmWindowIsFocused", [&app]() { return app.windowFocused(); });
@@ -79,14 +108,19 @@ void GLFWWindowModule::bindScriptApi(Engine& app) {
 
 void GLFWWindowModule::initialize(Engine& app) {
   if (app.embedded()) return;
-  if (app.getDevOptions().renderer == "none") {  // no window, no GL: nothing for GLFW to do
-    JM_LOG_INFO("[GLFW Window] none (JM_RENDERER=none)");
-    return;
-  }
-
   // config.window: { width, height, resizable, vsync, fullscreen, hideCursor }
   const nlohmann::json& config = app.getManifest().config;
   const nlohmann::json win = config.contains("window") ? config["window"] : nlohmann::json::object();
+  _automated = app.getDevOptions().automated();
+  const std::optional<bool> forced = app.launchFullscreen();
+  _forced = forced.has_value();
+  const bool fullscreen = forced.value_or(win.value("fullscreen", false));
+  if (app.getDevOptions().renderer == "none") {  // no window, no GL: nothing for GLFW to do
+    JM_LOG_INFO("[GLFW Window] none (JM_RENDERER=none)");
+    _fullscreen = fullscreen;  // noted, as in any automated run
+    return;
+  }
+
   _headless = app.getDevOptions().headless;
   _vsync = win.value("vsync", true);
 
@@ -127,15 +161,19 @@ void GLFWWindowModule::initialize(Engine& app) {
   glfwSetScrollCallback(_window, onScroll);
   if (win.value("hideCursor", false)) glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
   if (const auto& pos = app.getDevOptions().windowPos) glfwSetWindowPos(_window, pos->first, pos->second);
-  if (win.value("fullscreen", false)) setFullscreen(true);
+  if (fullscreen) setFullscreen(true);
 
   JM_LOG_INFO("[GLFW Window] initialized");
 }
 
 void GLFWWindowModule::setFullscreen(bool on) {
   if (on == _fullscreen) return;
+  if (_automated) {
+    _fullscreen = on;
+    return;
+  }
   if (on) {
-    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    GLFWmonitor* monitor = monitorUnder(_window);
     const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
     if (!mode) return;
     glfwGetWindowPos(_window, &_windowedX, &_windowedY);

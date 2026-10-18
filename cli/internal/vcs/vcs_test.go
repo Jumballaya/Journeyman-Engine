@@ -239,6 +239,28 @@ func TestANewFilesDiffIsItAllAdded(t *testing.T) {
 	}
 }
 
+// Before the first commit, every file's diff is it all added.
+func TestBeforeTheFirstCommitADiffIsTheNewFiles(t *testing.T) {
+	_, root := game(t)
+	if out, err := exec.Command("git", "-C", root, "init", "--quiet").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	d, err := Diff(root, "", "scenes/main.scene.json")
+	if err != nil || !strings.Contains(d, `+{"entities":[]}`) {
+		t.Errorf("diff: %v\n%s", err, d)
+	}
+	put(t, root, "added.txt", "added\n")
+	if out, err := exec.Command("git", "-C", root, "add", "added.txt").CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v %s", err, out)
+	}
+	if d, _ := Diff(root, "", ""); !strings.Contains(d, "+added") || !strings.Contains(d, `+{"entities":[]}`) {
+		t.Errorf("the whole game's, one file added to git:\n%s", d)
+	}
+	if _, err := Diff(root, "HEAD~1", ""); err == nil {
+		t.Error("a version that isn't there: no error")
+	}
+}
+
 // Going back takes away what came after, and a path written "./a" is a.
 func TestRestoreRemovesLaterFilesAndReadsDotPaths(t *testing.T) {
 	_, root := game(t)
@@ -554,8 +576,7 @@ func TestAFailedRestoreAcrossAFileThatIsNowAFolder(t *testing.T) {
 	first, _ := git(root, "rev-parse", "HEAD")
 	os.Remove(filepath.Join(root, "d"))
 	put(t, root, "d/a", "in a folder")
-	git(root, "add", "-A") // plain git: jm vcs commit -- . trips on a file turned folder (in todos)
-	if _, err := git(root, append(identity(root), "commit", "-q", "-m", "folder")...); err != nil {
+	if _, err := Commit(root, "folder"); err != nil {
 		t.Fatal(err)
 	}
 	put(t, root, "d/a", "staged")
@@ -573,10 +594,42 @@ func TestAFailedRestoreAcrossAFileThatIsNowAFolder(t *testing.T) {
 	}
 }
 
+// A file whose deletion is staged, and nothing else of it: git stash finds
+// nothing by that name, yet the restore brings it back, and the recovery
+// deletes it again.
+func TestARestoreBringsBackAStagedDeletion(t *testing.T) {
+	_, root := game(t)
+	put(t, root, "notes.txt", "a file")
+	if _, err := Commit(root, "notes"); err != nil {
+		t.Fatal(err)
+	}
+	git(root, "rm", "-q", "notes.txt")
+	if backup, err := Restore(root, "", []string{"notes.txt"}); err != nil || backup != "" {
+		t.Fatalf("alone: %q %v", backup, err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "notes.txt")); string(data) != "a file" {
+		t.Errorf("notes.txt: %q", data)
+	}
+	git(root, "rm", "-q", "notes.txt")
+	put(t, root, "new.txt", "mine")
+	before, _ := git(root, "status", "--porcelain=v1", "-uall")
+	backup, err := Restore(root, "", []string{"notes.txt", "new.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "notes.txt")); string(data) != "a file" || onDisk(filepath.Join(root, "new.txt")) {
+		t.Errorf("notes.txt: %q, new.txt kept: %v", data, onDisk(filepath.Join(root, "new.txt")))
+	}
+	recoverFrom(t, root, backup)
+	if after, _ := git(root, "status", "--porcelain=v1", "-uall"); after != before {
+		t.Errorf("after recovery:\n%s\nwas\n%s", after, before)
+	}
+}
+
 // The other way: a file whose deletion is staged, a folder by that name in
-// the version. The restore fails (git stash finds nothing by that name), and
-// the deletion stays staged.
-func TestAFailedRestoreKeepsADeletionWhereTheVersionHasAFolder(t *testing.T) {
+// the version. The restore brings the folder back, and the recovery the
+// staged deletion.
+func TestARestoreOverADeletionWhereTheVersionHasAFolder(t *testing.T) {
 	_, root := game(t)
 	put(t, root, "d/a", "in a folder")
 	if _, err := Commit(root, "folder"); err != nil {
@@ -585,18 +638,56 @@ func TestAFailedRestoreKeepsADeletionWhereTheVersionHasAFolder(t *testing.T) {
 	first, _ := git(root, "rev-parse", "HEAD")
 	os.RemoveAll(filepath.Join(root, "d"))
 	put(t, root, "d", "a file")
-	git(root, "add", "-A")
-	if _, err := git(root, append(identity(root), "commit", "-q", "-m", "file")...); err != nil {
+	if _, err := Commit(root, "file"); err != nil {
 		t.Fatal(err)
 	}
 	git(root, "rm", "-q", "d")
 	put(t, root, "new.txt", "mine")
 	before, _ := git(root, "status", "--porcelain=v1", "-uall")
-	_, err := Restore(root, strings.TrimSpace(first), []string{"d", "new.txt"})
-	if err == nil {
-		t.Fatal("restored over a staged deletion")
+	backup, err := Restore(root, strings.TrimSpace(first), []string{"d", "new.txt"})
+	if err != nil {
+		t.Fatal(err)
 	}
+	if data, _ := os.ReadFile(filepath.Join(root, "d/a")); string(data) != "in a folder" {
+		t.Errorf("d/a: %q", data)
+	}
+	recoverFrom(t, root, backup)
 	if after, _ := git(root, "status", "--porcelain=v1", "-uall"); after != before {
-		t.Errorf("status:\n%s\nwas\n%s", after, before)
+		t.Errorf("after recovery:\n%s\nwas\n%s", after, before)
+	}
+}
+
+// recoverFrom runs the recovery a restore's backup gives, as a person would.
+func recoverFrom(t *testing.T, root, backup string) {
+	t.Helper()
+	_, commands, ok := strings.Cut(backup, "at the repository's top: ")
+	if !ok {
+		t.Fatalf("no recovery in %q", backup)
+	}
+	cmd := exec.Command("sh", "-c", strings.TrimSuffix(commands, ")"))
+	cmd.Dir = root
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("recovery: %v\n%s\n%s", err, out, commands)
+	}
+}
+
+// A file git ignores, named alone, is refused before anything is stashed.
+func TestARestoreOfAnIgnoredFileChangesNothing(t *testing.T) {
+	_, root := game(t)
+	put(t, root, ".gitignore", "*.log\n")
+	put(t, root, "a.txt", "first")
+	if _, err := Commit(root, "ignore logs"); err != nil {
+		t.Fatal(err)
+	}
+	put(t, root, "a.txt", "changed")
+	put(t, root, "run.log", "output")
+	if _, err := Restore(root, "", []string{"a.txt", "run.log"}); err == nil || !strings.Contains(err.Error(), "run.log") {
+		t.Fatalf("restored: %v", err)
+	}
+	if stashes, _ := git(root, "stash", "list"); stashes != "" {
+		t.Errorf("stashed: %s", stashes)
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "a.txt")); string(data) != "changed" {
+		t.Errorf("a.txt: %q", data)
 	}
 }

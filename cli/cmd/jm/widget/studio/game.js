@@ -9,15 +9,15 @@ studioTabs.push((() => {
 
   // A moment: its picture with the picks outlined, from play_moment.
   const showMoment = async (ctx, game, play, n) => {
-    const key = `${play}#${n}`;
-    state.moment = { game, key };
+    const key = `${play}#${n}`, asked = {};  // this ask: a later one (another moment, or game) wins
+    state.moment = { game, key, asked };
     ctx.rerender();
     let shown;
     try {
       const r = await ctx.call("play_moment", { game, play, marker: "m" + n });  // this game's, whichever is open by then
       shown = r && r.structuredContent && r.structuredContent.marker ? { game, key, r } : { game, key, error: (r && r.content && r.content[0] && r.content[0].text) || "No such moment." };
     } catch (e) { shown = { game, key, error: String(e && e.message || e) }; }
-    if (state.moment && state.moment.key === key) { state.moment = shown; ctx.rerender(); }
+    if (state.moment && state.moment.asked === asked) { state.moment = shown; ctx.rerender(); }
   };
   const momentView = (ctx, m) => {
     const { el } = ctx.kit;
@@ -25,11 +25,14 @@ studioTabs.push((() => {
     if (!m.r) return el("div", { class: "meta" }, "Looking at that moment…");
     const s = m.r.structuredContent, src = (m.r._meta || {})["jm/image"];
     const title = `Moment ${s.marker.n} of play ${s.play}${s.marker.note ? ": " + s.marker.note : ""}`;
-    const text = (m.r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
+    // Which game, said outright: a new chat (or this one, later) may have another game open.
+    const name = ctx.game && ctx.game.path === m.game ? ctx.game.name : m.game.split("/").pop();
+    const which = `the game ${name} (${m.game}): open_game "${m.game}" before play_moment or play_state`;
+    const text = `In ${which}.\n` + (m.r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
     return el("div", { class: "moment" },
       src ? el("img", { class: "moment-picture", src, alt: title }) : null,
       el("ol", { class: "moment-picks" }, (s.picked || []).map((line) => el("li", {}, line))),
-      ctx.ask({ title, thumb: src, text, question: `Look at what I picked in moment ${s.marker.n} of my play ${s.play}: what's going on there?` }));
+      ctx.ask({ title, thumb: src, text, question: `Look at what I picked in moment ${s.marker.n} of my play ${s.play} in ${which}: what's going on there?` }));
   };
 
   const askPlays = async (ctx, path) => {
@@ -97,8 +100,8 @@ studioTabs.push((() => {
           meta: `${length(p.seconds)}${p.markers ? ` · ${p.markers} marker${p.markers === 1 ? "" : "s"}` : ""}${p.stale ? " · older build" : ""}` })),
           onPick: (item) => openPlay(ctx, plays.plays.find((p) => p.id === item.id)) })
       : el("div", { class: "meta" }, "No plays yet: Play records one."));
-    // The latest moments: markers the person picked entities in.
-    const moments = (plays && plays.plays || []).flatMap((p) => (p.moments || []).map((n) => ({ play: p.id, n,
+    // The latest moments, newest first (plays come newest first): markers the person picked things in.
+    const moments = (plays && plays.plays || []).flatMap((p) => [...(p.moments || [])].reverse().map((n) => ({ play: p.id, n,
       line: (p.marks || []).find((l) => l.startsWith(`m${n} `)) || `m${n}` }))).slice(0, 8);
     const shown = state.moment && state.moment.game === game.path ? state.moment : null;
     const momentList = moments.length ? kit.section("Moments", kit.tree({ label: "Moments", selected: shown && shown.key,

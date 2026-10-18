@@ -179,7 +179,7 @@ nlohmann::json MomentsModule::tilesIn(glm::vec2 lo, glm::vec2 hi) const {
                             glm::vec2(grid.properties().value("parallaxoriginx", 0.0f), -grid.properties().value("parallaxoriginy", 0.0f));
     nlohmann::json layers = nlohmann::json::array();
     for (const TileLayer& layer : grid.layers()) {
-      const auto in = layer.visible ? cells(origin + layer.offset + (camera - pivot) * (1.0f - layer.parallax)) : std::nullopt;
+      const auto in = layer.visible && layer.opacity > 0.0f ? cells(origin + layer.offset + (camera - pivot) * (1.0f - layer.parallax)) : std::nullopt;
       if (!in) continue;
       nlohmann::json found = nlohmann::json::array(), types = nlohmann::json::object();
       size_t count = 0;
