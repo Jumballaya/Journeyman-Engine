@@ -22,13 +22,15 @@ type Step struct {
 // every game).
 func Onboarding(root string, you Facts) []Step {
 	notes := Notes(root)
-	observed := func(title string, categories ...string) bool {
+	// observed: the note title (any, for "") has an observation whose category is one of in (any, for none) and not feel unless asked.
+	observed := func(title string, in ...string) bool {
 		for _, n := range notes {
-			if !strings.EqualFold(n.Title, title) && title != "" {
+			if title != "" && !strings.EqualFold(n.Title, title) {
 				continue
 			}
 			for _, o := range n.Observations {
-				if len(categories) == 0 || slices.ContainsFunc(categories, func(c string) bool { return strings.EqualFold(c, o.Category) }) {
+				fold := func(c string) bool { return strings.EqualFold(c, o.Category) }
+				if len(in) > 0 && slices.ContainsFunc(in, fold) || len(in) == 0 && !fold("feel") {
 					return true
 				}
 			}

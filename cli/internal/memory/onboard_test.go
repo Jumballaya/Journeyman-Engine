@@ -38,3 +38,24 @@ func TestOnboardingFollowsTheNotes(t *testing.T) {
 		t.Errorf("planned, but next: %+v", next)
 	}
 }
+
+// The feel noted in Pitch isn't its pitch; a skip of a step whose name is
+// already another fact's text is still kept.
+func TestOnboardingTellsFeelFromPitchAndKeepsSkips(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	you := PersonFacts(filepath.Join(t.TempDir(), "memory.md"))
+	Observe(root, "Pitch", "feel", "tense and quiet")
+	steps := Onboarding(root, you)
+	if next, _ := NextStep(steps); steps[1].Done != true || next.Name != "pitch" {
+		t.Errorf("only a feel: %+v", steps[:2])
+	}
+	topic, _, _ := GameFacts(root).Remember("topic", "world", "")
+	if _, err := Skip(root, "world"); err != nil {
+		t.Fatal(err)
+	}
+	Skip(root, "world")
+	if !Onboarding(root, you)[4].Done || len(GameFacts(root).All()) != 2 || GameFacts(root).All()[0] != topic {
+		t.Errorf("skip world beside a fact \"world\": %+v", GameFacts(root).All())
+	}
+}
