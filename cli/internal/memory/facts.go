@@ -80,14 +80,21 @@ func (f Facts) Remember(category, text, replaces string) (fact Fact, similar []F
 		return Fact{}, nil, err
 	}
 	defer release()
+	page, err := f.read()
+	if err != nil {
+		return Fact{}, nil, err
+	}
 	all := f.All()
 	for _, have := range all {
 		if have.ID != replaces && strings.EqualFold(have.Text, text) {
+			if replaces != "" { // the update says what another fact says: that one stays, the old one goes
+				if _, err := f.forget(page, replaces); err != nil {
+					return Fact{}, nil, err
+				}
+			}
 			return have, nil, nil
 		}
 	}
-	data, _ := os.ReadFile(f.path())
-	page := strings.ReplaceAll(string(data), "\r\n", "\n")
 	if page == "" {
 		page = f.empty()
 	}
@@ -120,14 +127,30 @@ func (f Facts) Forget(id string) (Fact, error) {
 		return Fact{}, err
 	}
 	defer release()
-	data, _ := os.ReadFile(f.path())
-	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
+	page, err := f.read()
+	if err != nil {
+		return Fact{}, err
+	}
+	return f.forget(page, id)
+}
+
+func (f Facts) forget(page, id string) (Fact, error) {
+	lines := strings.Split(page, "\n")
 	for i, line := range lines {
 		if m := factLine.FindStringSubmatch(line); m != nil && m[3] == id {
 			return Fact{ID: id, Category: m[1], Text: m[2], Scope: f.scope}, f.save(strings.Join(append(lines[:i], lines[i+1:]...), "\n"))
 		}
 	}
 	return Fact{}, fmt.Errorf("no fact %s (recall lists them)", id)
+}
+
+// read is the page the facts are on ("" when there's none yet).
+func (f Facts) read() (string, error) {
+	data, err := os.ReadFile(f.path())
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+	return strings.ReplaceAll(string(data), "\r\n", "\n"), nil
 }
 
 func (f Facts) empty() string {

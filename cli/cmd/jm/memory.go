@@ -73,6 +73,7 @@ var (
 	worldSteps     int
 	relateWith     []string
 	factYou        bool
+	factCategory   string
 	factReplaces   string
 )
 
@@ -166,7 +167,7 @@ func init() {
 		return "game"
 	}
 	remember := sub("remember <text>", "Keep a fact in mind in every conversation", cobra.ExactArgs(1), func(w io.Writer, root string, args []string) error {
-		f, similar, err := factsOf(root, scope()).Remember(memoryCategory, args[0], factReplaces)
+		f, similar, err := factsOf(root, scope()).Remember(factCategory, args[0], factReplaces)
 		if err != nil {
 			return err
 		}
@@ -179,7 +180,7 @@ func init() {
 		}
 		return nil
 	})
-	remember.Flags().StringVar(&memoryCategory, "category", "fact", "canon, rule, constraint, preference, style, tried...")
+	remember.Flags().StringVar(&factCategory, "category", "fact", "canon, rule, constraint, preference, style, tried...")
 	remember.Flags().BoolVar(&factYou, "you", false, "yours, for every game (~/.jm/memory.md)")
 	remember.Flags().StringVar(&factReplaces, "replaces", "", "the id of the fact this updates")
 	sub("recall [query]", "The facts kept in mind, best first for a query", cobra.MaximumNArgs(1), func(w io.Writer, root string, args []string) error {

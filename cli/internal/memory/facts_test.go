@@ -26,18 +26,24 @@ func TestFactsAreRememberedOnceAndUpdated(t *testing.T) {
 	if err != nil || updated.ID != exiled.ID || game.All()[0].Text != "The Dornes left Varn by choice." {
 		t.Errorf("update: %+v %v %+v", updated, err, game.All())
 	}
+	before := len(game.All())
+	locked, _, _ := game.Remember("canon", "The gate is locked.", "")
+	open, _, _ := game.Remember("canon", "The gate is open.", "")
+	if kept, _, err := game.Remember("canon", "The gate is open.", locked.ID); err != nil || kept.ID != open.ID || len(game.All()) != before+1 {
+		t.Errorf("an update to what another fact says: %+v %v %+v", kept, err, game.All())
+	}
 	you.Remember("preference", "Keep dialogue under three lines.", "")
 	you.Remember("style", "Pixel art at 16x16, warm palette.", "")
 	if got := Recall("dialogue lines", game, you); len(got) == 0 || got[0].Scope != "you" || !strings.Contains(got[0].Text, "dialogue") {
 		t.Errorf("recall: %+v", got)
 	}
-	if all := Recall("", game, you); len(all) != 4 {
+	if all := Recall("", game, you); len(all) != 5 {
 		t.Errorf("all: %+v", all)
 	}
-	if n, ok := Find(root, "Memory"); !ok || n.Type != "memory" || len(n.Observations) != 2 {
+	if n, ok := Find(root, "Memory"); !ok || n.Type != "memory" || len(n.Observations) != 3 {
 		t.Errorf("the game's facts are a design note: %+v", n)
 	}
-	if _, err := game.Forget(exiled.ID); err != nil || len(game.All()) != 1 {
+	if _, err := game.Forget(exiled.ID); err != nil || len(game.All()) != 2 {
 		t.Errorf("forget: %v %+v", err, game.All())
 	}
 	if _, err := game.Forget("fnope"); err == nil {
