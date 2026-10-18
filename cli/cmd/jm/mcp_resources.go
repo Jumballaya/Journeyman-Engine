@@ -342,10 +342,14 @@ func (s *mcpServer) completeArgument(params json.RawMessage) (any, *rpcError) {
 	var values []string
 	switch p.Ref.Type {
 	case "ref/prompt":
-		if _, ok := getPrompt(p.Ref.Name); !ok {
+		if _, ok := findPlaybook(p.Ref.Name); !ok {
 			return nil, &rpcError{Code: -32602, Message: "unknown prompt " + p.Ref.Name}
 		}
-		// jm's prompts take no arguments: nothing to suggest.
+		s.calls.Lock()
+		s.openRecentIfNone()
+		root, _ := projectRoot()
+		s.calls.Unlock()
+		values = knowledgeValues(root, p.Argument.Name)
 	case "ref/resource":
 		known := false
 		for _, t := range resourceTemplates() {

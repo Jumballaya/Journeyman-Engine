@@ -47,7 +47,11 @@ the next chat starts from them.
    `scope` you for the person's preference in every game). Opening the
    game reads them back. If it lists similar facts, `forget` the wrong one
    or `remember` with `replaces` (its id). `recall` finds them.
-8. **Link it.** `[[Note]]` links notes; name scene files in backticks
+8. **Grow it by playbook.** For "add to the world", "make some
+   characters", "make this place a level", "outline the story", "does this
+   fit", or "draw it", call `playbook` (no name to list them, then with
+   its `name` and `args`) and follow its steps.
+9. **Link it.** `[[Note]]` links notes; name scene files in backticks
    (`scenes/level1.scene.json`), entities as
    `jm://entity?scene=…&name=Hero`, plays and markers as `jm://play/<id>/m1`.
    One subject per note.
