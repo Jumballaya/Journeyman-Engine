@@ -502,7 +502,14 @@ named in backticks (`scenes/main.scene.json`).
   jm memory note <text> [--in Levels] [--category feel]
                                     add an observation (default: to Notes)
   jm memory decide <title> <why>    record a decision (design/decisions/)
+  jm memory onboard [--skip step]   plan a new game: each step, done or not, and
+                                    the next question to ask the person
   jm memory kinds                   the kinds of dossier: character, item, location...
+  jm memory remember <text> [--category canon] [--you] [--replaces id]
+                                    keep a fact in mind (design/Memory.md; --you:
+                                    yours, for every game: ~/.jm/memory.md)
+  jm memory recall [query]          the facts kept, the person's and the game's
+  jm memory forget <id> [--you]     forget one
   jm memory world <note> [--steps 2] what's connected to a note, within steps
   jm memory path <from> <to>        how two notes connect
   jm memory relate <from> <type> <to> [--with key=value]...
@@ -547,6 +554,19 @@ Flags:
       --summary string    a line or two under its heading
 ```
 
+## jm memory forget
+
+Forget a fact.
+
+
+
+```text
+Usage: jm memory forget <id> [flags]
+
+Flags:
+      --you   one of yours
+```
+
 ## jm memory init
 
 Make design/ (kept where it exists).
@@ -581,6 +601,19 @@ Flags:
       --in string         the note to add to (made if there's none of that name) (default "Notes")
 ```
 
+## jm memory onboard
+
+Plan a new game, a step at a time.
+
+
+
+```text
+Usage: jm memory onboard [flags]
+
+Flags:
+      --skip string   a step the game doesn't need: world, characters or you
+```
+
 ## jm memory path
 
 How two notes connect.
@@ -589,6 +622,16 @@ How two notes connect.
 
 ```text
 Usage: jm memory path <from> <to>
+```
+
+## jm memory recall
+
+The facts kept in mind, best first for a query.
+
+
+
+```text
+Usage: jm memory recall [query]
 ```
 
 ## jm memory relate
@@ -602,6 +645,21 @@ Usage: jm memory relate <from> <type> <to> [flags]
 
 Flags:
       --with stringArray   a detail, e.g. --with distance="120 km" (repeat)
+```
+
+## jm memory remember
+
+Keep a fact in mind in every conversation.
+
+
+
+```text
+Usage: jm memory remember <text> [flags]
+
+Flags:
+      --category string   canon, rule, constraint, preference, style, tried... (default "fact")
+      --replaces string   the id of the fact this updates
+      --you               yours, for every game (~/.jm/memory.md)
 ```
 
 ## jm memory search

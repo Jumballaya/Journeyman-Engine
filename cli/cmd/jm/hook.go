@@ -38,6 +38,7 @@ func sessionStart(in io.Reader, out io.Writer) error {
 		p := list[0]
 		text += fmt.Sprintf(" The person's latest play is %s (%d markers): when they talk about playing, play_show it first.", p.ID, len(p.Meta.Markers))
 	}
+	text += keepInMind(dir) + planned(dir)
 	return json.NewEncoder(out).Encode(map[string]any{"hookSpecificOutput": map[string]any{
 		"hookEventName": "SessionStart", "additionalContext": text}})
 }

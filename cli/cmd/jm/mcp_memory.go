@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
@@ -104,6 +105,66 @@ func (s *mcpServer) memoryTools() []mcpTool {
 				}
 				return toolResult{Text: n.Text, Structured: map[string]any{"ok": true, "note": n, "path": n.Path, "obsidian": memory.ObsidianURL(root, n)}}
 			})},
+		{Name: "onboard", Title: "Plan the game", Meta: callableMeta("", ""),
+			Description: "Plan a new game with the person (jm memory onboard), a step at a time: its pitch, feel, pillars, scope, world, " +
+				"characters, art and first level, and how the person likes to work. Gives each step, done or not as the notes say, " +
+				"and the next one: ask the person its question (with a concrete suggestion they can say yes to), wait, keep the answer " +
+				"as it says, then call onboard again for the next. skip a step the game has no need of (world, characters, you). " +
+				"Call it after new_game, and when a game's design notes are thin.",
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "skip": strArg("a step the game doesn't need: world, characters or you")}),
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
+				if skip := a.str("skip"); skip != "" {
+					if _, err := memory.Skip(root, skip); err != nil {
+						return textResult(err.Error(), true)
+					}
+				}
+				return onboarding(root)
+			})},
+		{Name: "remember", Title: "Remember this", Meta: callableMeta("Remembering…", "Remembered"),
+			Description: "Keep a fact in mind for every conversation (jm memory remember): the game's canon (\"the Dornes were exiled from Varn\"), " +
+				"a rule, a constraint, what was tried and why it failed (scope game, in design/Memory.md); or the person's preference for all their games " +
+				"(scope you, ~/.jm/memory.md). One fact a call, in a sentence. The same again is kept once; when its answer lists similar facts, " +
+				"forget one that's now wrong, or remember with replaces (its id) to update it. Opening the game reads them back. " +
+				"What came up in play goes in memory_note; a settled design question in memory_decide.",
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "text": strArg("the fact, a sentence"),
+				"category": strArg("canon, rule, constraint, preference, style, tried... (default fact)"),
+				"scope":    map[string]any{"type": "string", "enum": []string{"game", "you"}, "description": "game (default) or you: the person's, for every game"},
+				"replaces": strArg("the id of the fact this updates (it keeps the id)")}, "text"),
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
+				f, similar, err := factsOf(root, a.str("scope")).Remember(a.str("category"), a.str("text"), a.str("replaces"))
+				if err != nil {
+					return textResult(err.Error(), true)
+				}
+				text := fmt.Sprintf("Remembered %s: [%s] %s", f.ID, f.Category, f.Text)
+				for _, s := range similar {
+					text += fmt.Sprintf("\nSimilar, kept already: %s [%s] %s", s.ID, s.Category, s.Text)
+				}
+				if similar == nil {
+					similar = []memory.Fact{}
+				}
+				return toolResult{Text: text, Structured: map[string]any{"ok": true, "fact": f, "similar": similar}}
+			})},
+		{Name: "recall", Meta: callableMeta("", ""), Title: "What's remembered",
+			Description: "The facts kept in mind (jm memory recall), the person's and the game's: those a query is about, best first, or all of them.",
+			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "query": strArg(`e.g. "Dorne exile" (default: all)`)}),
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
+				facts := memory.Recall(a.str("query"), factsOf(root, "you"), factsOf(root, "game"))
+				if len(facts) == 0 {
+					return toolResult{Text: "Nothing remembered yet.", Structured: map[string]any{"facts": []memory.Fact{}}}
+				}
+				return toolResult{Text: factLines(facts), Structured: map[string]any{"facts": facts}}
+			})},
+		{Name: "forget", Title: "Forget a fact", Meta: callableMeta("Forgetting…", "Forgotten"),
+			Description: "Forget a remembered fact that's no longer so (jm memory forget), by its id (recall lists them).",
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "id": strArg(`e.g. "f3a9c"`),
+				"scope": map[string]any{"type": "string", "enum": []string{"game", "you"}, "description": "where it's kept (default game)"}}, "id"),
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
+				f, err := factsOf(root, a.str("scope")).Forget(a.str("id"))
+				if err != nil {
+					return textResult(err.Error(), true)
+				}
+				return toolResult{Text: fmt.Sprintf("Forgot %s: %s", f.ID, f.Text), Structured: map[string]any{"ok": true, "fact": f}}
+			})},
 		{Name: "memory_decide", Title: "Record a decision", Meta: callableMeta("Recording…", "Recorded"),
 			Description: "Record a design decision and why, once you and the person settle one (jm memory decide): its own note in design/decisions, listed in Decisions.",
 			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "title": strArg(`what was decided, e.g. "Jumps are variable height"`),
@@ -121,11 +182,10 @@ func (s *mcpServer) memoryTools() []mcpTool {
 // mcpPrompts are the conversations a person can start from the host's menu.
 var mcpPrompts = []struct{ name, title, description, text string }{
 	{"new_game_interview", "Plan a new game", "Interview the person about the game they want, then write its design notes.",
-		"Interview me about the game I want to make, one short question at a time, waiting for each answer: " +
-			"what it is in a sentence; who I play and what I do minute to minute; how it should feel; three pillars every change should serve; " +
-			"the first level or area; what's out of scope. Offer a concrete suggestion with each question so I can just say yes. " +
-			"As answers come in, write them to the game's design notes with memory_note (note: Pitch, Pillars, Levels, Systems) " +
-			"and memory_decide for anything we settle. No game open? new_game first. " +
+		"Plan the game I want to make with me. No game open? new_game first. Then call onboard: it gives the next step's question. " +
+			"Ask me it, one short question at a time, with a concrete suggestion so I can just say yes; wait for my answer; " +
+			"keep it as the step says (memory_note, remember, dossier_new, world_link); call onboard again. " +
+			"Skip a step the game doesn't need (onboard with skip). Use memory_decide for anything we settle. " +
 			"End with a short summary of the notes and the first thing to build."},
 }
 
@@ -145,4 +205,66 @@ func getPrompt(name string) (map[string]any, bool) {
 		}
 	}
 	return nil, false
+}
+
+// factsOf is where a scope's facts are kept: the person's ("you"), or the game's.
+func factsOf(root, scope string) memory.Facts {
+	if scope == "you" {
+		return memory.PersonFacts(filepath.Join(homeDir(), ".jm", "memory.md"))
+	}
+	return memory.GameFacts(root)
+}
+
+func factLines(facts []memory.Fact) string {
+	var lines []string
+	for _, f := range facts {
+		lines = append(lines, fmt.Sprintf("- [%s] %s (%s, %s)", f.Category, f.Text, f.ID, f.Scope))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// keepInMind is what a conversation about the game at root starts knowing:
+// the facts remembered, the person's and the game's (the first 40).
+func keepInMind(root string) string {
+	facts := memory.Recall("", factsOf(root, "you"), factsOf(root, "game"))
+	if len(facts) == 0 {
+		return ""
+	}
+	more := ""
+	if len(facts) > 40 {
+		facts, more = facts[:40], fmt.Sprintf("\n(%d more: recall)", len(facts)-40)
+	}
+	return "\n\nKeep in mind (remembered; forget or remember with replaces when one changes):\n" + factLines(facts) + more
+}
+
+// onboarding is the plan of a new game: its steps, and the next to ask.
+func onboarding(root string) toolResult {
+	steps := memory.Onboarding(root, factsOf(root, "you"))
+	var b strings.Builder
+	for _, s := range steps {
+		mark := "[ ]"
+		if s.Done {
+			mark = "[x]"
+		}
+		fmt.Fprintf(&b, "%s %s\n", mark, s.Name)
+	}
+	next, ok := memory.NextStep(steps)
+	if !ok {
+		b.WriteString("\nThe game is planned. Summarize the notes for the person, and the first thing to build.")
+		return toolResult{Text: b.String(), Structured: map[string]any{"steps": steps, "done": true}}
+	}
+	fmt.Fprintf(&b, "\nNext, %s: ask \"%s\" (with a suggestion), then keep the answer: %s.", next.Name, next.Ask, next.Keep)
+	if next.Optional {
+		b.WriteString(" If the game has no need of it, onboard with skip: " + next.Name + ".")
+	}
+	return toolResult{Text: b.String(), Structured: map[string]any{"steps": steps, "next": next, "done": false}}
+}
+
+// planned says when the game at root has no plan yet (no pitch): onboard
+// makes one ("" once it has; a step left later isn't nagged about).
+func planned(root string) string {
+	if steps := memory.Onboarding(root, factsOf(root, "you")); steps[0].Done {
+		return ""
+	}
+	return "\n\nIts design isn't planned yet: onboard plans it with the person, a question at a time."
 }

@@ -64,8 +64,14 @@ playtest, add it (`jm memory note "the pit in 1-1 is unfair" --in Levels
 it (`jm memory decide "Jumps are variable height" "serves [[Pillars]]"`;
 `memory_decide`). `[[Note]]` links notes; name game files in backticks. The
 notes are an Obsidian vault and Basic Memory's format, so the person can open
-them there too. For a new game, the MCP prompt `new_game_interview` plans it
-with them into these notes.
+them there too.
+
+With a new game, plan it with the person first: `onboard` (`jm memory
+onboard`) gives the steps (pitch, feel, pillars, scope, world, characters,
+art, first level, and how the person likes to work), done or not as the notes
+say, and the next question to ask. Ask it with a suggestion, keep the answer
+where the step says, and call `onboard` again; `skip` one the game doesn't
+need. The MCP prompt `new_game_interview` does the same.
 
 The game's world goes in dossiers: a note per character, item, location,
 faction, quest or piece of lore, in `design/<Folder>/` (`jm memory dossier
@@ -91,6 +97,17 @@ and the names linked that have no note yet; `jm memory path "Mara Dorne"
 Ost` (`world_path`) how two connect. `health`'s world check finds what the
 notes state twice and differently (a road of two lengths, a place inside
 itself).
+
+What holds in every conversation is a fact to keep in mind: the world's
+canon, a rule, a constraint, what was tried and why it failed (`jm memory
+remember "The Dornes were exiled from Varn" --category canon`; `remember`),
+in `design/Memory.md`; the person's own preferences, for all their games,
+with `--you` (scope you), in `~/.jm/memory.md`. One fact a call. Opening the
+game (`open_game`, and a Codex or Claude session in its folder) reads them
+back. When `remember` lists similar facts, `forget` one that's no longer so
+or remember again with `--replaces <id>` (`replaces`); `jm memory recall
+exile` (`recall`) finds them. A note is what came up; a fact is what to
+keep in mind.
 
 The game's history is git (`jm init` makes the first commit). After a change
 that builds and plays right, `vcs_commit` it (`jm vcs commit "Make jumps
