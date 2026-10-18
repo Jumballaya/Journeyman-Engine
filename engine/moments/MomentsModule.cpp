@@ -587,21 +587,19 @@ void MomentsModule::paint(Renderer2D& renderer) {
   _labels.add(DebugDraw::Shape::Text, true, {8, badge.y + kBadgeHeight * 0.5f}, {}, kPicked, 0.0f, false, help);
   _ui->paintDebug(renderer, _labels);
   taken.push_back(badge);
-  // Each pick's number at its mark, always; the focused one's lit.
+  // Each pick's number at its mark, always (drawn last: over the leader); the focused one's lit.
+  std::vector<std::optional<glm::vec4>> numbers(pins.size());
   for (size_t i = 0; i < pins.size(); ++i) {
     if (!pins[i]) continue;
-    const std::string n = std::to_string(i + 1);
-    const glm::vec2 box(_ui->debugTextWidth(n) + 1.0f + 2 * kPad, kLine + kPad);
-    const glm::vec2 at = pick_tags::numberAt(pins[i]->kind, pins[i]->lo, pins[i]->hi, box, size);
-    taken.emplace_back(at, box);
-    tag(renderer, taken.back(), n, _focus == i + 1);
-    pins[i]->lo = glm::min(pins[i]->lo, at);  // a leader to the pick may end on its number
-    pins[i]->hi = glm::max(pins[i]->hi, at + box);
+    const glm::vec2 box(_ui->debugTextWidth(std::to_string(i + 1)) + 1.0f + 2 * kPad, kLine + kPad);
+    numbers[i] = glm::vec4(pick_tags::numberAt(pins[i]->kind, pins[i]->lo, pins[i]->hi, box, size), box);
+    taken.push_back(*numbers[i]);
   }
-  // The focused pick's name and note beside it, a line to it when it can't touch it.
+  // The focused pick's name and note beside it and its number, a line to it when it can't touch it.
   if (_focus > 0 && pins[_focus - 1]) {
     const Pin& pin = *pins[_focus - 1];
-    Label focused{pin.lo, pin.hi, {std::to_string(_focus) + " " + pin.name}};
+    const glm::vec4 n = *numbers[_focus - 1];
+    Label focused{glm::min(pin.lo, glm::vec2(n)), glm::max(pin.hi, glm::vec2(n) + glm::vec2(n.z, n.w)), {std::to_string(_focus) + " " + pin.name}};
     note(_focus, focused, 2);
     const auto [from, to] = pick_tags::leader(label(renderer, focused, taken), pin.lo, pin.hi);
     if (glm::length(to - from) > 3.0f) {
@@ -609,6 +607,9 @@ void MomentsModule::paint(Renderer2D& renderer) {
       _labels.add(DebugDraw::Shape::Line, true, from, to, kPicked, 0.0f, false);
       _ui->paintDebug(renderer, _labels);
     }
+  }
+  for (size_t i = 0; i < numbers.size(); ++i) {
+    if (numbers[i]) tag(renderer, *numbers[i], std::to_string(i + 1), _focus == i + 1);
   }
   // The moment's note, top left (clear of the player, often at the bottom), when there's one or it's what typing writes.
   if (_focus == 0 || !_run->noteOf(0).empty()) {
@@ -620,9 +621,9 @@ void MomentsModule::paint(Renderer2D& renderer) {
   Label others{size - glm::vec2(4.0f, kBadgeHeight + 4.0f), size - glm::vec2(4.0f, kBadgeHeight + 4.0f), {}};
   others.numbered = true;
   for (size_t i = 0; i < picks.size(); ++i) {
-    if (i + 1 == _focus || picks[i].note.empty()) continue;
     const std::string n = std::to_string(i + 1) + " ";
-    others.lines.push_back(n + noteLines(picks[i].note, false, size.x * 0.6f - _ui->debugTextWidth(n), 1)[0]);
+    const auto lines = noteLines(picks[i].note, false, size.x * 0.6f - _ui->debugTextWidth(n), 1);
+    if (i + 1 != _focus && !lines.empty()) others.lines.push_back(n + lines[0]);
   }
   if (!others.lines.empty()) label(renderer, others, taken);
 }
