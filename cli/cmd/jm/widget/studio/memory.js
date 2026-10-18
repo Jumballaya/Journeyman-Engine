@@ -9,7 +9,7 @@ studioTabs.push((() => {
   // facts: recall's facts (the person's and the game's), asked each visit.
   // form: "note" | "decide" while that form is open; draft: its fields.
   // game: whose these are (another game's start over). seq: the latest list asked (an older answer is dropped).
-  const fresh = (game) => ({ game, listed: null, asking: "", read: null, found: null, query: "", form: null, draft: {}, routed: "", seq: 0, searchSeq: 0, facts: null });
+  const fresh = (game) => ({ game, listed: null, asking: "", read: null, found: null, query: "", form: null, draft: {}, routed: "", seq: 0, searchSeq: 0, facts: null, recallSeq: 0 });
   let state = fresh(null);
 
   // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
@@ -30,8 +30,9 @@ studioTabs.push((() => {
   };
 
   const recall = async (ctx, mine) => {
+    const n = ++mine.recallSeq;
     const r = await ctx.call("recall", on(ctx, {})).catch(() => null);
-    if (mine !== state) return;
+    if (mine !== state || n !== mine.recallSeq) return;  // another game's, or an older recall
     state.facts = (r && r.structuredContent && r.structuredContent.facts) || [];
     ctx.rerender();
   };
@@ -79,7 +80,9 @@ studioTabs.push((() => {
     if (!all) return null;
     const forget = async (f) => {
       const mine = state;
-      if (await ctx.act("Forgetting", "forget", on(ctx, { id: f.id, scope: f.scope }), (t) => t) && mine === state) recall(ctx, mine);
+      if (!(await ctx.act("Forgetting", "forget", on(ctx, { id: f.id, scope: f.scope }), (t) => t)) || mine !== state) return;
+      recall(ctx, mine);
+      if (f.scope === "game" && state.read && state.read.note && state.read.note.note && state.read.note.note.path === "design/Memory.md") open(ctx, state.read.title);  // the page it was on
     };
     return section("Keep in mind", all.length ? el("ul", { class: "mem-list mem-facts" }, all.map((f) => el("li", {},
       el("span", { class: "badge" }, f.category), el("span", {}, inline(ctx, f.text), f.scope === "you" ? el("span", { class: "meta" }, " (yours)") : null),
