@@ -36,6 +36,7 @@ struct DevOptions {
   bool debugPhysics = false;                 // JM_DEBUG_PHYSICS: draw colliders and terrain over the frame
   std::optional<bool> debugDraw;             // JM_DEBUG_DRAW=0|1: scripts' Debug drawing (default: on, but off in an exported game)
   std::optional<std::pair<int, int>> windowPos;  // JM_WINDOW_POS=x,y: where the window opens (jm run --peers)
+  std::optional<bool> fullscreen;            // JM_FULLSCREEN=0|1: open windowed or fullscreen, whatever config and saved settings say
   bool realtime = false;                     // JM_REALTIME: a fixed-dt run still keeps to the clock (multiplayer tests)
   bool watch = false;                        // JM_WATCH: reload images, atlases, shaders, sounds and scripts whose files change
   std::filesystem::path control;             // JM_CONTROL: a live run steered through files there (agent/LiveControl.hpp)

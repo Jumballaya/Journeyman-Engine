@@ -6,7 +6,7 @@ import { utf8 } from "./util";
 // onUpdate), or `seconds` of game time; colors are 0xRRGGBB. `Debug` draws in
 // world units (y up); `Debug.screen` in screen px from the top-left, like UI.
 // Plays, captures and the state dump (`debug`) show them; an exported game
-// doesn't draw them unless run with JM_DEBUG_DRAW=1.
+// never draws them (it ignores JM_DEBUG_DRAW).
 export class DebugDraw {
   constructor(private onScreen: bool) {}
 
