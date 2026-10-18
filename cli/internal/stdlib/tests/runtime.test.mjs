@@ -15,8 +15,8 @@ if (result.error) throw new Error(result.stderr.toString());
 const module = await WebAssembly.compile(await readFile(output));
 await rm(dir, { recursive: true });
 
-function harness(stores = new Map()) {
-  let instance, fullscreen = false;
+function harness(stores = new Map(), forced = false) {
+  let instance, fullscreen = forced === "fullscreen";
   const volumes = [], effects = [], enabled = [], uniforms = [], transitions = [];
   const spawns = [], classes = [], styles = [], fields = new Map(), values = new Map();
   const utf8 = (ptr, length) => Buffer.from(instance.exports.memory.buffer, ptr, length).toString('utf8');
@@ -48,6 +48,7 @@ function harness(stores = new Map()) {
     __jmAudioSetBusVolume: (bus, value) => volumes.push([bus, value]),
     __jmWindowIsFullscreen: () => fullscreen,
     __jmWindowSetFullscreen: value => { fullscreen = !!value; },
+    __jmWindowFullscreenForced: () => forced !== false,
     __jmEffectAddCustom: (p, n) => { effects.push(utf8(p, n)); return effects.length; },
     __jmEffectSetEnabled: (id, on) => enabled.push([id, !!on]),
     __jmEffectSetUniform: (id, p, n, count, x) => uniforms.push([id, utf8(p, n), x]),
@@ -121,6 +122,7 @@ test('settings persist, apply effects live, and screens own panels and transitio
   assert.deepEqual(h.classes, [['main', 'hidden', true], ['options', 'hidden', false], ['main', 'hidden', true], ['options', 'hidden', true]]);
   assert.deepEqual(h.transitions, [['level1', 1, 'wipe']]);
   harness(stores).run.restoreSettings();
+  harness(stores, 'windowed').run.forcedWindowStays(); // saved fullscreen, launched --windowed
 });
 
 test('sprite shadows configure the owner without spawning companion entities', () => {
