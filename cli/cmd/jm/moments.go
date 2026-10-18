@@ -49,8 +49,8 @@ func momentPicture(p *plays.Play, m plays.Marker) image.Image {
 		r = r.Inset(-scale).Intersect(img.Bounds()) // around it, not over its edge
 		outline(img, r.Inset(-1), scale+2, color.RGBA{0, 0, 0, 0xFF})
 		outline(img, r, scale, momentInk)
-		if pick.Kind == "point" { // the label above the crosshair's arms
-			r.Min.Y -= 5 * scale
+		if pick.Kind == "point" { // the label clear of the crosshair's arms
+			r.Min.Y, r.Max.Y = r.Min.Y-5*scale, r.Max.Y+5*scale
 		}
 		label(img, r, fmt.Sprintf("%d %s", i+1, pick.Name()), scale)
 	}
@@ -70,7 +70,7 @@ func fill(img *image.RGBA, r image.Rectangle, c color.RGBA) {
 }
 
 // label writes text (upper case, at most 18 letters) on a dark tag above r,
-// or inside its top when r is at the picture's top.
+// or under it when r is at the picture's top (inside its top if r is the picture's height).
 func label(img *image.RGBA, r image.Rectangle, text string, scale int) {
 	text = strings.ToUpper(text)
 	if len(text) > 18 {
@@ -79,8 +79,10 @@ func label(img *image.RGBA, r image.Rectangle, text string, scale int) {
 	cell, pad := 4*scale, scale
 	tag := image.Rect(0, 0, len(text)*cell+pad, 5*scale+2*pad)
 	at := image.Pt(r.Min.X, r.Min.Y-tag.Dy())
-	if at.Y < 0 {
-		at.Y = r.Min.Y
+	if at.Y < 0 && r.Max.Y+tag.Dy() <= img.Bounds().Dy() {
+		at.Y = r.Max.Y
+	} else if at.Y < 0 {
+		at.Y = max(0, r.Min.Y)
 	}
 	at.X = min(at.X, img.Bounds().Dx()-tag.Dx())
 	tag = tag.Add(image.Pt(max(0, at.X), at.Y))

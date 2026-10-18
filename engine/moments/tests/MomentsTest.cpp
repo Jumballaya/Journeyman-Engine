@@ -9,7 +9,9 @@
 // A held run's picks through the driver, in a 640x400 frame showing a
 // 320x180 game (scale 2, 20 px bars above and below), its camera at (64, 32)
 // zoomed 2x: logical (x, y) is the world's (64 + (x - 160) / 2, 32 + (90 - y) / 2).
-// The map: 8x4 cells of 16, at the origin; ground along the bottom row and at (3, 1).
+// The map: 8x4 cells of 16, at the origin; ground along the bottom row and at (3, 1),
+// and a layer moved past its right edge with ground at (0, 0). A stick, turned,
+// near the area's corner but not in it.
 TEST(Moments, PointsAndAreasSayWhatsThere) {
   TempDir game;
   game.writeFile("tiles.tsj", R"({"type": "tileset", "tilewidth": 16, "tileheight": 16, "tilecount": 1, "columns": 1,
@@ -17,13 +19,16 @@ TEST(Moments, PointsAndAreasSayWhatsThere) {
   game.writeFile("level.tmj", R"({"width": 8, "height": 4, "tilewidth": 16, "tileheight": 16,
       "tilesets": [{"firstgid": 1, "source": "tiles.tsj"}],
       "layers": [{"type": "tilelayer", "name": "ground", "width": 8, "height": 4,
-                  "data": [0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,1,0,0,0,0, 1,1,1,1,1,1,1,1]}]})");
+                  "data": [0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,1,0,0,0,0, 1,1,1,1,1,1,1,1]},
+                 {"type": "tilelayer", "name": "beyond", "offsetx": 128, "width": 8, "height": 4,
+                  "data": [0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 1,0,0,0,0,0,0,0]}]})");
   game.writeFile(".jm.json", R"({"name": "T", "entryScene": "main.scene.json", "scenes": ["main.scene.json"],
       "assets": ["level.tmj", "tiles.tsj"],
       "config": {"window": {"width": 640, "height": 400}, "renderer": {"logicalWidth": 320, "logicalHeight": 180}}})");
   game.writeFile("main.scene.json", R"({"name": "main", "entities": [
       {"name": "Map", "components": {"TransformComponent": {"position": [0, 0, 0]}, "TileMapComponent": {"map": "level.tmj"}}},
       {"name": "Eye", "components": {"TransformComponent": {"position": [64, 32, 0]}, "CameraComponent": {"zoom": 2, "smoothing": 0}}},
+      {"name": "Stick", "components": {"TransformComponent": {"position": [34, 56, 0], "scale": [10, 1], "rotation": 0.785398}, "SpriteComponent": {}}},
       {"name": "Coin", "components": {"TransformComponent": {"position": [100, 40, 1], "scale": [4, 4]}, "SpriteComponent": {}}}]})");
   EngineOptions options;
   options.dev = DevOptions{};
@@ -34,9 +39,9 @@ TEST(Moments, PointsAndAreasSayWhatsThere) {
   Engine engine(game.path(), ".jm.json", options);
   engine.initialize();
   // A point on (56, 24): ground (3, 1); the coin; an area from (40, 50) to (110, 10); shift
-  // near the point takes it away, and on empty ground again puts it back.
+  // near the point takes it away, and on empty ground again puts it back; a point on (136, 8).
   std::istringstream in("step 2\nfreeze\npick 144 106\npick 232 74 add\narea 112 54 252 134 add\n"
-                        "pick 146 107 add\npick 144 106 add\nsave\n");
+                        "pick 146 107 add\npick 144 106 add\npick 304 138 add\nsave\n");
   std::ostringstream out;
   engine.agent().drive(in, out);
   std::vector<nlohmann::json> replies;
@@ -44,18 +49,18 @@ TEST(Moments, PointsAndAreasSayWhatsThere) {
     std::string line;
     if (std::getline(lines, line) && !line.empty()) replies.push_back(nlohmann::json::parse(line));
   }
-  ASSERT_EQ(replies.size(), 9u) << out.str();  // "ready", then one per command
+  ASSERT_EQ(replies.size(), 10u) << out.str();  // "ready", then one per command
   EXPECT_EQ(replies[3]["picks"], nlohmann::json::parse(R"([{"kind": "point", "at": [56.0, 24.0]}])"));
   EXPECT_EQ(replies[4]["picks"][1]["kind"], "entity");
   EXPECT_EQ(replies[5]["picks"][2], nlohmann::json::parse(R"({"kind": "area", "area": [40.0, 10.0, 110.0, 50.0]})"));
   EXPECT_EQ(replies[6]["picks"].size(), 2u);
   EXPECT_EQ(replies[7]["picks"].size(), 3u);
-  EXPECT_EQ(replies[8]["picks"], 3);
+  EXPECT_EQ(replies[9]["picks"], 4);
   engine.shutdown();
 
   std::ifstream meta(game.path() / "play" / "session.json");
   const nlohmann::json picks = nlohmann::json::parse(meta)["markers"][0]["picks"];
-  ASSERT_EQ(picks.size(), 3u);
+  ASSERT_EQ(picks.size(), 4u);
   const nlohmann::json& area = picks[1];
   // Its picture's rect: logical (112, 54)-(252, 134), in the frame (224, 128)-(504, 288).
   EXPECT_EQ(area["rect"], (nlohmann::json{0.35, 0.32, 0.4375, 0.4}));
@@ -75,4 +80,9 @@ TEST(Moments, PointsAndAreasSayWhatsThere) {
   EXPECT_EQ(point["rect"], (nlohmann::json{0.45, 0.58, 0.0, 0.0}));
   EXPECT_TRUE(point["entities"].empty());
   EXPECT_EQ(point["tiles"][0]["layers"][0]["cells"], nlohmann::json::parse("[[3, 1, 1]]"));
+  // Off the map, on its moved layer: that layer's cell, and no cell of the map's own.
+  const nlohmann::json& beyond = picks[3]["tiles"];
+  ASSERT_EQ(beyond.size(), 1u);
+  EXPECT_FALSE(beyond[0].contains("from"));
+  EXPECT_EQ(beyond[0]["layers"], nlohmann::json::parse(R"([{"layer": "beyond", "cells": [[0, 0, 1]], "count": 1, "types": {"ground": 1}}])"));
 }

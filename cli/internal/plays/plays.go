@@ -91,8 +91,8 @@ type There struct {
 type Tiles struct {
 	Map    string    `json:"map"`
 	Entity [2]uint32 `json:"entity"`
-	From   [2]int    `json:"from"`
-	To     [2]int    `json:"to"`
+	From   []int     `json:"from"` // none when only a layer's offset or parallax puts tiles there
+	To     []int     `json:"to"`
 	Layers []struct {
 		Layer string         `json:"layer"`
 		Cells [][3]int       `json:"cells"` // tx, ty, gid (the .tmj's, flags off); the first 64
@@ -201,17 +201,22 @@ func (p Pick) placeText() string {
 			if l.Count == 1 {
 				layer = fmt.Sprintf("layer %s 1 tile", l.Layer)
 			}
-			if p.Kind == "point" && len(l.Cells) > 0 {
-				layer = fmt.Sprintf("layer %s gid %d", l.Layer, l.Cells[0][2])
+			if c := l.Cells; p.Kind == "point" && len(c) > 0 {
+				layer = fmt.Sprintf("layer %s gid %d", l.Layer, c[0][2])
+				if len(t.From) != 2 || c[0][0] != t.From[0] || c[0][1] != t.From[1] { // moved by its offset or parallax
+					layer += fmt.Sprintf(" at (%d, %d)", c[0][0], c[0][1])
+				}
 			}
 			if len(types) > 0 {
 				layer += " (" + strings.Join(types, ", ") + ")"
 			}
 			layers = append(layers, layer)
 		}
-		cells := fmt.Sprintf("cells (%d, %d)–(%d, %d)", t.From[0], t.From[1], t.To[0], t.To[1])
-		if p.Kind == "point" {
+		cells := "layers"
+		if len(t.From) == 2 && len(t.To) == 2 && p.Kind == "point" {
 			cells = fmt.Sprintf("tile (%d, %d)", t.From[0], t.From[1])
+		} else if len(t.From) == 2 && len(t.To) == 2 {
+			cells = fmt.Sprintf("cells (%d, %d)–(%d, %d)", t.From[0], t.From[1], t.To[0], t.To[1])
 		}
 		if len(layers) == 0 {
 			layers = []string{"no tiles"}

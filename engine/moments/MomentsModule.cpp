@@ -43,6 +43,21 @@ nlohmann::json idJson(EntityId id) { return {id.index, id.generation}; }
 
 nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }
 
+// Whether a quad (turned, convex) and a box overlap: no axis of either's edges separates them.
+bool touches(const std::array<glm::vec2, 4>& quad, glm::vec2 lo, glm::vec2 hi) {
+  const std::array<glm::vec2, 4> box{lo, glm::vec2(hi.x, lo.y), hi, glm::vec2(lo.x, hi.y)};
+  for (const glm::vec2 axis : {glm::vec2(1, 0), glm::vec2(0, 1), quad[1] - quad[0], quad[2] - quad[1]}) {
+    glm::vec2 a(1e30f, -1e30f), b(1e30f, -1e30f);  // each one's span along the axis
+    for (int i = 0; i < 4; ++i) {
+      const float p = glm::dot(quad[i], axis), q = glm::dot(box[i], axis);
+      a = {std::min(a.x, p), std::max(a.y, p)};
+      b = {std::min(b.x, q), std::max(b.y, q)};
+    }
+    if (a.y < b.x || b.y < a.x) return false;
+  }
+  return true;
+}
+
 bool inside(glm::vec2 p, glm::vec2 lo, glm::vec2 hi) { return p.x >= lo.x && p.y >= lo.y && p.x <= hi.x && p.y <= hi.y; }
 
 }  // namespace
@@ -104,9 +119,7 @@ nlohmann::json MomentsModule::describe(const Pick& pick) const {
     for (const EntityId id : world.entities()) {
       const auto quad = quadOf(id);
       if (!quad || world.isPendingDestroy(id)) continue;
-      glm::vec2 lo(1e30f), hi(-1e30f);
-      for (const glm::vec2 p : *quad) lo = glm::min(lo, p), hi = glm::max(hi, p);
-      if (lo.x <= pick.hi.x && lo.y <= pick.hi.y && hi.x >= pick.lo.x && hi.y >= pick.lo.y) there.push_back(id);
+      if (touches(*quad, pick.lo, pick.hi)) there.push_back(id);
     }
   }
   nlohmann::json entities = nlohmann::json::array();
@@ -132,8 +145,7 @@ nlohmann::json MomentsModule::tilesIn(glm::vec2 lo, glm::vec2 hi) const {
       return std::array{a, b};
     };
     const glm::vec2 origin(transform->position);
-    const auto range = cells(origin);
-    if (!range) continue;
+    const auto range = cells(origin);  // the map's own; a layer's offset or parallax moves its cells
     // As TileMapRenderModule draws them: Tiled's parallax pivots on the map's top-left (or its "parallaxorigin").
     const glm::vec2 pivot = origin + glm::vec2(0.0f, grid.pixelSize().y) +
                             glm::vec2(grid.properties().value("parallaxoriginx", 0.0f), -grid.properties().value("parallaxoriginy", 0.0f));
@@ -157,8 +169,9 @@ nlohmann::json MomentsModule::tilesIn(glm::vec2 lo, glm::vec2 hi) const {
       layers.push_back({{"layer", layer.name}, {"cells", std::move(found)}, {"count", count}});
       if (!types.empty()) layers.back()["types"] = std::move(types);
     }
-    maps.push_back({{"map", grid.path()}, {"entity", idJson(id)}, {"from", {(*range)[0].x, (*range)[0].y}},
-                    {"to", {(*range)[1].x, (*range)[1].y}}, {"layers", std::move(layers)}});
+    if (!range && layers.empty()) continue;
+    maps.push_back({{"map", grid.path()}, {"entity", idJson(id)}, {"layers", std::move(layers)}});
+    if (range) maps.back().update({{"from", {(*range)[0].x, (*range)[0].y}}, {"to", {(*range)[1].x, (*range)[1].y}}});
   }
   return maps;
 }

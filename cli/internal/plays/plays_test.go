@@ -224,6 +224,8 @@ func TestAMarkersPicksSayWhereTheyCameFrom(t *testing.T) {
 		{"kind": "point", "at": [412.04, 96], "scene": "scenes/l1.scene.json", "entities": [],
 		 "tiles": [{"map": "maps/l1.tmj", "entity": [0, 0], "from": [12, 3], "to": [12, 3],
 		            "layers": [{"layer": "ground", "cells": [[12, 3, 5]], "count": 1, "types": {"brick": 1}}]}]},
+		{"kind": "point", "at": [72, 8], "entities": [],
+		 "tiles": [{"map": "maps/l1.tmj", "entity": [0, 0], "layers": [{"layer": "far", "cells": [[0, 0, 7]], "count": 1}]}]},
 		{"kind": "point", "at": [40, 200], "scene": "scenes/l1.scene.json", "entities": [],
 		 "tiles": [{"map": "maps/l1.tmj", "entity": [0, 0], "from": [1, 9], "to": [1, 9], "layers": []}]},
 		{"kind": "area", "area": [96, 16, 160.5, 64], "scene": "scenes/l1.scene.json", "moreEntities": 3,
@@ -243,6 +245,7 @@ func TestAMarkersPicksSayWhereTheyCameFrom(t *testing.T) {
 		"entity [122 1]: spawned from prefab prefabs/zero.prefab.json by script scripts/director.ts at frame 1021, part of [121 1]",
 		"entity [3 2]",
 		"a point at (412, 96) in scenes/l1.scene.json, over tile (12, 3) of maps/l1.tmj: layer ground gid 5 (brick)",
+		"a point at (72, 8), over layers of maps/l1.tmj: layer far gid 7 at (0, 0)",
 		"a point at (40, 200) in scenes/l1.scene.json, over tile (1, 9) of maps/l1.tmj: no tiles",
 		"an area (96, 16)–(160.5, 64) in scenes/l1.scene.json, over cells (6, 1)–(10, 4) of maps/l1.tmj: " +
 			"layer ground 12 tiles (brick 8, dirt 4); layer deco 1 tile; on Pip [58 0], scene entry 58 in scenes/l1.scene.json and 3 more",

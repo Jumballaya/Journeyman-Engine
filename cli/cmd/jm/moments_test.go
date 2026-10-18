@@ -25,7 +25,7 @@ func momentGame(t *testing.T) *plays.Play {
 			 "origin":{"from":"scene","scene":"scenes/level.scene.json","entry":"58","name":"Pip","prefab":"prefabs/pip.prefab.json"}},
 			{"kind":"entity","entity":[122,1],"tags":[],"state":{},
 			 "origin":{"from":"spawn","prefab":"prefabs/enemy_zero.prefab.json","frame":40,"by":[93,1],"script":"scripts/director.ts"}},
-			{"kind":"point","at":[200,40],"scene":"scenes/level.scene.json","rect":[0.75,0.2,0,0],"entities":[],
+			{"kind":"point","at":[200,40],"scene":"scenes/level.scene.json","rect":[0.75,0.01,0,0],"entities":[],
 			 "tiles":[{"map":"maps/level.tmj","entity":[0,0],"from":[12,2],"to":[12,2],"layers":[{"layer":"ground","cells":[[12,2,5]],"count":1}]}]}]},
 		{"n":2,"frame":200,"time":3.3,"scene":"scenes/level.scene.json","image":"m2.png"}]}`), 0o644)
 	writePNG(t, filepath.Join(dir, "m1.png"), 640, 360, color.Black)
@@ -58,11 +58,22 @@ func TestAMomentsPictureOutlinesItsPicks(t *testing.T) {
 	if ink(320, 180) || ink(10, 340) {
 		t.Error("drawn inside the pick or elsewhere")
 	}
-	// The point at (480, 72): a crosshair, its arms 16 px out.
-	for _, at := range [][2]int{{494, 72}, {466, 72}, {480, 86}, {480, 58}} {
+	// The point at (480, 3): a crosshair, its arms 16 px out.
+	for _, at := range [][2]int{{494, 3}, {466, 3}, {480, 18}} {
 		if !ink(at[0], at[1]) {
 			t.Errorf("no crosshair at %v", at)
 		}
+	}
+	labeled := 0 // under the crosshair: no room above it
+	for x := 470; x < 540; x++ {
+		for y := 22; y < 36; y++ {
+			if ink(x, y) {
+				labeled++
+			}
+		}
+	}
+	if labeled == 0 {
+		t.Error("the point's label isn't under it")
 	}
 	label := 0
 	for x := 158; x < 260; x++ {

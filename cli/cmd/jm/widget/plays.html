@@ -262,9 +262,10 @@
     : `spawned from prefab ${o.prefab}${o.script ? ` by script ${o.script}` : ""} at frame ${o.frame}${o.in ? `, part of entity ${o.in[0]}` : ""}`;
   const placeText = (pk) => {
     const xy = (a, i) => `(${Math.round(a[i] * 10) / 10}, ${Math.round(a[i + 1] * 10) / 10})`;
-    const map = (pk.tiles || [])[0];
+    const map = (pk.tiles || [])[0], layer = map && map.layers[0], cell = layer && layer.cells[0];
     return (pk.kind === "point" ? `at ${xy(pk.at || [0, 0], 0)}` : `${xy(pk.area || [0, 0, 0, 0], 0)}–${xy(pk.area || [0, 0, 0, 0], 2)}`) +
-      (map ? `, ${pk.kind === "point" ? `tile (${map.from.join(", ")})` : `cells (${map.from.join(", ")})–(${map.to.join(", ")})`} of ${map.map}` : "") +
+      (map ? `, ${pk.kind === "point" ? `tile (${(cell || map.from || []).slice(0, 2).join(", ")})` :
+        map.from ? `cells (${map.from.join(", ")})–(${map.to.join(", ")})` : "layers"} of ${map.map}` : "") +
       ((pk.entities || []).length ? `, on ${pk.entities.map((e) => e.name).join(", ")}` : "");
   };
   const pickText = (pk) => (isPlace(pk) ? placeText(pk) : originText(pk.origin));
