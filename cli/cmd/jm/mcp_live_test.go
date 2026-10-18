@@ -112,3 +112,54 @@ func TestPlayLiveSteersTheGameNamed(t *testing.T) {
 		t.Errorf("play_live: %v", r)
 	}
 }
+
+// A frame the game never sends: cancelling the call stops the wait, and the next request is answered at once.
+func TestACancelledLiveFrameStopsWaiting(t *testing.T) {
+	_, send, next := notifySession(t)
+	root, _ := os.Getwd()
+	dir := filepath.Join(liveDir(root), "77")
+	os.MkdirAll(filepath.Join(dir, "answers"), 0o755)
+	os.WriteFile(filepath.Join(dir, "in"), nil, 0o644)
+	os.WriteFile(filepath.Join(dir, "status.json"), []byte(fmt.Sprintf(`{"frame":9,"scene":"s","paused":false,"speed":1,"updated":%d}`, time.Now().Unix())), 0o644)
+	done := make(chan struct{})
+	defer close(done)
+	capturing := make(chan struct{})
+	go func() { // the game: answers each request but the capture
+		read := 0
+		for {
+			select {
+			case <-done:
+				return
+			case <-time.After(5 * time.Millisecond):
+			}
+			data, _ := os.ReadFile(filepath.Join(dir, "in"))
+			lines := bufio.NewScanner(strings.NewReader(string(data[read:])))
+			for lines.Scan() {
+				read += len(lines.Bytes()) + 1
+				var req struct{ ID, Command string }
+				json.Unmarshal(lines.Bytes(), &req)
+				if strings.HasPrefix(req.Command, "capture ") {
+					close(capturing)
+					continue
+				}
+				answer, _ := json.Marshal(map[string]any{"ok": true})
+				os.WriteFile(filepath.Join(dir, "answers", req.ID+".json"), answer, 0o644)
+			}
+		}
+	}()
+	send(`{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"play_live","arguments":{"command":"pause","frame":true}}}`)
+	select {
+	case <-capturing:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no capture asked for")
+	}
+	send(`{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":9}}`)
+	asked := time.Now()
+	send(`{"jsonrpc":"2.0","id":10,"method":"ping"}`)
+	if msg := next(); msg["id"] != 10.0 {
+		t.Fatalf("a cancelled call gets no answer, the next does: %v", msg)
+	}
+	if waited := time.Since(asked); waited > time.Second {
+		t.Errorf("the ping waited %v for the cancelled capture", waited)
+	}
+}

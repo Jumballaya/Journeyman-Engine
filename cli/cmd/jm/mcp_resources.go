@@ -132,6 +132,9 @@ func (s *mcpServer) subscribe(params json.RawMessage, on bool) (any, *rpcError) 
 	}
 	root, _ := os.Getwd()
 	stamp, err := s.stampOf(root, p.URI)
+	if err == nil {
+		err = there(root, p.URI)
+	}
 	if err != nil {
 		return nil, &rpcError{Code: -32002, Message: err.Error()}
 	}
@@ -139,6 +142,34 @@ func (s *mcpServer) subscribe(params json.RawMessage, on bool) (any, *rpcError) 
 	w.stamps[p.URI] = stamp
 	w.mu.Unlock()
 	return map[string]any{}, nil
+}
+
+// there: a doc, play or marker uri names one there is. Checked once, when
+// subscribed: polls only stat. A file needn't be there yet.
+func there(root, uri string) error {
+	if topic, ok := strings.CutPrefix(uri, "jm://docs/"); ok {
+		_, err := docs.Read(topic)
+		return err
+	}
+	rest, ok := strings.CutPrefix(uri, "jm://play/")
+	if !ok {
+		return nil
+	}
+	id, marker, _ := strings.Cut(rest, "/")
+	id, _ = url.PathUnescape(id) // stampOf took it
+	p, err := plays.Load(filepath.Join(plays.Root(root), id))
+	if err != nil {
+		return fmt.Errorf("no play %s", id)
+	}
+	if marker == "" {
+		return nil
+	}
+	for _, m := range p.Meta.Markers {
+		if fmt.Sprintf("m%d", m.N) == marker {
+			return nil
+		}
+	}
+	return fmt.Errorf("play %s has no marker %s", id, marker)
 }
 
 // listedNow: the client has the list as it is now.

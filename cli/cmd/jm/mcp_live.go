@@ -107,6 +107,9 @@ func askLive(ctx context.Context, dir, command string) (map[string]any, error) {
 		}
 		return reply, nil
 	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	return nil, fmt.Errorf("the game didn't answer %q within %v (is it stuck, or closed?)", command, wait)
 }
 
@@ -156,7 +159,7 @@ func (s *mcpServer) liveTools() []mcpTool {
 			// Whose answers: a page following one game's run can tell another's.
 			result := toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"answers": answers, "game": evalOrSelf(root), "run": filepath.Base(dir)}}
 			if a.flag("frame") {
-				if jpeg, err := liveFrame(dir); err != nil {
+				if jpeg, err := liveFrame(a.call().context(), dir); err != nil {
 					result.Text = strings.TrimSpace(result.Text + "\nNo picture: " + err.Error())
 				} else {
 					result.Images = []mcpImage{{Data: jpeg, MimeType: "image/jpeg"}}
@@ -171,14 +174,14 @@ func (s *mcpServer) liveTools() []mcpTool {
 }
 
 // liveFrame is the last frame of the run steered through live, as a JPEG.
-func liveFrame(live string) ([]byte, error) {
+func liveFrame(ctx context.Context, live string) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "jm-live-")
 	if err != nil {
 		return nil, err
 	}
 	defer os.RemoveAll(dir)
 	png := filepath.Join(dir, "frame.png")
-	reply, err := askLive(context.Background(), live, "capture "+png)
+	reply, err := askLive(ctx, live, "capture "+png)
 	if err != nil {
 		return nil, err
 	}
