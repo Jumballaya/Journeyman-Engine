@@ -106,6 +106,9 @@ class Engine {
   bool simulating() const { return _simulating; }
 
   bool embedded() const { return _options.embedded; }
+  // Windowed or fullscreen as the launch chose (JM_FULLSCREEN), over config
+  // and saved settings; a replay has its recording's.
+  std::optional<bool> launchFullscreen() const;
   bool server() const { return _options.server; }
   // Embedded only: the view's framebuffer size (its focus: setWindowFocused).
   void resizeView(int width, int height);

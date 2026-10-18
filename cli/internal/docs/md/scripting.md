@@ -380,7 +380,9 @@ Camera.zoom = 2;                   // 2: twice as close; Camera.width, Camera.he
 Camera.toWorld(sx, sy, out);       // screen (UI) pixels <-> world units
 Camera.toScreen(x, y, out);
 Renderer.setClearColor(0.1, 0.2, 0.4);
-Window.fullscreen = true;
+Window.fullscreen = true;          // borderless, on the monitor the window is on
+Window.toggleFullscreen();         // an options menu's "Fullscreen", an F11 binding
+Window.fullscreenForced;           // launched --fullscreen / --windowed: don't restore a saved choice over it
 Window.focused;                    // false while another app has focus
 ```
 
