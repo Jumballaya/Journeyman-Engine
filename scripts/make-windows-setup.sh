@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Makes the one-file Windows install (scripts/windows/journeyman.iss) with Inno
 # Setup's ISCC, from a folder holding journeyman_editor.exe, jm.exe,
-# journeyman_engine.exe, journeyman_server.exe and LICENSE. Git Bash on Windows.
+# journeyman_engine.exe, journeyman_player.exe, journeyman_server.exe and LICENSE. Git Bash on Windows.
 #   scripts/make-windows-setup.sh <folder> <out-setup.exe> [version]
 # Signed with JM_WINDOWS_SIGNTOOL (an ISCC sign command using $f) if set.
 set -euo pipefail

@@ -31,7 +31,11 @@ literal (`<i32>(1 + 1) == 2`) or a `bool` local are fine.
 ## Running a game unattended
 
 The engine reads these environment variables, which make it possible to
-script a playthrough and check the result frame by frame.
+script a playthrough and check the result frame by frame. Only the agent
+build does: `journeyman_engine`, which `jm run` and the tools start (and
+`journeyman_server`). An exported game is `journeyman_player`, which reads
+none of them (nor `JM_NET_*`): nothing drives, steers, records or dumps it,
+and scripts' `Debug` drawing is off. It plays the same as the engine.
 
 **Runs are deterministic.** A frame is a fixed step (1/60 s, or
 `config.stepRate`) run on one thread in a fixed order, and an automated run
@@ -61,7 +65,7 @@ below) or state for state (`JM_DUMP_DIR`).
 | `JM_ERRORS=-` or `JM_ERRORS=file` | every error as a JSON line, on stderr or into the file (below) |
 | `JM_STRICT=1` | the first error ends the run, with exit code 1 |
 | `JM_PROFILE=file` | write where the frames' time went (the driver's `profile`) to the file as JSON at exit; `jm run --profile` prints it |
-| `JM_DEBUG_DRAW=0` or `1` | scripts' `Debug` drawing off or on (on by default, off in an exported game) |
+| `JM_DEBUG_DRAW=0` or `1` | scripts' `Debug` drawing off or on (on by default) |
 | `JM_DEBUG_PHYSICS=1` | draws what physics sees over every frame: colliders (solid boxes magenta, others green, circles cyan) and ground (solid white, one-way yellow) |
 | `JM_RECORD_DIR=dir` | record the run as a play there (`jm run` does this when you play; `jm docs plays`) |
 | `JM_CONTROL=dir` | steer a live run from outside: append `{"id","command"}` lines to `dir/in` (the driver's commands, plus `pause`, `resume`, `speed 0.1..1`, `status`); each answer is `dir/answers/<id>.json`, and `dir/status.json` says it's live (`jm run` does this when you play: `.jm/live/<run>`, which MCP's `play_live` uses) |

@@ -335,6 +335,20 @@ func resolveServerPath() (string, error) {
 	return findBinary("journeyman_server", "JM_SERVER")
 }
 
+// resolvePlayerPath finds journeyman_player, the engine without the agent
+// tooling that jm export ships: $JM_PLAYER, else beside the engine (a release
+// and a build put them together), else beside jm or on PATH.
+func resolvePlayerPath() (string, error) {
+	if os.Getenv("JM_PLAYER") == "" {
+		if engine, err := resolveEnginePath(); err == nil {
+			if candidate := filepath.Join(filepath.Dir(engine), exeName("journeyman_player")); isFile(candidate) {
+				return candidate, nil
+			}
+		}
+	}
+	return findBinary("journeyman_player", "JM_PLAYER")
+}
+
 // findBinary finds one of the engine's programs (name): the path in the
 // environment variable env if it's set (it must exist), else beside jm, where
 // a release, and scripts/build-release.sh's build/bin, put the programs jm

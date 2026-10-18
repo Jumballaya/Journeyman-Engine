@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Builds one platform's release files into dist/release/:
-#   journeyman-cli-<target>.tar.gz|zip      jm + the engine and server: scripts, CI, AI agents
-#   journeyman-editor-<target>.zip|tar.gz   the editor, with jm, the engine and the server inside
-#   journeyman-engine-<target>[.exe]        the engine alone, for `jm export --target`
+#   journeyman-cli-<target>.tar.gz|zip      jm + the engine, player and server: scripts, CI, AI agents
+#   journeyman-editor-<target>.zip|tar.gz   the editor, with jm, the engine, the player and the server inside
+#   journeyman-player-<target>[.exe]        the player alone, for `jm export --target`
 #   journeyman-server-<target>[.exe]        the dedicated server alone, for `jm export --server --target`
 #   journeyman-<target>.pkg                 macOS: the one-file install (editor in /Applications, jm on PATH)
 #   journeyman-<target>-setup.exe           Windows: the one-file install (per user: editor, jm on PATH)
@@ -26,13 +26,14 @@ build="build/release-$target"
 cmake_args=(--preset release -B "$build" -DJM_VERSION="$version")
 [[ "$target" == darwin-amd64 ]] && cmake_args+=(-DCMAKE_OSX_ARCHITECTURES=x86_64)
 cmake "${cmake_args[@]}"
-cmake --build "$build" --target journeyman_engine journeyman_server journeyman_editor
+cmake --build "$build" --target journeyman_engine journeyman_player journeyman_server journeyman_editor
 
 mkdir -p "$build/bin"
 (cd cli && CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath \
   -ldflags "-s -w -X main.version=$version" -o "../$build/bin/jm$exe" ./cmd/jm)
 
 engine="$build/engine/journeyman_engine$exe"
+player="$build/engine/journeyman_player$exe"
 server="$build/engine/journeyman_server$exe"
 editor="$build/editor/journeyman_editor$exe"
 jm="$build/bin/jm$exe"
@@ -55,21 +56,21 @@ trap 'rm -rf "$staging"' EXIT
 # macOS: everything signed (Developer ID with JM_SIGN_IDENTITY, else ad-hoc) and,
 # with a notary key, notarized before it's packed (see scripts/sign-mac.sh).
 if [[ "$os" == darwin ]]; then
-  scripts/sign-mac.sh sign "$engine" "$server" "$jm"
+  scripts/sign-mac.sh sign "$engine" "$player" "$server" "$jm"
   app="$staging/Journeyman Editor.app"
-  scripts/make-mac-app.sh "$editor" "$engine" "$jm" "$app" "$version" "$server"
-  scripts/sign-mac.sh notarize "$engine" "$server" "$jm" "$app"
+  scripts/make-mac-app.sh "$editor" "$engine" "$jm" "$app" "$version" "$server" "$player"
+  scripts/sign-mac.sh notarize "$engine" "$player" "$server" "$jm" "$app"
   # The one-file install, holding the notarized app.
   scripts/make-mac-pkg.sh "$app" "$out/journeyman-$target.pkg" "$version"
   scripts/sign-mac.sh notarize "$out/journeyman-$target.pkg"
 fi
 
-cp "$engine" "$out/journeyman-engine-$target$exe"
+cp "$player" "$out/journeyman-player-$target$exe"
 cp "$server" "$out/journeyman-server-$target$exe"
 
 cli="$staging/journeyman-cli-$target"
 mkdir -p "$cli"
-cp "$jm" "$engine" "$server" LICENSE "$cli/"
+cp "$jm" "$engine" "$player" "$server" LICENSE "$cli/"
 archive "journeyman-cli-$target" "$cli"
 
 if [[ "$os" == darwin ]]; then
@@ -78,7 +79,7 @@ if [[ "$os" == darwin ]]; then
 else
   app="$staging/journeyman-editor-$target"
   mkdir -p "$app"
-  cp "$editor" "$jm" "$engine" "$server" LICENSE "$app/"
+  cp "$editor" "$jm" "$engine" "$player" "$server" LICENSE "$app/"
   archive "journeyman-editor-$target" "$app"
   if [[ "$os" == windows ]]; then
     scripts/make-windows-setup.sh "$app" "$out/journeyman-$target-setup.exe" "$version"
