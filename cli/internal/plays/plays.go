@@ -5,6 +5,7 @@ package plays
 
 import (
 	"bufio"
+	"cmp"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -171,16 +172,15 @@ func (o Origin) Text() string {
 
 // placeText is a point or an area, its tiles and the entities there.
 func (p Pick) placeText() string {
-	num := func(v float64) string { return strconv.FormatFloat(math.Round(v*10)/10, 'f', -1, 64) }
-	text := "a point"
-	if len(p.At) == 2 {
-		text = fmt.Sprintf("a point at (%s, %s)", num(p.At[0]), num(p.At[1]))
-	}
-	if p.Kind == "area" {
-		text = "an area"
-		if len(p.Area) == 4 {
-			text = fmt.Sprintf("an area (%s, %s)–(%s, %s)", num(p.Area[0]), num(p.Area[1]), num(p.Area[2]), num(p.Area[3]))
+	xy := func(v []float64, i int) string {
+		if len(v) < i+2 {
+			return "(?)"
 		}
+		return "(" + strconv.FormatFloat(math.Round(v[i]*10)/10, 'f', -1, 64) + ", " + strconv.FormatFloat(math.Round(v[i+1]*10)/10, 'f', -1, 64) + ")"
+	}
+	text := "a point at " + xy(p.At, 0)
+	if p.Kind == "area" {
+		text = "an area " + xy(p.Area, 0) + "–" + xy(p.Area, 2)
 	}
 	if p.Scene != "" {
 		text += " in " + p.Scene
@@ -197,10 +197,7 @@ func (p Pick) placeText() string {
 				}
 			}
 			sort.Strings(types)
-			layer := fmt.Sprintf("layer %s %d tiles", l.Layer, l.Count)
-			if l.Count == 1 {
-				layer = fmt.Sprintf("layer %s 1 tile", l.Layer)
-			}
+			layer := fmt.Sprintf("layer %s %d tile%s", l.Layer, l.Count, map[bool]string{true: "s"}[l.Count != 1])
 			if c := l.Cells; p.Kind == "point" && len(c) > 0 {
 				layer = fmt.Sprintf("layer %s gid %d", l.Layer, c[0][2])
 				if len(t.From) != 2 || c[0][0] != t.From[0] || c[0][1] != t.From[1] { // moved by its offset or parallax
@@ -213,15 +210,13 @@ func (p Pick) placeText() string {
 			layers = append(layers, layer)
 		}
 		cells := "layers"
-		if len(t.From) == 2 && len(t.To) == 2 && p.Kind == "point" {
-			cells = fmt.Sprintf("tile (%d, %d)", t.From[0], t.From[1])
-		} else if len(t.From) == 2 && len(t.To) == 2 {
+		if len(t.From) == 2 && len(t.To) == 2 {
 			cells = fmt.Sprintf("cells (%d, %d)–(%d, %d)", t.From[0], t.From[1], t.To[0], t.To[1])
+			if p.Kind == "point" {
+				cells = fmt.Sprintf("tile (%d, %d)", t.From[0], t.From[1])
+			}
 		}
-		if len(layers) == 0 {
-			layers = []string{"no tiles"}
-		}
-		text += fmt.Sprintf(", over %s of %s: %s", cells, t.Map, strings.Join(layers, "; "))
+		text += fmt.Sprintf(", over %s of %s: %s", cells, t.Map, cmp.Or(strings.Join(layers, "; "), "no tiles"))
 	}
 	if len(p.Entities) > 0 {
 		var there []string
