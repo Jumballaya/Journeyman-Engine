@@ -15,6 +15,7 @@ std::vector<EntityId> SceneLoader::loadScene(const AssetHandle& handle) {
   const RawAsset& asset = _assetManager.getRawAsset(handle);
   const nlohmann::json scene = nlohmann::json::parse(asset.data.begin(), asset.data.end());
   _groups.clear();
+  _scene = asset.filePath.generic_string();
   std::vector<EntityId> created;
   try {
     size_t index = 0;
@@ -69,6 +70,7 @@ EntityId SceneLoader::createEntityFromJson(const nlohmann::json& entityJson, con
   const nlohmann::json childOverrides = overrides.value("children", nlohmann::json::object());
   overrides.erase("children");
   const EntityId id = _world.instantiatePrefab(prefab, overrides);
+  if (_built) _built(id, entityJson, _scene);
   try {
     createChildren(id, prefab.children, childOverrides, key.empty() ? key : key + "/p");
     createChildren(id, entityJson.value("children", nlohmann::json::array()), nlohmann::json::object(),

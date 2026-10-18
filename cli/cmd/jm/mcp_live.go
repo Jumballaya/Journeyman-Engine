@@ -15,7 +15,7 @@ import (
 )
 
 // The game the person is playing now, in its own window (jm run, project_play):
-// steered through its JM_CONTROL folder (engine/core/app/LiveControl.hpp).
+// steered through its JM_CONTROL folder (engine/core/app/agent/LiveControl.hpp).
 
 // liveDir holds the folders of a project's played runs, one each.
 func liveDir(root string) string { return filepath.Join(root, ".jm", "live") }

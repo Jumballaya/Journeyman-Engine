@@ -229,7 +229,7 @@ void Editor::registerCommands() {
   _commands.add({"play.step", "Step One Frame", "Play", ICON_SKIP_FORWARD, ImGuiKey_F10, [this]() { stepFrame(); }, isPlaying, true});
   // F8 in the focused game drops one there; this is for the menu and an unfocused game.
   _commands.add({"play.marker", "Drop Marker (for your agent)", "Play", ICON_FLAG, ImGuiKey_F8,
-                 [this]() { _game->engine().dropMarker(); }, isPlaying});
+                 [this]() { _game->engine().agent().dropMarker(); }, isPlaying});
 
   // Help
   _commands.add({"help.shortcuts", "Keyboard Shortcuts", "Help", ICON_KEYBOARD, ImGuiMod_Ctrl | ImGuiKey_Slash,

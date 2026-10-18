@@ -15,7 +15,7 @@
 #include "audio/AudioModule.hpp"
 #include "audio/SoundBuffer.hpp"
 #include "core/app/Platform.hpp"
-#include "core/app/PlaySession.hpp"
+#include "core/app/agent/PlaySession.hpp"
 #include "LogBook.hpp"
 #include "References.hpp"
 #include "TiledFiles.hpp"

@@ -1,4 +1,4 @@
-#include "DevOptions.hpp"
+#include "../DevOptions.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -51,6 +51,14 @@ DevOptions DevOptions::fromEnvironment() {
                   : env("JM_PLAY_THEN") == "live" ? AfterReplay::Live
                                                   : AfterReplay::Stop;
   if (auto v = env("JM_PLAY_UNTIL"); !v.empty()) o.playUntil = std::strtoull(v.c_str(), nullptr, 10);
+  o.netHost = env("JM_NET_HOST");
+  o.netJoin = env("JM_NET_JOIN");
+  o.netName = env("JM_NET_NAME");
+  o.netPort = static_cast<uint16_t>(std::strtoul(env("JM_NET_PORT").c_str(), nullptr, 10));
+  o.netLatency = std::strtof(env("JM_NET_LATENCY").c_str(), nullptr);
+  o.netJitter = std::strtof(env("JM_NET_JITTER").c_str(), nullptr);
+  o.netLoss = std::strtof(env("JM_NET_LOSS").c_str(), nullptr);
+  o.netTrace = env("JM_NET_TRACE");
   if (o.automated()) {
     if (!(o.fixedDt > 0.0f)) o.fixedDt = 1.0f / 60.0f;
     if (!o.seed) o.seed = 1;

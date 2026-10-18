@@ -144,8 +144,9 @@ jm migrate                         # convert an older project (.script.json) to 
 A game doesn't say where the engine is: `jm` uses `$JM_ENGINE` if set, else
 the `journeyman_engine` beside it (a release, or `build/bin` from
 `scripts/build-release.sh`), else the one on `PATH`. The dedicated server is
-found the same way (`$JM_SERVER`, else beside the engine). `jm doctor` shows
-which one it found.
+found the same way (`$JM_SERVER`, else beside the engine), and so is
+`journeyman_player` (`$JM_PLAYER`), the engine without the agent tooling that
+`jm export` ships. `jm doctor` shows which ones it found.
 
 The project tree holds only sources you author: `.jm.json`, scenes, prefabs,
 `.ts` scripts, images, sounds, fonts, `.ui.html`/`.css` screens, `.frag`

@@ -4,9 +4,17 @@ You and your agent build the game together: it edits and builds, you play
 and say what feels wrong. A play is how what you saw reaches the agent.
 
 Every time you play with `jm run`, the play is recorded in `.jm/plays/<id>`.
-Press **F8** when something looks off: that's a marker (the window's title
-says "marker 1 saved"). Then tell your agent about it, in your own words:
-"at my marker the jump felt floaty", "the second time I died was unfair".
+Press **F8** when something looks off: the game holds still ("Paused · F8"),
+and you can point at what you mean. Click an entity to pick it; click empty
+space to pick that point ("a coin should be here"); drag to pick an area ("this
+whole section is too dark"; a drag is an area wherever it starts). Shift adds
+more, or takes away what you shift-click again (a point near it, an area on
+its edge); `.` steps a frame. **Enter** saves the moment: a marker
+with what you picked (nothing picked: a plain marker; the window's title says
+"marker 1 saved"). F8 or Esc goes on without saving. While held, nothing in the
+game moves, plays sound or hears your keys, and the held time isn't in the
+play: it replays as if you never stopped. Then tell your agent about it, in your own words:
+"at my marker the jump felt floaty", "this enemy shouldn't be here".
 It replays your play to that moment, exactly, and looks.
 
 A play recorded while files reload (the editor's Play, as you save) ends at the
@@ -67,10 +75,27 @@ play now goes differently, `jm plays frame latest m1` again to see the
 difference → `jm plays resume latest m1` so the person tries the fix right
 where they were.
 
+## Moments: what you picked
+
+A marker you saved with picks is a moment, and your agent sees what you
+pointed at: each pick numbered (`picked 1: Pip [58 0]: scene entry 58 in
+scenes/level.scene.json (prefab assets/prefabs/pip.prefab.json)`, or
+`spawned from prefab ... by script ... at frame 1021` for one a script made),
+which is the file it changes. A point or an area says where it is in the world
+and what's there: `picked 2: a point at (56, 24) in scenes/level.scene.json, over
+tile (3, 1) of assets/maps/1-1.tmj: layer ground gid 1 (ground)`, and an area its
+cells, each layer's tiles by type, and the entities in it with their origins. `play_moment` gives it the picture you saw
+with each pick outlined, numbered and named (drawn from where each was, kept
+in the pick as `rect`); `play_state` at the moment's frame has the rest. In
+ChatGPT the timeline shows a moment's picture outlined and its picks with
+where each came from, and "New chat" starts one about them; Studio's
+Overview lists the latest moments. A moment can be @-mentioned ("moment 1"),
+and comes with its picks and picture.
+
 ## In Codex, Claude Code and ChatGPT
 
 `jm mcp` serves the same as tools: `plays_list`, `play_show`, `play_frame`
-(the image itself), `play_state`, `play_inputs`, `play_verify`, `play_resume`, and
+(the image itself), `play_moment`, `play_state`, `play_inputs`, `play_verify`, `play_resume`, and
 `drive_start` with a `play` and `at` to drive on from a moment. To follow
 something frame by frame from there, `drive` takes several commands and a
 repeat: `{"commands": ["step 1", "get tag=Player TransformComponent.y"],
@@ -128,7 +153,12 @@ call it).
 ## Under the hood
 
 A play's folder: `session.json` (game, seed, entry scene, starting session
-values, markers, how it ended: `quit`, `crashed`, or `running` while it
+values, markers (a moment's has its `picks`, each with its `kind` and `rect` (where it was in the picture: x, y, w, h as fractions from its top-left; a point's w, h are 0):
+an `"entity"` its id, `origin`, `tags` and components then (`state`); a `"point"` its world
+`at` (x, y; y up, as scripts' world), an `"area"` its `area` (x0, y0, x1, y1), both their `scene`, the `entities` there
+(id, `name`, `origin`; the first 24, then `moreEntities`) and the `tiles` they cover: per map, its `map` file,
+`from`/`to` cells (tile coordinates, the bottom row 0, as scripts' tile maps; in the .tmj's `data` row
+height-1-y) and each visible layer's tiles there (`cells`: [x, y, gid], the first 64; `count`; `types`)), how it ended: `quit`, `crashed`, or `running` while it
 goes), `frames.bin` (each frame's dt: the fixed step, the same at any display
 rate; float32), `inputs.jsonl` (each input with its frame: keys by name, so a play
 replays on another machine; the pointer; window size and focus; a driver's

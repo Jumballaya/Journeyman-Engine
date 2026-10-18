@@ -22,6 +22,10 @@ class SceneLoader {
 
   SceneLoader(World& world, AssetManager& assetManager);
   void setCondition(Condition condition) { _condition = std::move(condition); }
+  // Told about each entity built from an entry, as it's made (its children
+  // not yet): the entry, and the path of the scene last loaded.
+  using Built = std::function<void(EntityId id, const nlohmann::json& entry, const std::string& scene)>;
+  void onBuilt(Built built) { _built = std::move(built); }
 
   // All or nothing: if an entry fails, the entities made so far are destroyed and it rethrows.
   std::vector<EntityId> loadScene(const std::filesystem::path& scenePath);
@@ -52,6 +56,8 @@ class SceneLoader {
   World& _world;
   AssetManager& _assetManager;
   Condition _condition;
+  Built _built;
+  std::string _scene;  // the scene last loaded (its groups come later)
   std::unordered_map<std::string, std::vector<nlohmann::json>> _groups;
   int _nesting = 0;
   std::vector<std::string> _keys;

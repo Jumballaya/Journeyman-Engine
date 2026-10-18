@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Makes the one-file macOS install: a .pkg that puts "Journeyman Editor.app" in
-# /Applications and links jm, the engine and the server into /usr/local/bin
+# /Applications and links jm, the engine, the player and the server into /usr/local/bin
 # (into the app, so a newer app updates them too).
 #   scripts/make-mac-pkg.sh <Journeyman Editor.app> <out.pkg> [version]
 # Signed with JM_INSTALLER_IDENTITY (a Developer ID Installer identity) if set.
@@ -22,7 +22,7 @@ cat >"$work/scripts/postinstall" <<'SCRIPT'
 app="/Applications/Journeyman Editor.app/Contents/MacOS"
 bin="$3/usr/local/bin"
 mkdir -p "$bin"
-for tool in jm journeyman_engine journeyman_server; do
+for tool in jm journeyman_engine journeyman_player journeyman_server; do
   if [ -e "$bin/$tool" ] || [ -L "$bin/$tool" ]; then
     case "$(readlink "$bin/$tool")" in
       "$app/$tool") ;;

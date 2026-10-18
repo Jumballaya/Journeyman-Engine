@@ -10,6 +10,7 @@
 #include "../assets/TempDir.hpp"
 #include "Engine.hpp"
 #include "LiveControl.hpp"
+#include "PlaySession.hpp"
 #include <fstream>
 
 namespace {
@@ -31,7 +32,7 @@ std::vector<nlohmann::json> drive(const std::string& commands,
   if (edit) edit(dir);
   std::istringstream in(commands);
   std::ostringstream out;
-  engine.drive(in, out);
+  engine.agent().drive(in, out);
   std::vector<nlohmann::json> replies;
   std::istringstream lines(out.str());
   for (std::string line; std::getline(lines, line);) replies.push_back(nlohmann::json::parse(line));
@@ -189,7 +190,7 @@ struct LiveProject {
   nlohmann::json drive(const std::string& commands) {  // the last reply
     std::istringstream in(commands);
     std::ostringstream out;
-    engine->drive(in, out);
+    engine->agent().drive(in, out);
     std::string line, last;
     for (std::istringstream lines(out.str()); std::getline(lines, line);) last = line;
     return nlohmann::json::parse(last);

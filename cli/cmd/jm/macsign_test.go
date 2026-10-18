@@ -86,7 +86,7 @@ func exportFixture(t *testing.T) exportOptions {
 	buildDir := filepath.Join(dir, "build")
 	writeManifest(t, buildDir, "Sky Hop")
 	writeFile(t, filepath.Join(buildDir, "scenes/level1.scene.json"), []byte(`{"entities":[]}`))
-	player := filepath.Join(dir, "journeyman_engine")
+	player := filepath.Join(dir, "journeyman_player")
 	writeFile(t, player, append(binary.LittleEndian.AppendUint32(nil, 0xfeedfacf), make([]byte, 64)...))
 	return exportOptions{buildDir: buildDir, outDir: filepath.Join(dir, "dist"), player: player, target: "darwin-arm64"}
 }

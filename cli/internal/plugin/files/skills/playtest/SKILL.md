@@ -13,6 +13,12 @@ play is recorded, and F8 marks moments they want you to see.
    markers.
 2. Look at the moment: `play_frame` and `play_state` with `at: "m1"` (a
    marker) or a frame; `play_inputs` for what they pressed and how long.
+   A marker with picks is a moment: the person pointed at those entities,
+   points or areas, so they are what they mean. `play_moment` shows them
+   outlined; an entity's origin is the file to change (a scene's entry, or
+   the prefab and the script that spawned it); a point or an area says
+   where in the world and what's there (entities, a map's tile cells and
+   layers); `play_state` at its frame for more.
 3. Say what you see and what you'll change; then change it and `build`.
 4. `play_verify` on their play: it says whether it now goes differently,
    and which values end differently.

@@ -82,7 +82,7 @@ int Application::run() {
   LoggerService::instance().setErrorListener([&](LogLevel level, std::string_view message, const ErrorSource& source) {
     const uint64_t frame = engineRunning ? engineRunning->frameCount() : 0;
     errors.add(level, message, source, frame);
-    if (dev.drive && engineRunning) engineRunning->noteError(ErrorReport::toJson(level, message, source, frame));
+    if (engineRunning) engineRunning->agent().noteError(ErrorReport::toJson(level, message, source, frame));
     if (dev.strict && engineRunning) engineRunning->quit();
   });
   struct StopListening {
@@ -117,6 +117,7 @@ int Application::run() {
   // An escaped exception (startup, or mid-game) is reported, not an abort().
   try {
     EngineOptions options;
+    options.dev = dev;
     options.server = _server;
     if (!options.dev.debugDraw) options.dev.debugDraw = bundled.empty();  // an exported game: off unless asked for
     Engine engine(rootDir, manifestPath, std::move(options));
