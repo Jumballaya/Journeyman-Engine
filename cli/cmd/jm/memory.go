@@ -28,7 +28,15 @@ named in backticks (` + "`scenes/main.scene.json`" + `).
   jm memory search <text>           notes whose title or lines hold text
   jm memory note <text> [--in Levels] [--category feel]
                                     add an observation (default: to Notes)
-  jm memory decide <title> <why>    record a decision (design/decisions/)`,
+  jm memory decide <title> <why>    record a decision (design/decisions/)
+  jm memory kinds                   the kinds of dossier: character, item, location...
+  jm memory dossier <kind> <name> [--summary text] [--set key=value]...
+                                    a dossier (design/Characters/<name>.md...)
+                                    from its kind's template
+
+A kind is a template in design/_templates (Characters.md: its properties in
+frontmatter, its sections in the body). Edit one, or add a file for a kind
+of your own; design/<Folder>.base shows a kind as a table in Obsidian.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return inGameRoot(func(root string) error {
@@ -47,7 +55,11 @@ named in backticks (` + "`scenes/main.scene.json`" + `).
 	},
 }
 
-var memoryNoteIn string
+var (
+	memoryNoteIn   string
+	dossierSummary string
+	dossierSet     []string
+)
 
 func init() {
 	memoryCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "JSON output (for tools)")
@@ -107,6 +119,33 @@ func init() {
 		}
 		return err
 	})
+	sub("kinds", "The kinds of dossier and their properties", cobra.NoArgs, func(w io.Writer, root string, _ []string) error {
+		kinds := memory.Kinds(root)
+		if jsonOutput {
+			return writeJSON(w, map[string]any{"kinds": kinds})
+		}
+		for _, k := range kinds {
+			fmt.Fprintf(w, "%s (design/%s/): %s\n", k.Name, k.Folder, strings.Join(k.Props, ", "))
+		}
+		return nil
+	})
+	dossier := sub("dossier <kind> <name>", "A dossier from its kind's template", cobra.ExactArgs(2), func(w io.Writer, root string, args []string) error {
+		props := map[string]string{}
+		for _, kv := range dossierSet {
+			key, value, ok := strings.Cut(kv, "=")
+			if !ok || strings.TrimSpace(key) == "" {
+				return fmt.Errorf("--set %q: give key=value", kv)
+			}
+			props[strings.TrimSpace(key)] = value
+		}
+		n, err := memory.NewDossier(root, args[0], args[1], dossierSummary, props)
+		if err == nil {
+			fmt.Fprintf(w, "Created %s\n", n.Path)
+		}
+		return err
+	})
+	dossier.Flags().StringVar(&dossierSummary, "summary", "", "a line or two under its heading")
+	dossier.Flags().StringArrayVar(&dossierSet, "set", nil, `a property, e.g. --set faction="[[House Dorne]]" (repeat)`)
 }
 
 func inGameRoot(run func(root string) error) error {

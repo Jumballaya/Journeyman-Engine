@@ -41,7 +41,7 @@ play **before** reading code or answering.
 | `assets/ui/*.ui.html`, `*.css` | UI screens, in an HTML/CSS subset |
 | `tests/*.spec.ts` | logic tests (`jm test`) |
 | `tests/golden/` | reference frames (`jm golden`) |
-| `design/*.md` | the game's memory: design notes (Pitch, Pillars, Levels, Systems, Decisions, Notes) |
+| `design/*.md` | the game's memory: design notes (Pitch, Pillars, Levels, Systems, Decisions, Notes) and dossiers (`design/Characters/`, `Locations/`...) |
 | `build/` | made by `jm build` and wiped each time. Never edit it |
 
 New files under `assets/` ship when they match a pattern in `.jm.json`'s
@@ -66,6 +66,17 @@ it (`jm memory decide "Jumps are variable height" "serves [[Pillars]]"`;
 notes are an Obsidian vault and Basic Memory's format, so the person can open
 them there too. For a new game, the MCP prompt `new_game_interview` plans it
 with them into these notes.
+
+The game's world goes in dossiers: a note per character, item, location,
+faction, quest or piece of lore, in `design/<Folder>/` (`jm memory dossier
+character "Mara Dorne" --set home="[[Irongate]]"`; `dossier_new`). Each kind
+is a template in `design/_templates/` (its properties in frontmatter, its
+sections in the body): `jm memory kinds` lists them, and a file there adds a
+kind of the game's own. Link a dossier to what it relates to, in its
+properties (`faction: "[[House Dorne]]"`) and its text, so what links to a
+note (`jm memory show Irongate`) is how the world is connected. Read the
+dossiers a new one relates to first, so it agrees with them.
+`design/<Folder>.base` shows a kind as a table in Obsidian.
 
 The game's history is git (`jm init` makes the first commit). After a change
 that builds and plays right, `vcs_commit` it (`jm vcs commit "Make jumps

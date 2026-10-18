@@ -21,7 +21,15 @@ the next chat starts from them.
    it feels and what a play showed.
 4. **Record decisions.** Once you settle something together,
    `memory_decide` with the `title` (what was decided) and `why`.
-5. **Link it.** `[[Note]]` links notes; name scene files in backticks
+5. **The world goes in dossiers.** A character, item, location, faction,
+   quest or piece of lore is a note of its own: `dossier_new` (`kind`,
+   `name`, `summary`, `props`), in `design/<Folder>/` from the kind's
+   template. `memory` lists the kinds and their properties; `memory` with a
+   `kind` lists that kind's dossiers. Before writing one, read what it
+   relates to (`memory` with `note`) so the new one agrees with them, and
+   link them: props like `{"home": "[[Irongate]]"}`, `[[links]]` in its text.
+   A kind of the game's own is a template file in `design/_templates/`.
+6. **Link it.** `[[Note]]` links notes; name scene files in backticks
    (`scenes/level1.scene.json`), entities as
    `jm://entity?scene=…&name=Hero`, plays and markers as `jm://play/<id>/m1`.
    One subject per note.
