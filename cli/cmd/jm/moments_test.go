@@ -1,6 +1,7 @@
 package main
 
 import (
+	"image"
 	"image/color"
 	"os"
 	"path/filepath"
@@ -12,7 +13,7 @@ import (
 
 // A play with a moment: marker 1 picked Pip (a scene entry), an enemy a
 // script spawned and a point on a map's tile, each where it was in the
-// picture; marker 2 is plain.
+// picture, Pip and the point with a note; marker 2 is plain.
 func momentGame(t *testing.T) *plays.Play {
 	t.Helper()
 	t.Chdir(t.TempDir())
@@ -21,11 +22,11 @@ func momentGame(t *testing.T) *plays.Play {
 	os.MkdirAll(dir, 0o755)
 	os.WriteFile(filepath.Join(dir, "session.json"), []byte(`{"format":3,"frames":300,"seconds":5,"started":"2000-01-03T00:00:00","markers":[
 		{"n":1,"frame":120,"time":2,"scene":"scenes/level.scene.json","note":"this one","image":"m1.png","picks":[
-			{"kind":"entity","entity":[58,0],"tags":["Pip","player"],"state":{},"rect":[0.25,0.25,0.5,0.5],
+			{"kind":"entity","entity":[58,0],"tags":["Pip","player"],"state":{},"rect":[0.25,0.25,0.5,0.5],"note":"this one clips",
 			 "origin":{"from":"scene","scene":"scenes/level.scene.json","entry":"58","name":"Pip","prefab":"prefabs/pip.prefab.json"}},
 			{"kind":"entity","entity":[122,1],"tags":[],"state":{},
 			 "origin":{"from":"spawn","prefab":"prefabs/enemy_zero.prefab.json","frame":40,"by":[93,1],"script":"scripts/director.ts"}},
-			{"kind":"point","at":[200,40],"scene":"scenes/level.scene.json","rect":[0.75,0.01,0,0],"entities":[],
+			{"kind":"point","at":[200,40],"scene":"scenes/level.scene.json","rect":[0.75,0.01,0,0],"entities":[],"note":"this gap is too wide",
 			 "tiles":[{"map":"maps/level.tmj","entity":[0,0],"from":[12,2],"to":[12,2],"layers":[{"layer":"ground","cells":[[12,2,5]],"count":1}]}]}]},
 		{"n":2,"frame":200,"time":3.3,"scene":"scenes/level.scene.json","image":"m2.png"}]}`), 0o644)
 	writePNG(t, filepath.Join(dir, "m1.png"), 640, 360, color.Black)
@@ -86,6 +87,17 @@ func TestAMomentsPictureOutlinesItsPicks(t *testing.T) {
 	if label == 0 {
 		t.Error("no label above the pick")
 	}
+	note := 0 // its note, white, under its name
+	for x := 158; x < 260; x++ {
+		for y := 76; y < 88; y++ {
+			if r, g, b, _ := img.At(x, y).RGBA(); r&g&b>>8 == 0xFF {
+				note++
+			}
+		}
+	}
+	if note == 0 {
+		t.Error("no note under the pick's name")
+	}
 	if plain := momentPicture(p, p.Meta.Markers[1]); plain == nil {
 		t.Error("a plain marker has no picture")
 	} else if r, g, b, _ := plain.At(320, 88).RGBA(); r|g|b != 0 {
@@ -107,9 +119,9 @@ func TestAMomentReachesTheAgentWithItsPicks(t *testing.T) {
 	text := content[0].(map[string]any)["text"].(string)
 	for _, want := range []string{
 		`Marker 1 of play 2000-01-03_000000 at 0:02.0 (frame 120), scenes/level.scene.json: "this one"`,
-		"picked 1: Pip [58 0]: scene entry 58 in scenes/level.scene.json (prefab prefabs/pip.prefab.json)",
+		`picked 1: Pip [58 0]: scene entry 58 in scenes/level.scene.json (prefab prefabs/pip.prefab.json): "this one clips"`,
 		"picked 2: entity [122 1]: spawned from prefab prefabs/enemy_zero.prefab.json by script scripts/director.ts at frame 40",
-		"picked 3: a point at (200, 40) in scenes/level.scene.json, over tile (12, 2) of maps/level.tmj: layer ground gid 5",
+		`picked 3: a point at (200, 40) in scenes/level.scene.json, over tile (12, 2) of maps/level.tmj: layer ground gid 5: "this gap is too wide"`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("play_moment says:\n%s\nwant %q", text, want)
@@ -123,7 +135,7 @@ func TestAMomentReachesTheAgentWithItsPicks(t *testing.T) {
 	}
 	items := replies[2]["result"].(map[string]any)["structuredContent"].(map[string]any)["items"].([]any)
 	if link := items[0].(map[string]any); link["name"] != "moment 1: this one" ||
-		!strings.HasSuffix(link["description"].(string), "picked Pip, enemy_zero, point") || link["uri"] != "jm://play/2000-01-03_000000/m1" {
+		!strings.HasSuffix(link["description"].(string), `picked Pip: "this one clips", enemy_zero, point: "this gap is too wide"`) || link["uri"] != "jm://play/2000-01-03_000000/m1" {
 		t.Errorf("mention: %v", items)
 	}
 	read := replies[3]["result"].(map[string]any)["contents"].([]any)
@@ -135,7 +147,7 @@ func TestAMomentReachesTheAgentWithItsPicks(t *testing.T) {
 	}
 	listing, err := listPlays(".")
 	if err != nil || len(listing.Plays) != 1 || jsonOf(listing.Plays[0].Moments) != "[1]" ||
-		listing.Plays[0].Marks[0] != "m1 0:02.0: this one · picked Pip, enemy_zero, point" {
+		listing.Plays[0].Marks[0] != `m1 0:02.0: this one · picked Pip: "this one clips", enemy_zero, point: "this gap is too wide"` {
 		t.Errorf("listing: %+v %v", listing, err)
 	}
 }
@@ -150,5 +162,38 @@ func TestAMomentIsReadFromTheGameNamed(t *testing.T) {
 	result := replies[1]["result"].(map[string]any)
 	if result["isError"] == true || result["structuredContent"].(map[string]any)["play"] != "2000-01-03_000000" {
 		t.Errorf("play_moment in %s: %v", game, result)
+	}
+}
+
+// A label near the game's right edge stays in the game, off the letterbox
+// bar; a long note is cut to its lines.
+func TestALabelStaysInTheGame(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 640, 360))
+	fill(img, img.Bounds(), color.RGBA{0, 0, 0, 0xFF})
+	fill(img, image.Rect(80, 0, 560, 360), color.RGBA{0x40, 0x60, 0x90, 0xFF})
+	game := gameArea(img)
+	if game != image.Rect(80, 0, 560, 360) {
+		t.Fatalf("game area: %v", game)
+	}
+	lines := noteLines(2, plays.Pick{Kind: "point", Note: "this gap is too wide, and the next one too: jump it twice and see"})
+	if len(lines) != 3 || lines[0] != "2 point" || !strings.HasSuffix(lines[2], "…") {
+		t.Errorf("lines: %q", lines)
+	}
+	label(img, tagPlace(game, image.Rect(540, 100, 550, 110), labelSize(lines, 2), nil), lines, 2)
+	inked := false
+	for y := 0; y < 360; y++ {
+		for x := 0; x < 640; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			if x < 80 || x >= 560 {
+				if r|g|b != 0 {
+					t.Fatalf("drawn on the bar at (%d, %d)", x, y)
+				}
+			} else if r>>8 == 0xFF {
+				inked = true
+			}
+		}
+	}
+	if !inked {
+		t.Error("no label")
 	}
 }

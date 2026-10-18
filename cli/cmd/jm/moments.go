@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"slices"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
@@ -29,6 +30,13 @@ func momentPicture(p *plays.Play, m plays.Marker) image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
 	draw.Draw(img, img.Bounds(), src, b.Min, draw.Src)
 	scale := max(1, b.Dx()/256) // a pixel of line and type per 256 px of frame
+	game := gameArea(img)
+	type marked struct {
+		r     image.Rectangle // what a label goes beside
+		lines []string
+	}
+	var labels []marked
+	var taken []image.Rectangle // what labels keep off: the marks, then the labels placed
 	for i, pick := range m.Picks {
 		if len(pick.Rect) != 4 {
 			continue
@@ -50,11 +58,44 @@ func momentPicture(p *plays.Play, m plays.Marker) image.Image {
 		outline(img, r.Inset(-1), scale+2, color.RGBA{0, 0, 0, 0xFF})
 		outline(img, r, scale, momentInk)
 		if pick.Kind == "point" { // the label clear of the crosshair's arms
-			r.Min.Y, r.Max.Y = r.Min.Y-5*scale, r.Max.Y+5*scale
+			r = r.Inset(-6 * scale)
 		}
-		label(img, r, fmt.Sprintf("%d %s", i+1, pick.Name()), scale)
+		taken = append(taken, r)
+		labels = append(labels, marked{r, noteLines(i+1, pick)})
+	}
+	for _, l := range labels {
+		tag := tagPlace(game, l.r, labelSize(l.lines, scale), taken)
+		taken = append(taken, tag)
+		label(img, tag, l.lines, scale)
 	}
 	return img
+}
+
+// tagPlace is where a tag goes beside r: above it, under it, then further up;
+// inside the game's area (never on a letterbox bar); the first place clear
+// of what's taken, else the one least on it.
+func tagPlace(game, r image.Rectangle, tag image.Point, taken []image.Rectangle) image.Rectangle {
+	places := []image.Point{{r.Min.X, r.Min.Y - tag.Y}, {r.Min.X, r.Max.Y}, {r.Max.X - tag.X, r.Min.Y - tag.Y}, {r.Max.X - tag.X, r.Max.Y}}
+	for y := r.Min.Y - 2*tag.Y; y > game.Min.Y-tag.Y; y -= tag.Y/2 + 1 {
+		places = append(places, image.Pt(r.Min.X, y), image.Pt(r.Max.X-tag.X, y))
+	}
+	best, least := image.Rectangle{}, -1
+	for _, at := range append(places, r.Min) {
+		at.X = max(game.Min.X, min(at.X, game.Max.X-tag.X))
+		at.Y = max(game.Min.Y, min(at.Y, game.Max.Y-tag.Y))
+		t, on := image.Rectangle{at, at.Add(tag)}, 0
+		for _, o := range taken {
+			i := t.Intersect(o)
+			on += i.Dx() * i.Dy()
+		}
+		if least < 0 || on < least {
+			best, least = t, on
+		}
+		if on == 0 {
+			break
+		}
+	}
+	return best
 }
 
 // outline draws r's edges, thick px wide, inward.
@@ -69,35 +110,89 @@ func fill(img *image.RGBA, r image.Rectangle, c color.RGBA) {
 	draw.Draw(img, r.Intersect(img.Bounds()), image.NewUniform(c), image.Point{}, draw.Src)
 }
 
-// label writes text (upper case, at most 18 letters) on a dark tag above r,
-// or under it when r is at the picture's top (inside its top if r is the picture's height).
-func label(img *image.RGBA, r image.Rectangle, text string, scale int) {
-	text = strings.ToUpper(text)
-	if len(text) > 18 {
-		text = text[:17] + "."
+// labelSize is how big label draws lines.
+func labelSize(lines []string, scale int) image.Point {
+	width := 0
+	for _, line := range lines {
+		width = max(width, len([]rune(line)))
 	}
-	cell, pad := 4*scale, scale
-	tag := image.Rect(0, 0, len(text)*cell+pad, 5*scale+2*pad)
-	at := image.Pt(r.Min.X, r.Min.Y-tag.Dy())
-	if at.Y < 0 && r.Max.Y+tag.Dy() <= img.Bounds().Dy() {
-		at.Y = r.Max.Y
-	} else if at.Y < 0 {
-		at.Y = max(0, r.Min.Y)
-	}
-	at.X = min(at.X, img.Bounds().Dx()-tag.Dx())
-	tag = tag.Add(image.Pt(max(0, at.X), at.Y))
+	return image.Pt(width*4*scale+scale, len(lines)*6*scale+scale)
+}
+
+// label writes lines in upper case on a dark tag: the first (a pick's
+// number and name) in the outlines' color, the rest (its note) white.
+func label(img *image.RGBA, tag image.Rectangle, lines []string, scale int) {
+	cell, pad, row := 4*scale, scale, 6*scale
 	draw.Draw(img, tag, image.NewUniform(color.RGBA{0x10, 0x10, 0x14, 0xE0}), image.Point{}, draw.Over)
-	for i, ch := range text {
-		bits := glyphs[ch]
-		for row := 0; row < 5; row++ {
-			for col := 0; col < 3; col++ {
-				if len(bits) == 15 && bits[row*3+col] == '1' {
-					x, y := tag.Min.X+pad+i*cell+col*scale, tag.Min.Y+pad+row*scale
-					draw.Draw(img, image.Rect(x, y, x+scale, y+scale), image.NewUniform(momentInk), image.Point{}, draw.Src)
+	for n, line := range lines {
+		ink := momentInk
+		if n > 0 {
+			ink = color.RGBA{0xFF, 0xFF, 0xFF, 0xFF}
+		}
+		for i, ch := range []rune(strings.ToUpper(line)) {
+			bits := glyphs[ch]
+			for y := 0; y < 5; y++ {
+				for x := 0; x < 3; x++ {
+					if len(bits) == 15 && bits[y*3+x] == '1' {
+						px, py := tag.Min.X+pad+i*cell+x*scale, tag.Min.Y+pad+n*row+y*scale
+						fill(img, image.Rect(px, py, px+scale, py+scale), ink)
+					}
 				}
 			}
 		}
 	}
+}
+
+// noteLines is a pick's label: its number and name (at most 18 letters),
+// then its note in lines of at most 24, two of them (the rest cut).
+func noteLines(n int, pick plays.Pick) []string {
+	lines := []string{shortened(fmt.Sprintf("%d %s", n, pick.Name()), 18)}
+	line := ""
+	for _, word := range strings.Fields(pick.Note) {
+		for len([]rune(word)) > 24 { // a word longer than a line, broken
+			lines, line = append(lines, strings.TrimSpace(line)), ""
+			lines, word = append(lines, string([]rune(word)[:24])), string([]rune(word)[24:])
+		}
+		if len([]rune(line+word)) > 24 {
+			lines, line = append(lines, strings.TrimSpace(line)), ""
+		}
+		line += word + " "
+	}
+	lines = slices.DeleteFunc(append(lines, strings.TrimSpace(line)), func(l string) bool { return l == "" })
+	if len(lines) > 3 { // the rest cut
+		last := []rune(lines[2])
+		lines = append(lines[:2], strings.TrimSpace(string(last[:min(len(last), 23)]))+"…")
+	}
+	return lines
+}
+
+// gameArea is the picture without its letterbox bars: runs of the bars'
+// one color as wide on both sides (or above and below), the game between.
+func gameArea(img *image.RGBA) image.Rectangle {
+	b := img.Bounds()
+	uniform := func(r image.Rectangle, c color.RGBA) bool {
+		for y := r.Min.Y; y < r.Max.Y; y++ {
+			for x := r.Min.X; x < r.Max.X; x++ {
+				if img.RGBAAt(x, y) != c {
+					return false
+				}
+			}
+		}
+		return true
+	}
+	bar := func(n int, line func(i int) image.Rectangle) int {
+		c, i := img.RGBAAt(line(0).Min.X, line(0).Min.Y), 0
+		for i < n/2 && uniform(line(i), c) && uniform(line(n-1-i), c) {
+			i++
+		}
+		return i
+	}
+	x := bar(b.Dx(), func(i int) image.Rectangle { return image.Rect(i, 0, i+1, b.Dy()) })
+	y := bar(b.Dy(), func(i int) image.Rectangle { return image.Rect(0, i, b.Dx(), i+1) })
+	if (x > 0 && y > 0) || x >= b.Dx()/2 || y >= b.Dy()/2 { // one color all round, or all of it: the game's own
+		return b
+	}
+	return image.Rect(x, y, b.Dx()-x, b.Dy()-y)
 }
 
 // glyphs is a 3x5 type: rows top first; what isn't here is a space.
@@ -110,14 +205,28 @@ var glyphs = map[rune]string{
 	'P': "110101110100100", 'Q': "010101101110011", 'R': "110101110101101", 'S': "011100010001110", 'T': "111010010010010",
 	'U': "101101101101111", 'V': "101101101101010", 'W': "101101111111101", 'X': "101101010101101", 'Y': "101101010010010",
 	'Z': "111001010100111", '_': "000000000000111", '-': "000000111000000", '.': "000000000000010", '/': "001001010100100",
+	'!': "010010010000010", '?': "111001011000010", ',': "000000000010100", '\'': "010010000000000", ':': "000010000010000",
+	'…': "000000000000101", '"': "101101000000000",
 }
 
+// pickNames are a moment's picks for a listing: `Pip: "this one clips"`, the note cut short.
 func pickNames(m plays.Marker) []string {
 	names := make([]string, len(m.Picks))
 	for i, pick := range m.Picks {
 		names[i] = pick.Name()
+		if pick.Note != "" {
+			names[i] += fmt.Sprintf(": %q", shortened(pick.Note, 40))
+		}
 	}
 	return names
+}
+
+// shortened is text cut to at most n runes, an ellipsis ending what was cut.
+func shortened(text string, n int) string {
+	if r := []rune(text); len(r) > n {
+		return strings.TrimSpace(string(r[:n-1])) + "…"
+	}
+	return text
 }
 
 // momentText is a moment for the model: its picks, numbered as the picture

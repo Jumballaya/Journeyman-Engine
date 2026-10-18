@@ -57,6 +57,7 @@ type Pick struct {
 	Entities     []There `json:"entities,omitempty"`
 	MoreEntities int     `json:"moreEntities,omitempty"`
 	Tiles        []Tiles `json:"tiles,omitempty"`
+	Note         string  `json:"note,omitempty"` // what the person wrote about it ("this one clips")
 
 	saved json.RawMessage // as the engine wrote it: what's passed on
 }
@@ -134,8 +135,16 @@ func (p Pick) Name() string {
 // Text is the pick on one line, as the timeline says it too: "Pip [58 0]:
 // scene entry 58 in scenes/level.scene.json (prefab assets/prefabs/pip.prefab.json)";
 // "a point at (412, 96) in scenes/x.scene.json, over tile (12, 3) of
-// assets/maps/x.tmj: layer ground gid 5 (brick); on Pip [58 0], scene entry 58 in ...".
+// assets/maps/x.tmj: layer ground gid 5 (brick); on Pip [58 0], scene entry 58 in ...";
+// then the person's note on it: `: "this gap is too wide"`.
 func (p Pick) Text() string {
+	if p.Note != "" {
+		return p.thing() + fmt.Sprintf(": %q", p.Note)
+	}
+	return p.thing()
+}
+
+func (p Pick) thing() string {
 	switch p.Kind {
 	case "point", "area":
 		return p.placeText()
