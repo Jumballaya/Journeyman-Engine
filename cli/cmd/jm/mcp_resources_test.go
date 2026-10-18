@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -85,7 +86,7 @@ func TestResourceTemplatesAreListedAndAGamesFileReads(t *testing.T) {
 	scratchSettings(t)
 	home := t.TempDir()
 	t.Setenv("JM_GAMES", home)
-	game, err := newGame(home, newGameChoice{name: "Neon Vow"})
+	game, err := newGame(context.Background(), home, newGameChoice{name: "Neon Vow"})
 	if err != nil {
 		t.Fatal(err)
 	}
