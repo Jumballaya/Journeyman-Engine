@@ -1,17 +1,13 @@
-// State dumps for tools (JM_DUMP_DIR, JM_DUMP_FRAMES): the game as data rather
-// than pixels, so an agent can assert on what a headless run did.
+// The game's state as data rather than pixels, for tools (state dumps, the
+// driver, play sessions): an agent can assert on what a headless run did.
 
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
-#include <filesystem>
-#include <fstream>
 
-#include "../logger/logging.hpp"
 #include "../scripting/ScriptComponent.hpp"
 #include "Engine.hpp"
-#include "Platform.hpp"
 
 namespace {
 
@@ -83,20 +79,8 @@ nlohmann::json Engine::stateJson(bool withModules) {
     state["transition"] = {{"from", t->from}, {"progress", tidy(t->progress)}};
   }
   if (!withModules) return state;
-  if (_playback) {
-    state["replay"] = {{"frames", _playback->frames()},
-                       {"diverged", _divergedAt ? nlohmann::json(*_divergedAt) : nlohmann::json()}};
-  }
+  _agent->describeState(state);
   _modules.describeState(*this, state);
   return state;
 }
 
-void Engine::dumpState(const std::string& name) {
-  if (_options.dev.dumpDir.empty()) return;
-  std::error_code ec;
-  std::filesystem::create_directories(_options.dev.dumpDir, ec);
-  const auto path = _options.dev.dumpDir / name;
-  std::string error;  // one line, as the driver answers: greppable
-  if (platform::writeAtomically(path, stateJson().dump() + "\n", error)) JM_LOG_INFO("[Engine] state dumped to {}", path.string());
-  else JM_LOG_ERROR("[Engine] {}", error);
-}

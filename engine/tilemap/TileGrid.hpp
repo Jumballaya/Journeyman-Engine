@@ -108,6 +108,7 @@ class TileGrid {
   const std::vector<TerrainChain>& terrain() const { return _terrain; }
   // Which parse this grid came from: a different map (or a reload) has another.
   uint64_t revision() const { return _revision; }
+  const std::string& path() const { return _path; }  // the map's project path ("" for one passed whole, unsaved)
   const nlohmann::json& properties() const { return _properties; }
 
   // A box (center, half size) moved by `delta` one axis at a time, stopping
@@ -135,6 +136,7 @@ class TileGrid {
   std::vector<MapObject> _objects;
   std::vector<TerrainChain> _terrain;
   uint64_t _revision = 0;
+  std::string _path;
   nlohmann::json _properties = nlohmann::json::object();
   // The tile beyond each edge (map properties "outside", or "outsideLeft"...), by type.
   struct {

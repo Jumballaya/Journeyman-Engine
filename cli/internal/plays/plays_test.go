@@ -2,6 +2,7 @@ package plays
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"math"
 	"os"
 	"path/filepath"
@@ -206,5 +207,50 @@ func TestACrashMarkersLeadInIsTwoSecondsBeforeIt(t *testing.T) {
 	os.WriteFile(filepath.Join(p.Dir, "frames.bin"), frames, 0o644)
 	if s, _ := p.Summarize(); len(s.Markers[0].Pressed) != 0 {
 		t.Errorf("Tap ended before frame 20, 2 s before frame 140: %+v", s.Markers[0].Pressed)
+	}
+}
+
+// A moment's marker (F8, format 3) carries what was picked: each reads as
+// what it is and where it came from; a point or an area as where it is and
+// what's there.
+func TestAMarkersPicksSayWhereTheyCameFrom(t *testing.T) {
+	var meta Meta
+	err := json.Unmarshal([]byte(`{"format": 3, "markers": [{"n": 1, "frame": 360, "picks": [
+		{"kind": "entity", "entity": [58, 0], "tags": ["Pip", "player"], "state": {"TransformComponent": {"x": 56}},
+		 "origin": {"from": "scene", "scene": "scenes/l1.scene.json", "entry": "58", "name": "Pip", "prefab": "prefabs/pip.prefab.json"}},
+		{"kind": "entity", "entity": [122, 1], "tags": [], "state": {},
+		 "origin": {"from": "spawn", "prefab": "prefabs/zero.prefab.json", "frame": 1021, "by": [93, 1], "script": "scripts/director.ts", "in": [121, 1]}},
+		{"kind": "entity", "entity": [3, 2], "tags": [], "state": {}, "origin": null},
+		{"kind": "point", "at": [412.04, 96], "scene": "scenes/l1.scene.json", "entities": [],
+		 "tiles": [{"map": "maps/l1.tmj", "entity": [0, 0], "from": [12, 3], "to": [12, 3],
+		            "layers": [{"layer": "ground", "cells": [[12, 3, 5]], "count": 1, "types": {"brick": 1}}]}]},
+		{"kind": "point", "at": [72, 8], "entities": [],
+		 "tiles": [{"map": "maps/l1.tmj", "entity": [0, 0], "layers": [{"layer": "far", "cells": [[0, 0, 7]], "count": 1}]}]},
+		{"kind": "point", "at": [40, 200], "scene": "scenes/l1.scene.json", "entities": [],
+		 "tiles": [{"map": "maps/l1.tmj", "entity": [0, 0], "from": [1, 9], "to": [1, 9], "layers": []}]},
+		{"kind": "area", "area": [96, 16, 160.5, 64], "scene": "scenes/l1.scene.json", "moreEntities": 3,
+		 "entities": [{"entity": [58, 0], "name": "Pip", "origin": {"from": "scene", "scene": "scenes/l1.scene.json", "entry": "58"}}],
+		 "tiles": [{"map": "maps/l1.tmj", "entity": [0, 0], "from": [6, 1], "to": [10, 4],
+		            "layers": [{"layer": "ground", "cells": [[6, 1, 5]], "count": 12, "types": {"brick": 8, "dirt": 4}},
+		                       {"layer": "deco", "cells": [[7, 2, 9]], "count": 1}]}]}]}]}`), &meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, p := range meta.Markers[0].Picks {
+		got = append(got, p.Text())
+	}
+	want := []string{
+		"Pip [58 0]: scene entry 58 in scenes/l1.scene.json (prefab prefabs/pip.prefab.json)",
+		"entity [122 1]: spawned from prefab prefabs/zero.prefab.json by script scripts/director.ts at frame 1021, part of [121 1]",
+		"entity [3 2]",
+		"a point at (412, 96) in scenes/l1.scene.json, over tile (12, 3) of maps/l1.tmj: layer ground gid 5 (brick)",
+		"a point at (72, 8), over layers of maps/l1.tmj: layer far gid 7 at (0, 0)",
+		"a point at (40, 200) in scenes/l1.scene.json, over tile (1, 9) of maps/l1.tmj: no tiles",
+		"an area (96, 16)–(160.5, 64) in scenes/l1.scene.json, over cells (6, 1)–(10, 4) of maps/l1.tmj: " +
+			"layer ground 12 tiles (brick 8, dirt 4); layer deco 1 tile; on Pip [58 0], scene entry 58 in scenes/l1.scene.json and 3 more",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("picks read as:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }

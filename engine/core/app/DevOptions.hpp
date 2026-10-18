@@ -26,7 +26,7 @@ struct DevOptions {
   std::filesystem::path captureDir;          // JM_CAPTURE_DIR
   std::vector<uint64_t> captureFrames;       // JM_CAPTURE_FRAMES=60,120
   std::filesystem::path inputReplay;         // JM_INPUT_REPLAY
-  bool drive = false;                        // JM_DRIVE: stepped by commands on stdin (Engine::drive)
+  bool drive = false;                        // JM_DRIVE: stepped by commands on stdin (AgentTools::drive)
   std::filesystem::path driveRecord;         // JM_DRIVE_RECORD: the driven inputs, as a replay file
   std::filesystem::path dumpDir;             // JM_DUMP_DIR: the game's state as JSON, at exit
   std::vector<uint64_t> dumpFrames;          // JM_DUMP_FRAMES=60,120: and at these frames
@@ -39,8 +39,8 @@ struct DevOptions {
   std::optional<bool> fullscreen;            // JM_FULLSCREEN=0|1: open windowed or fullscreen, whatever config and saved settings say
   bool realtime = false;                     // JM_REALTIME: a fixed-dt run still keeps to the clock (multiplayer tests)
   bool watch = false;                        // JM_WATCH: reload images, atlases, shaders, sounds and scripts whose files change
-  std::filesystem::path control;             // JM_CONTROL: a live run steered through files there (LiveControl.hpp)
-  std::filesystem::path recordDir;           // JM_RECORD_DIR: record this (played) run as a session there (PlaySession.hpp)
+  std::filesystem::path control;             // JM_CONTROL: a live run steered through files there (agent/LiveControl.hpp)
+  std::filesystem::path recordDir;           // JM_RECORD_DIR: record this (played) run as a session there (agent/PlaySession.hpp)
   std::filesystem::path playSession;         // JM_PLAY_SESSION: replay a recorded session, exactly
   std::optional<uint64_t> playUntil;         // JM_PLAY_UNTIL=n: the recording ends at frame n (a marker's, say)
 
@@ -60,9 +60,9 @@ struct DevOptions {
   enum class AfterReplay { Stop, Live, Drive };
   AfterReplay afterReplay = AfterReplay::Stop;
 
-  // Defined per executable, by the library it links: engine_dev_options
+  // Defined per executable, by the library it links: engine_agent_tools
   // reads the environment (journeyman_engine, journeyman_server, tests),
-  // engine_dev_options_player returns the defaults (journeyman_player).
+  // engine_agent_tools_none returns the defaults (journeyman_player).
   static DevOptions fromEnvironment();
 
   // A replay that hands over to the player isn't automated: it ends live.

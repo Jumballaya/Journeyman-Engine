@@ -39,6 +39,8 @@ class AudioManager {
   // While `when` says so, non-looping sounds don't play (they still get an
   // id, so callers can't tell). Asked at each play.
   void silenceOneShotsWhile(std::function<bool()> when) { _silenceOneShots = std::move(when); }
+  // Held: nothing plays on, and what's playing waits where it is (the run held). Main thread.
+  void hold(bool held) { _held.store(held, std::memory_order_relaxed); }
 
   // Returns 0 if the sound is unknown.
   SoundInstanceId play(AudioHandle handle, float gain = 1.0f, bool loop = false,
@@ -66,6 +68,7 @@ class AudioManager {
   VoiceManager::Playing _playing;
   ma_device _device;
   bool _deviceStarted = false;
+  std::atomic<bool> _held{false};
 
   std::atomic<SoundInstanceId> _nextInstanceId{1};
   std::unordered_map<AudioHandle, std::shared_ptr<SoundBuffer>> _soundRegistry;

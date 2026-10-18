@@ -115,6 +115,12 @@ and replaying that file reaches the same state.
 | `scene <path>` | loads a scene (on the next step) | `{"ok": true}` |
 | `move x y`, `click [x y] [button]`, `mousedown`/`mouseup [x y] [button]`, `wheel dy` | the mouse, in logical px from the game's top-left (as UI rects in the state); buttons `left`, `right`, `middle`; a click lets go a frame later | `{"ok": true}` |
 | `marker [note]` | a marker in the recorded play (`JM_RECORD_DIR`), as F8 makes | `{"ok": true, "marker": 1}` |
+| `freeze` | holds the run as F8 does: picking starts; `step` still steps (`.` for the person) | `{"ok": true, "frame": 359}` |
+| `pick x y [add]` | while frozen, a click (logical px, as `click`): the entity drawn under it is the pick, or the point there when there's none (sprites first, then colliders; never tile maps); `add` adds it, or takes away the entity, or a point within 6 px (shift-click) | `{"ok": true, "under": [58, 0], "picks": [{"kind": "entity", "entity": [58, 0]}]}` |
+| `area x0 y0 x1 y1 [add]` | while frozen, a drag between two corners (logical px): the area it spans (clipped to the game) is the pick; `add` adds it. A shift-click on its edge takes it away | `{"ok": true, "picks": [{"kind": "area", "area": [40, 10, 110, 50]}]}` (world units, y up) |
+| `picks` | while frozen, what's picked: an entity's tags and origin; a point's `at`, an area's `area` (world) | `{"ok": true, "frame": 359, "picks": [{"kind": "entity", "entity": [58, 0], "tags": [...], "origin": {...}}]}` |
+| `save [note]` | while frozen, saves the moment as a marker with the picks (Enter), and goes on | `{"ok": true, "marker": 1, "picks": 2}` |
+| `resume` | goes on without saving (F8, Esc) | `{"ok": true}` |
 | `capture <path>` | the last frame as a PNG (needs GL) | `{"ok": true, "path": ...}` |
 | `reload` | reloads the files that changed (after a `jm build`) and starts the current scene again, `GameState` kept | `{"ok": true, "reloaded": ["scenes/main.scene.json"]}` |
 | `profile` | where the last frames' time went (up to 120): systems, scripts and modules (`avgMs`, `worstMs`, costliest first), `counts` (entities, scripts, draw calls, sprites); see [performance](performance.md#profiling-a-game) | `{"ok": true, "profile": {"frames": 120, "frame": {...}, "systems": [...], ...}}` |
@@ -142,6 +148,7 @@ without reading pixels:
 {"frame": 300, "time": 5.0, "scene": "scenes/level1.scene.json",
  "entities": [
    {"id": [12, 0], "tags": ["Player"], "parent": [3, 0],
+    "origin": {"from": "scene", "scene": "scenes/level1.scene.json", "entry": "3/c0", "name": "Player"},
     "components": {"TransformComponent": {"x": 120.5, "y": -40, "z": 5, "scaleX": 16, "scaleY": 16, "rotation": 0},
                    "ScriptComponent": {"script": "assets/scripts/player.ts", "failed": false}}}],
  "session": {"score": 1200}, "save": {"best": 4000},
@@ -151,7 +158,13 @@ without reading pixels:
 
 Each component lists its script fields with the values scripts read (a
 sprite's `shadow*` fields only while it has a shadow) (an
-entity's name is one of its tags). `ui` is each shown document's elements as
+entity's name is one of its tags). `origin` is where an entity came from:
+a scene's entry (`entry`: its place in the scene, `"3"`, a child `"3/c0"`, a
+prefab's child `"3/p0"`, a group's `"g:wave1/0"`; its `name` and `prefab`), or
+a spawn (`"from": "spawn"`: the `prefab`, the `frame`, the entity that spawned
+it `by` and its `script` then; a spawned prefab's child says which spawn it's
+`in`). Ids are the same in a replay: frame N's entity [12, 0] is the same one.
+While F8's moment holds the run, `moment` lists its `picks`. `ui` is each shown document's elements as
 laid out (logical px); an inline element (`<span id="score">`) has its own
 `text` and the rect its words cover, so a value is found by its id. `draw` is what the frame drew: `world` sprites back to
 front (`image`: its path, `"white"` for a solid quad, or a number for the engine's own textures such as text glyphs; `center`, `size`, `z`, and `rotation`/`color`/`texRect` when

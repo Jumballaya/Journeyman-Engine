@@ -19,6 +19,12 @@
 //   move x y, click [x y] [button], mousedown|mouseup [x y] [button], wheel dy
 //                       the mouse, in logical px (renderer module)
 //   marker [note]       a marker in the recorded session (JM_RECORD_DIR), once a frame has run
+//   freeze, pick x y [add], picks, save [note], resume
+//                       F8's moment, as the person has it: the run held
+//                       (step still steps), entities picked under a point in
+//                       logical px (add: toggled among the picks; moments
+//                       module), the picks with their origins, saved as a
+//                       marker (resuming), or resumed without
 //   capture <path>      the last frame as a PNG (renderer module)
 //   profile             where the last frames' time went (Profiler::report)
 //   quit
@@ -36,12 +42,12 @@
 #include <string_view>
 #include <vector>
 
-#include "Engine.hpp"
-#include "PlaySession.hpp"
+#include "../Engine.hpp"
+#include "AgentRun.hpp"
 
 namespace {
 
-constexpr const char* kCommands = "step [n], marker [note], move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, until [tag=Name] <path> <op> <value> [max n], echo <text>, near tag=Name [distance], capture <path>, profile, debug physics on|off, reload, quit";
+constexpr const char* kCommands = "step [n], marker [note], freeze, pick x y [add], picks, save [note], resume, move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, until [tag=Name] <path> <op> <value> [max n], echo <text>, near tag=Name [distance], capture <path>, profile, debug physics on|off, reload, quit";
 
 nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }
 
@@ -147,22 +153,22 @@ nlohmann::json getValue(const nlohmann::json& state, std::string_view args) {
 
 }  // namespace
 
-void Engine::drive(std::istream& in, std::ostream& out) {
+void AgentRun::drive(std::istream& in, std::ostream& out) {
   auto reply = [&](const nlohmann::json& message) { out << message.dump() << std::endl; };
-  reply(withErrors({{"ok", true}, {"ready", true}, {"frame", _frames}, {"scene", _sceneManager.getCurrentScenePath()},
+  reply(withErrors({{"ok", true}, {"ready", true}, {"frame", _engine.frameCount()}, {"scene", _engine.getSceneManager().getCurrentScenePath()},
                     {"plays", session::kFormat}}));
-  for (std::string line; _running && std::getline(in, line);) {
+  for (std::string line; _engine.running() && std::getline(in, line);) {
     if (nlohmann::json answer = command(line); !answer.is_null()) reply(answer);
   }
 }
 
-nlohmann::json Engine::withErrors(nlohmann::json message) {
+nlohmann::json AgentRun::withErrors(nlohmann::json message) {
   message["errors"] = std::move(_driverErrors);
   _driverErrors.clear();
   return message;
 }
 
-nlohmann::json Engine::command(std::string line) {
+nlohmann::json AgentRun::command(std::string line) {
   if (!line.empty() && line.back() == '\r') line.pop_back();
   const size_t start = line.find_first_not_of(" \t");
   if (start == std::string::npos || line[start] == '#') return nullptr;
@@ -173,7 +179,7 @@ nlohmann::json Engine::command(std::string line) {
   args.erase(args.find_last_not_of(" \t") + 1);
 
   if (verb == "quit") {
-    _running = false;
+    _engine.quit();
     return {{"ok", true}};
   }
   if (verb == "step") {
@@ -186,24 +192,24 @@ nlohmann::json Engine::command(std::string line) {
     }
     if (n < 0 || w.size() > 1) {
       return failure("step takes a frame count, e.g. step 60 (frames are fixed steps: " +
-                     std::to_string(std::lround(1.0f / _stepSeconds)) + " a second)");
+                     std::to_string(std::lround(1.0f / _engine.stepSeconds())) + " a second)");
     }
-    for (long long i = 0; i < n && _running; ++i) stepOnce();
-    nlohmann::json message = {{"ok", true}, {"frame", _frames}};
-    if (!_running) message["quit"] = true;  // the game asked to quit
+    for (long long i = 0; i < n && _engine.running(); ++i) _engine.stepOnce();
+    nlohmann::json message = {{"ok", true}, {"frame", _engine.frameCount()}};
+    if (!_engine.running()) message["quit"] = true;  // the game asked to quit
     return withErrors(std::move(message));
   }
   if (verb == "state") {
-    nlohmann::json state = stateJson();
+    nlohmann::json state = _engine.stateJson();
     if (std::string error = selectState(state, args); !error.empty()) return failure(std::move(error));
     return withErrors({{"ok", true}, {"state", std::move(state)}});
   }
-  if (verb == "get") return getValue(stateJson(), args);
+  if (verb == "get") return getValue(_engine.stateJson(), args);
   if (verb == "until") return withErrors(until(args));
   if (verb == "profile") {
-    if (_profiler) return {{"ok", true}, {"profile", _profiler->report()}};
-    if (_options.dev.drive) return failure("not profiling");
-    setProfiling(true);  // a live run: from now on
+    if (Profiler* profiler = _engine.profiler()) return {{"ok", true}, {"profile", profiler->report()}};
+    if (_dev.drive) return failure("not profiling");
+    _engine.setProfiling(true);  // a live run: from now on
     return failure("profiling from now on: ask again in a moment");
   }
   if (verb == "echo") return {{"ok", true}, {"echo", args}};
@@ -216,22 +222,23 @@ nlohmann::json Engine::command(std::string line) {
     return {{"ok", true}};
   }
   if (verb == "marker") {
-    if (_frames == 0) return failure("no frame has run yet: step first, then marker");  // no moment to mark
+    if (_engine.frameCount() == 0) return failure("no frame has run yet: step first, then marker");  // no moment to mark
     const int n = dropMarker(args);
     return n > 0 ? nlohmann::json{{"ok", true}, {"marker", n}} : failure("this run isn't recorded (JM_RECORD_DIR): nothing to mark");
   }
-  if (verb == "reload") return {{"ok", true}, {"reloaded", reloadAssets(true)}};  // the files changed: their new versions, the scene from its start
+  if (verb == "freeze" || verb == "resume" || verb == "picks" || verb == "save") return momentCommand(verb, args);
+  if (verb == "reload") return {{"ok", true}, {"reloaded", _engine.reloadAssets(true)}};  // the files changed: their new versions, the scene from its start
   if (verb == "scene") {
     if (args.empty()) return failure("scene takes a path, e.g. scene scenes/level2.scene.json");
     giveInput({{"type", "scene"}, {"path", args}});
     return {{"ok", true}};
   }
   nlohmann::json message;
-  if (_modules.driveCommand(*this, verb, args, message)) return message;
+  if (_engine.getModules().driveCommand(_engine, verb, args, message)) return message;
   return failure("unknown command '" + verb + "' (commands: " + kCommands + ")");
 }
 
-nlohmann::json Engine::until(std::string_view args) {
+nlohmann::json AgentRun::until(std::string_view args) {
   // <get words> <op> <JSON value, spaces and all> [max n]
   static const std::regex kForm(R"(^\s*(\S.*?)\s+(<=|>=|==|!=|<|>)\s+(.*?)(?:\s+max\s+(\d{1,12}))?\s*$)");
   std::smatch m;
@@ -255,22 +262,22 @@ nlohmann::json Engine::until(std::string_view args) {
   // Not there yet (a coin not spawned, or gone) isn't true yet: it keeps stepping.
   nlohmann::json last, value;
   for (long long steps = 0;; ++steps) {
-    const nlohmann::json state = stateJson();
+    const nlohmann::json state = _engine.stateJson();
     last = getValue(state, get);
     value = !last.value("ok", false) ? nlohmann::json() : last.contains("value") ? last["value"] : last["values"];
     const nlohmann::json values = last.contains("values") ? last["values"] : nlohmann::json::array({value});
     if (last.value("ok", false) && std::ranges::any_of(values, holds))
-      return !_running ? nlohmann::json{{"ok", true}, {"frame", state["frame"]}, {"steps", steps}, {"value", value}, {"quit", true}}
+      return !_engine.running() ? nlohmann::json{{"ok", true}, {"frame", state["frame"]}, {"steps", steps}, {"value", value}, {"quit", true}}
                        : nlohmann::json{{"ok", true}, {"frame", state["frame"]}, {"steps", steps}, {"value", value}};
-    if (steps >= max || !_running) {
-      nlohmann::json out = failure(_running ? "not true after " + std::to_string(max) + " frames"
+    if (steps >= max || !_engine.running()) {
+      nlohmann::json out = failure(_engine.running() ? "not true after " + std::to_string(max) + " frames"
                                             : "the game quit at frame " + state["frame"].dump());
       if (!last.value("ok", false)) out["error"] = out["error"].get<std::string>() + " (" + last.value("error", "") + ")";
       out["frame"] = state["frame"];
       out["value"] = value;
-      if (!_running) out["quit"] = true;
+      if (!_engine.running()) out["quit"] = true;
       return out;
     }
-    stepOnce();
+    _engine.stepOnce();
   }
 }

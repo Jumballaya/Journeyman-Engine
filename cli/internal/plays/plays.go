@@ -5,11 +5,13 @@ package plays
 
 import (
 	"bufio"
+	"cmp"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -30,8 +32,207 @@ type Marker struct {
 	Scene string  `json:"scene"`
 	Note  string  `json:"note,omitempty"`
 	Image string  `json:"image"` // relative to the play's folder
+	// The entities the person picked (F8's moment), with where each came from.
+	Picks []Pick `json:"picks,omitempty"`
 	// In a Summary: what the person pressed in the LeadIn before it.
 	Pressed []Press `json:"pressed,omitempty"`
+}
+
+// Pick is what the person picked in a moment: an entity (Kind "entity": its
+// id, the same entity in a replay at that frame, where it came from, its tags
+// and components then), or a point or an area of the world (At, Area: world
+// units, y up) with what's there. Rect is where it was in the marker's picture.
+type Pick struct {
+	Kind   string          `json:"kind"`
+	Entity [2]uint32       `json:"entity"`
+	Origin *Origin         `json:"origin"`
+	Tags   []string        `json:"tags"`
+	State  json.RawMessage `json:"state"`
+	Rect   []float64       `json:"rect,omitempty"` // x, y, w, h: fractions of the picture from its top-left (a point's w, h: 0)
+	At     []float64       `json:"at,omitempty"`   // a point: x, y
+	Area   []float64       `json:"area,omitempty"` // an area: x0, y0, x1, y1 (its low and high corners)
+	Scene  string          `json:"scene,omitempty"`
+	// A point's or area's: the entities drawn there (topmost first; the first
+	// 24, then how many more) and the tile maps' cells it covers.
+	Entities     []There `json:"entities,omitempty"`
+	MoreEntities int     `json:"moreEntities,omitempty"`
+	Tiles        []Tiles `json:"tiles,omitempty"`
+
+	saved json.RawMessage // as the engine wrote it: what's passed on
+}
+
+func (p *Pick) UnmarshalJSON(data []byte) error {
+	type fields Pick
+	if err := json.Unmarshal(data, (*fields)(p)); err != nil {
+		return err
+	}
+	p.saved = append(json.RawMessage(nil), data...)
+	return nil
+}
+
+// MarshalJSON is the pick as saved: only the fields its kind has.
+func (p Pick) MarshalJSON() ([]byte, error) {
+	if p.saved != nil {
+		return p.saved, nil
+	}
+	type fields Pick
+	return json.Marshal(fields(p))
+}
+
+// There is an entity under a point or in an area.
+type There struct {
+	Entity [2]uint32 `json:"entity"`
+	Name   string    `json:"name"`
+	Origin *Origin   `json:"origin"`
+}
+
+// Tiles are the cells of one tile map a point or an area covers: From and To
+// (inclusive; tile coordinates, the bottom row 0, as scripts' tile maps), and
+// each layer's tiles there (by its own offset and parallax).
+type Tiles struct {
+	Map    string    `json:"map"`
+	Entity [2]uint32 `json:"entity"`
+	From   []int     `json:"from"` // none when only a layer's offset or parallax puts tiles there
+	To     []int     `json:"to"`
+	Layers []struct {
+		Layer string         `json:"layer"`
+		Cells [][3]int       `json:"cells"` // tx, ty, gid (the .tmj's, flags off); the first 64
+		Count int            `json:"count"`
+		Types map[string]int `json:"types,omitempty"` // tiles by type
+	} `json:"layers"`
+}
+
+// Origin is where an entity came from: a scene's entry (From "scene") or a
+// spawn ("spawn": its prefab, the frame, the entity and script that spawned
+// it, and In: the spawned entity it's a part of).
+type Origin struct {
+	From   string   `json:"from"`
+	Scene  string   `json:"scene,omitempty"`
+	Entry  string   `json:"entry,omitempty"`
+	Name   string   `json:"name,omitempty"`
+	Prefab string   `json:"prefab,omitempty"`
+	Frame  uint64   `json:"frame,omitempty"`
+	By     []uint32 `json:"by,omitempty"`
+	Script string   `json:"script,omitempty"`
+	In     []uint32 `json:"in,omitempty"`
+}
+
+// Name is what the pick is called: "point", "area"; an entity's first tag (a
+// scene entity's name), else the prefab it was spawned from, else its id.
+func (p Pick) Name() string {
+	switch {
+	case p.Kind == "point" || p.Kind == "area":
+		return p.Kind
+	case len(p.Tags) > 0:
+		return p.Tags[0]
+	case p.Origin != nil && p.Origin.Prefab != "":
+		return strings.TrimSuffix(path.Base(p.Origin.Prefab), ".prefab.json")
+	}
+	return fmt.Sprintf("entity %d", p.Entity[0])
+}
+
+// Text is the pick on one line, as the timeline says it too: "Pip [58 0]:
+// scene entry 58 in scenes/level.scene.json (prefab assets/prefabs/pip.prefab.json)";
+// "a point at (412, 96) in scenes/x.scene.json, over tile (12, 3) of
+// assets/maps/x.tmj: layer ground gid 5 (brick); on Pip [58 0], scene entry 58 in ...".
+func (p Pick) Text() string {
+	switch p.Kind {
+	case "point", "area":
+		return p.placeText()
+	}
+	name := fmt.Sprintf("entity [%d %d]", p.Entity[0], p.Entity[1])
+	if len(p.Tags) > 0 {
+		name = fmt.Sprintf("%s [%d %d]", p.Tags[0], p.Entity[0], p.Entity[1])
+	}
+	if p.Origin == nil {
+		return name
+	}
+	return name + ": " + p.Origin.Text()
+}
+
+// Text is where an entity came from, as a pick says it.
+func (o Origin) Text() string {
+	if o.From == "scene" {
+		text := fmt.Sprintf("scene entry %s in %s", o.Entry, o.Scene)
+		if o.Prefab != "" {
+			text += " (prefab " + o.Prefab + ")"
+		}
+		return text
+	}
+	text := "spawned from prefab " + o.Prefab
+	if o.Script != "" {
+		text += " by script " + o.Script
+	}
+	text += fmt.Sprintf(" at frame %d", o.Frame)
+	if len(o.In) == 2 {
+		text += fmt.Sprintf(", part of [%d %d]", o.In[0], o.In[1])
+	}
+	return text
+}
+
+// placeText is a point or an area, its tiles and the entities there.
+func (p Pick) placeText() string {
+	xy := func(v []float64, i int) string {
+		if len(v) < i+2 {
+			return "(?)"
+		}
+		return "(" + strconv.FormatFloat(math.Round(v[i]*10)/10, 'f', -1, 64) + ", " + strconv.FormatFloat(math.Round(v[i+1]*10)/10, 'f', -1, 64) + ")"
+	}
+	text := "a point at " + xy(p.At, 0)
+	if p.Kind == "area" {
+		text = "an area " + xy(p.Area, 0) + "–" + xy(p.Area, 2)
+	}
+	if p.Scene != "" {
+		text += " in " + p.Scene
+	}
+	for _, t := range p.Tiles {
+		// A point's cell: each layer's tile there; an area's: how many each layer has, by type.
+		var layers []string
+		for _, l := range t.Layers {
+			var types []string
+			for kind, n := range l.Types {
+				types = append(types, fmt.Sprintf("%s %d", kind, n))
+				if p.Kind == "point" {
+					types[len(types)-1] = kind
+				}
+			}
+			sort.Strings(types)
+			layer := fmt.Sprintf("layer %s %d tile%s", l.Layer, l.Count, map[bool]string{true: "s"}[l.Count != 1])
+			if c := l.Cells; p.Kind == "point" && len(c) > 0 {
+				layer = fmt.Sprintf("layer %s gid %d", l.Layer, c[0][2])
+				if len(t.From) != 2 || c[0][0] != t.From[0] || c[0][1] != t.From[1] { // moved by its offset or parallax
+					layer += fmt.Sprintf(" at (%d, %d)", c[0][0], c[0][1])
+				}
+			}
+			if len(types) > 0 {
+				layer += " (" + strings.Join(types, ", ") + ")"
+			}
+			layers = append(layers, layer)
+		}
+		cells := "layers"
+		if len(t.From) == 2 && len(t.To) == 2 {
+			cells = fmt.Sprintf("cells (%d, %d)–(%d, %d)", t.From[0], t.From[1], t.To[0], t.To[1])
+			if p.Kind == "point" {
+				cells = fmt.Sprintf("tile (%d, %d)", t.From[0], t.From[1])
+			}
+		}
+		text += fmt.Sprintf(", over %s of %s: %s", cells, t.Map, cmp.Or(strings.Join(layers, "; "), "no tiles"))
+	}
+	if len(p.Entities) > 0 {
+		var there []string
+		for _, e := range p.Entities {
+			name := fmt.Sprintf("%s [%d %d]", e.Name, e.Entity[0], e.Entity[1])
+			if e.Origin != nil {
+				name += ", " + e.Origin.Text()
+			}
+			there = append(there, name)
+		}
+		text += "; on " + strings.Join(there, "; ")
+		if p.MoreEntities > 0 {
+			text += fmt.Sprintf(" and %d more", p.MoreEntities)
+		}
+	}
+	return text
 }
 
 // Meta is session.json.
