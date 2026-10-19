@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"debug/macho"
 	"encoding/json"
@@ -264,12 +265,25 @@ func (r *doctorReport) checkInstall(self string) {
 	dir := filepath.Dir(self)
 	if onPath, err := exec.LookPath("jm"); err != nil {
 		r.problem("warning", "jm isn't on PATH", fmt.Sprintf(`export PATH=%s:"$PATH" (and add that line to your shell profile)`, shellQuote(dir)))
-	} else if !sameFile(onPath, self) {
+	} else if !sameFile(onPath, self) && !launches(onPath, self) {
 		r.problem("warning", fmt.Sprintf("PATH runs another jm first: %s, not %s", onPath, self), "remove the other one, or put "+dir+" first on PATH")
 	}
 	if _, err := resolveServerPath(); err != nil {
 		r.problem("warning", "no journeyman_server: jm export --server and dedicated servers won't work", "keep journeyman_server beside jm, as a release has it")
 	}
+}
+
+// launches says whether the program at path is a script that starts self
+// (an install from source: ~/bin/jm running the build's jm).
+func launches(path, self string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	head := make([]byte, 4096)
+	n, _ := io.ReadFull(f, head)
+	return bytes.HasPrefix(head[:n], []byte("#!")) && bytes.Contains(head[:n], []byte(self))
 }
 
 // startFix is why a program that won't start doesn't (", ..." or "") and

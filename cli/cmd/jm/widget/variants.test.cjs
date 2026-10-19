@@ -37,6 +37,15 @@ test('compare shows both frames side by side and what differs', async () => {
   assert.match(s.app.text, /changed Player: VelocityComponent/);
 });
 
+test("compare can replay a recorded play's inputs in both", async () => {
+  const plays = { structuredContent: { plays: [{ id: '20261015-101500', started: '2026-10-15T10:15:00Z', seconds: 75 }] } };
+  const s = await open_({ plays_list: plays });
+  s.find((e) => e.tag === 'select')[0].fire('change', { target: { value: '20261015-101500' } });
+  s.find((e) => e.tag === 'form').at(-1).fire('submit');
+  await settle(8);
+  assert.deepEqual(s.calls().find((c) => c.name === 'variant_compare').arguments, { a: 'floaty', frame: 120, play: '20261015-101500', game: '/g/pip' });
+});
+
 test('merge and drop ask first; a new variant is made from its name', async () => {
   const s = await open();
   s.button('Merge').fire('click');

@@ -86,6 +86,7 @@ func TestIndexLinksOnlyWhatItIndexed(t *testing.T) {
 	os.WriteFile(filepath.Join(outside, "secret.png"), []byte("x"), 0o644)
 	for path, text := range map[string]string{
 		".jm.json": `{"name":"G","assets":["assets/**"]}`, "assets/a.png": "x", "assets/readme.txt": "hi", "assets/env.d.ts": "",
+		"plugins/journeyman/plugin.json": "{}", // the agents' plugin, not the game's
 	} {
 		os.MkdirAll(filepath.Join(root, filepath.Dir(path)), 0o755)
 		os.WriteFile(filepath.Join(root, path), []byte(text), 0o644)
@@ -94,6 +95,9 @@ func TestIndexLinksOnlyWhatItIndexed(t *testing.T) {
 	got := map[string]indexEntry{}
 	for _, e := range indexGame(root) {
 		got[e.Path] = e
+	}
+	if _, ok := got["plugins/journeyman/plugin.json"]; ok {
+		t.Error("the agents' plugin is indexed")
 	}
 	if strings.Join(got[".jm.json"].Uses, ",") != "assets/a.png" || strings.Join(got["assets/a.png"].UsedBy, ",") != ".jm.json" {
 		t.Errorf("manifest uses %v", got[".jm.json"].Uses)

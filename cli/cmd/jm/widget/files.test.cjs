@@ -28,6 +28,15 @@ test('the files are a tree with git marks; folders with changes start open', asy
   assert.match(row(s, 'scenes/old.scene.json').text, /deleted/);
 });
 
+test('a folder opens and closes from its name too', async () => {
+  const s = await open();
+  assert.equal(row(s, 'assets/textures/pip.png'), undefined);
+  row(s, 'assets/textures/').fire('click');
+  assert.ok(row(s, 'assets/textures/pip.png'));
+  row(s, 'assets/textures/').fire('click');
+  assert.equal(row(s, 'assets/textures/pip.png'), undefined);
+});
+
 test('a file picked is looked at: its problems and its lines; it is the model\'s context', async () => {
   const s = await open();
   row(s, 'scenes/main.scene.json').fire('click');

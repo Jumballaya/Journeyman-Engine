@@ -4,10 +4,11 @@
 studioTabs.push((() => {
   "use strict";
   // variants / sandboxes: their tools' answers. picked: { kind: "variant" | "sandbox", name }.
-  // compared: { name, frame, result | null } while/after comparing. confirm: the button asked once.
+  // compared: { name, frame, play, result | null } while/after comparing. plays: the game's recorded plays, to compare
+  // both with one's inputs (play: its id, "" none). confirm: the button asked once.
   // failed: { variants, sandboxes }: why the last ask for that list failed (its data then is the one before).
   const fresh = (game) => ({ game, asking: "", seq: 0, variants: null, thumbs: {}, sandboxes: null, failed: {}, picked: null, compared: null,
-                             frame: 120, draft: null, newName: "", confirm: "", routed: null, ran: Object.create(null) });  // ran: by sandbox name (any name, "constructor" too)
+                             frame: 120, plays: [], play: "", draft: null, newName: "", confirm: "", routed: null, ran: Object.create(null) });  // ran: by sandbox name (any name, "constructor" too)
   let state = fresh(null);
 
   const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
@@ -17,8 +18,10 @@ studioTabs.push((() => {
   const load = async (ctx) => {
     const n = ++state.seq, mine = state;
     const ask = (tool) => ctx.call(tool, on(ctx)).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
-    const [v, s] = await Promise.all([ask("variants"), ask("sandboxes")]);
+    const [v, s, p] = await Promise.all([ask("variants"), ask("sandboxes"), ask("plays_list")]);
     if (n !== mine.seq || mine !== state) return;
+    state.plays = (p && !p.isError && p.structuredContent && p.structuredContent.plays) || [];
+    if (state.play && !state.plays.some((x) => x.id === state.play)) state.play = "";
     const list = (key, r) => {  // a failed ask keeps what was there, said to be failing
       const items = r && !r.isError && r.structuredContent && r.structuredContent[key];
       if (Array.isArray(items)) { state[key] = items; delete state.failed[key]; } else state.failed[key] = said(r) || `Couldn't list the ${key}.`;
@@ -41,9 +44,9 @@ studioTabs.push((() => {
   };
 
   const compare = async (ctx, name) => {
-    const c = state.compared = { name, frame: state.frame, result: null };
+    const c = state.compared = { name, frame: state.frame, play: state.play, result: null };
     ctx.rerender();
-    const r = await ctx.call("variant_compare", on(ctx, { a: name, frame: c.frame })).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
+    const r = await ctx.call("variant_compare", on(ctx, { a: name, frame: c.frame, ...(c.play ? { play: c.play } : {}) })).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
     if (state.compared === c) { c.result = r || { isError: true }; ctx.rerender(); }
   };
 
@@ -64,9 +67,13 @@ studioTabs.push((() => {
     const frameInput = el("input", { type: "number", min: "1", "aria-label": "Frame", class: "var-frame", "data-key": "var-frame",
       oninput: (e) => { state.frame = Math.max(1, Number(e.target.value) || 1); } });
     frameInput.value = String(state.frame);
+    // Standing still, two takes look alike: a recorded play's inputs drive both the same way.
+    const playPick = state.plays.length ? el("select", { "aria-label": "Inputs", class: "var-play", onchange: (e) => { state.play = e.target.value; } },
+      [{ id: "", label: "no input" }, ...state.plays.map((p) => ({ id: p.id, label: `the inputs of ${new Date(p.started).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}'s play` }))]
+        .map((o) => el("option", { value: o.id, selected: o.id === state.play }, o.label))) : null;
     let body;
     if (!c) body = el("div", { class: "meta" }, "Compare runs both builds headless and shows them at the same frame.");
-    else if (!c.result) body = el("div", { class: "meta" }, `Comparing at frame ${c.frame}: building and running both…`);
+    else if (!c.result) body = el("div", { class: "meta" }, `Comparing at frame ${c.frame}${c.play ? ", a play's inputs replayed" : ""}: building and running both…`);
     else if (c.result.isError) body = el("div", { class: "meta" }, said(c.result) || "Couldn't compare.");
     else {
       const s = c.result.structuredContent || {}, frames = (c.result._meta && c.result._meta["jm/frames"]) || [];
@@ -74,7 +81,7 @@ studioTabs.push((() => {
         el("div", { class: "var-ab" }, [v.name, "the game"].map((label, i) => el("figure", {},
           frames[i] ? el("img", { src: frames[i], alt: `${label} at frame ${s.frame}` }) : el("div", { class: "var-noframe meta" }, (s.errors || [])[i] || "No frame."),
           el("figcaption", {}, `${label} · frame ${s.frame}`)))),
-        (s.changes || []).length ? changesList(el, s.changes) : el("div", { class: "meta" }, "Their commits change no files."));
+        (s.changes || []).length ? changesList(el, s.changes) : el("div", { class: "meta" }, "Its commits changed no files since it split from the game."));
     }
     return el("section", { class: "section var-detail" },
       el("div", { class: "head" }, el("h1", {}, v.name), el("span", { class: "meta" }, `${v.branch} · ${v.subject || ""}`), el("span", { class: "spacer" }),
@@ -85,7 +92,7 @@ studioTabs.push((() => {
           "Dropping", "variant_drop", { name: v.name }, (t) => t, () => { state.picked = null; }),
         el("button", { onclick: () => ctx.host.message([ctx.host.text(`About variant ${v.name} of ${ctx.game.name}: `)], { send: false }) }, "Ask about this")),
       el("form", { class: "head", onsubmit: (e) => { e.preventDefault(); compare(ctx, v.name); } },
-        el("span", { class: "meta" }, "Against the game at frame"), frameInput,
+        el("span", { class: "meta" }, "Against the game at frame"), frameInput, playPick ? el("span", { class: "meta" }, "with") : null, playPick,
         el("button", { class: "primary", type: "submit", disabled: !!(c && !c.result) }, "Compare")),
       body);
   };

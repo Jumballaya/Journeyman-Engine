@@ -276,7 +276,7 @@ studioTabs.push((() => {
       state.found ? kit.section(`Search: ${state.found.text}`, state.found.hits.length ? kit.tree({ label: "Found", items: state.found.hits.map((h, i) => ({
         id: "hit:" + i, label: h.text || h.title, title: h.path, meta: h.line ? h.title : "" })), onPick: (item) => open(ctx, state.found.hits[Number(item.id.slice(4))].title) })
         : el("div", { class: "meta" }, "Nothing found.")) : null,
-      kit.section("Design notes", kit.tree({ label: "Design notes", items, selected: state.read && state.read.title, onPick: (item) => { if (!item.children) open(ctx, item.id); } })),
+      kit.section("Design notes", kit.tree({ label: "Design notes", items, selected: state.read && state.read.title, onPick: (item) => item.children ? false : open(ctx, item.id) })),
       facts(ctx));
     return el("div", {}, kit.split("memory", left, state.read ? reader(ctx) : kit.section("Note", el("div", { class: "meta" }, "Pick a note.")), { ratio: 0.3 }));
   };

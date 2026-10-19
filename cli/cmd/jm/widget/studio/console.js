@@ -66,7 +66,7 @@ studioTabs.push((() => {
         onchange: (e) => { state.problems = e.target.checked; state.log = null; state.held = null; state.gen++; ctx.rerender(); } }), " Warnings and errors only"));
     if (!log) return el("div", {}, head, kit.empty("Reading the log…"));
     if (!log.lines) return el("div", {}, head, kit.empty(log.error));
-    if (!log.lines.length) return el("div", {}, head, kit.empty("No log yet: play or build the game."));
+    if (!log.lines.length) return el("div", {}, head, kit.empty("No log yet: play the game, or run its tests."));
     const sel = selection();
     if (sel) {  // the same lines, the person's selection in them put back once they're on the page again
       const [a, ao, f, fo] = [sel.anchorNode, sel.anchorOffset, sel.focusNode, sel.focusOffset];

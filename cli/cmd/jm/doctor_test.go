@@ -55,6 +55,13 @@ func TestDoctorSaysWhenPATHRunsAnotherJM(t *testing.T) {
 	if !hasProblem(r, "PATH runs another jm first") {
 		t.Errorf("problems: %+v", r.Problems)
 	}
+	// A launcher that runs this jm is this jm.
+	os.WriteFile(filepath.Join(other, "jm"), []byte("#!/bin/sh\nexec "+self+" \"$@\"\n"), 0o755)
+	r = doctorReport{OK: true}
+	r.checkInstall(self)
+	if hasProblem(r, "PATH runs another jm first") {
+		t.Errorf("a launcher of this jm: %+v", r.Problems)
+	}
 	t.Setenv("PATH", t.TempDir())
 	r = doctorReport{OK: true}
 	r.checkInstall(self)

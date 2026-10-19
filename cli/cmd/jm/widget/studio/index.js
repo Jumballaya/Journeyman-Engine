@@ -52,7 +52,7 @@ studioTabs.push((() => {
       el("input", { placeholder: "Find a file (\"unused\": what nothing uses)", "aria-label": "Find a file", "data-key": "index-find", value: state.query,
         style: { width: "100%", marginBottom: "6px" }, oninput: (e) => { state.query = e.target.value; ctx.rerender(); } }),
       items.length ? el("div", { style: { maxHeight: "70vh", overflow: "auto" } }, kit.tree({ label: "Files", items, folded: state.folded, selected: state.picked,
-        onPick: (item) => { if (!item.id.startsWith("kind:")) pick(ctx, item.id); } })) : el("div", { class: "meta" }, "Nothing matches."));
+        onPick: (item) => item.id.startsWith("kind:") ? false : pick(ctx, item.id) })) : el("div", { class: "meta" }, "Nothing matches."));
   };
 
   // Picks a file, its kind unfolded so it shows in the list.
