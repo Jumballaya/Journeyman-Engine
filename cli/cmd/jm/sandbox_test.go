@@ -252,3 +252,20 @@ func TestALinkedSandboxStoreIsLeftAlone(t *testing.T) {
 		}
 	}
 }
+
+func TestASandboxIsComparedWithTheGameAsItIsNow(t *testing.T) {
+	game := variantGame(t)
+	os.WriteFile(filepath.Join(game, "notes.md"), []byte("uncommitted"), 0o644) // the copy has it too: no difference
+	sb, err := newSandbox(game, "red", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(sb.Dir, "scenes/main.scene.json"), []byte(`{"entities":[{"name":"Bat","components":{}}]}`), 0o644)
+	cmp, err := compareVariants(nil, game, "red", "game", 60, "")
+	if err != nil || !cmp.Sandbox || jsonOf(cmp.Changes) != `[{"path":"scenes/main.scene.json","status":"M","entities":[{"entity":"Bat","change":"added"}]}]` {
+		t.Errorf("compare: %v %+v", err, cmp)
+	}
+	if _, err := compareVariants(nil, game, "red", "other", 60, ""); err == nil {
+		t.Error("a sandbox compared with a variant")
+	}
+}

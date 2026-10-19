@@ -78,9 +78,21 @@ test('a sandbox is kept as a variant', async () => {
   assert.match(s.app.text, /scenes\/main\.scene\.json\s+changed/);
   s.button('Keep as a variant').fire('click');
   key(s, 'var-keep').fire('input', { target: { value: 'kept' } });
-  s.find((e) => e.tag === 'form').at(-1).fire('submit');
+  s.find((e) => e.tag === 'form' && e.all((k) => k.attributes['data-key'] === 'var-keep').length)[0].fire('submit');
   await settle(8);
   assert.deepEqual(s.calls().find((c) => c.name === 'sandbox_promote').arguments, { name: 'sb1', variant: 'kept', game: '/g/pip' });
+});
+
+test('a sandbox is compared with the game too: both frames, and its changes per entity', async () => {
+  const s = await open({ 'openai/deepLink': { url: '/variants?sandbox=sb1' } },
+    { variant_compare: { ...compared, structuredContent: { ...compared.structuredContent, a: 'sb1', sandbox: true } } });
+  assert.match(s.app.text, /scenes\/main\.scene\.json\s+changed/);
+  s.find((e) => e.tag === 'form').at(-1).fire('submit');
+  await settle(8);
+  assert.deepEqual(s.calls().find((c) => c.name === 'variant_compare').arguments, { a: 'sb1', frame: 120, game: '/g/pip' });
+  assert.deepEqual(s.find((e) => e.tag === 'img' && e.attributes.alt && e.attributes.alt.includes('frame 30')).map((e) => e.attributes.alt),
+    ['sb1 at frame 30', 'the game at frame 30']);
+  assert.equal(s.app.text.match(/changed Player: VelocityComponent/g).length, 1);
 });
 
 test('an action keeps the pick the person made after a deep link', async () => {

@@ -61,9 +61,11 @@ studioTabs.push((() => {
     el("span", { class: "var-path" }, c.path), " ", el("span", { class: "meta" }, marks[c.status] || c.status),
     (c.entities || []).map((e) => el("div", { class: "meta var-entity" }, `${e.change} ${e.entity}${e.changed ? ": " + e.changed.join(", ") : ""}`)))));
 
-  const variantView = (ctx, v) => {
-    const { el } = ctx.kit, c = state.compared && state.compared.name === v.name ? state.compared : null;
-    ctx.share(`The person is looking at variant ${v.name} of ${ctx.game.name} (${v.ahead} commits ahead).`, { variant: v.name, dir: v.dir });
+  // Compare's form and what it showed: item (a variant, or a sandbox) beside the
+  // game at a frame. The changes are a variant's commits since it split; a
+  // sandbox lists its own (comparing adds each scene's per entity).
+  const comparing = (ctx, item, kind) => {
+    const { el } = ctx.kit, c = state.compared && state.compared.name === item.name ? state.compared : null;
     const frameInput = el("input", { type: "number", min: "1", "aria-label": "Frame", class: "var-frame", "data-key": "var-frame",
       oninput: (e) => { state.frame = Math.max(1, Number(e.target.value) || 1); } });
     frameInput.value = String(state.frame);
@@ -78,11 +80,20 @@ studioTabs.push((() => {
     else {
       const s = c.result.structuredContent || {}, frames = (c.result._meta && c.result._meta["jm/frames"]) || [];
       body = el("div", { class: "var-compare" },
-        el("div", { class: "var-ab" }, [v.name, "the game"].map((label, i) => el("figure", {},
+        el("div", { class: "var-ab" }, [item.name, "the game"].map((label, i) => el("figure", {},
           frames[i] ? el("img", { src: frames[i], alt: `${label} at frame ${s.frame}` }) : el("div", { class: "var-noframe meta" }, (s.errors || [])[i] || "No frame."),
           el("figcaption", {}, `${label} · frame ${s.frame}`)))),
-        (s.changes || []).length ? changesList(el, s.changes) : el("div", { class: "meta" }, "Its commits changed no files since it split from the game."));
+        kind === "sandbox" ? null : (s.changes || []).length ? changesList(el, s.changes) : el("div", { class: "meta" }, "Its commits changed no files since it split from the game."));
     }
+    const form = el("form", { class: "head", onsubmit: (e) => { e.preventDefault(); compare(ctx, item.name); } },
+      el("span", { class: "meta" }, "Against the game at frame"), frameInput, playPick ? el("span", { class: "meta" }, "with") : null, playPick,
+      el("button", { class: "primary", type: "submit", disabled: !!(c && !c.result) }, "Compare"));
+    return { form, body, changes: c && c.result && !c.result.isError && (c.result.structuredContent || {}).changes };
+  };
+
+  const variantView = (ctx, v) => {
+    const { el } = ctx.kit, cmp = comparing(ctx, v, "variant");
+    ctx.share(`The person is looking at variant ${v.name} of ${ctx.game.name} (${v.ahead} commits ahead).`, { variant: v.name, dir: v.dir });
     return el("section", { class: "section var-detail" },
       el("div", { class: "head" }, el("h1", {}, v.name), el("span", { class: "meta" }, `${v.branch} · ${v.subject || ""}`), el("span", { class: "spacer" }),
         workHere(ctx, v),
@@ -91,10 +102,8 @@ studioTabs.push((() => {
         twice(ctx, "drop:" + v.name, "Drop", v.changed ? `Drop? (${v.changed} uncommitted files go)` : "Drop?",
           "Dropping", "variant_drop", { name: v.name }, (t) => t, () => { state.picked = null; }),
         el("button", { onclick: () => ctx.host.message([ctx.host.text(`About variant ${v.name} of ${ctx.game.name}: `)], { send: false }) }, "Ask about this")),
-      el("form", { class: "head", onsubmit: (e) => { e.preventDefault(); compare(ctx, v.name); } },
-        el("span", { class: "meta" }, "Against the game at frame"), frameInput, playPick ? el("span", { class: "meta" }, "with") : null, playPick,
-        el("button", { class: "primary", type: "submit", disabled: !!(c && !c.result) }, "Compare")),
-      body);
+      cmp.form,
+      cmp.body);
   };
 
   // A check run in a sandbox (jm build or test there, not in the game): its last
@@ -129,9 +138,9 @@ studioTabs.push((() => {
   } }, "Work here");
 
   const sandboxView = (ctx, s) => {
-    const { el } = ctx.kit;
+    const { el } = ctx.kit, cmp = comparing(ctx, s, "sandbox");
     ctx.share(`The person is looking at sandbox ${s.name} of ${ctx.game.name}.`, { sandbox: s.name, dir: s.dir });
-    const changes = Object.entries(s.changes || {}).sort().map(([path, status]) => ({ path, status }));
+    const changes = cmp.changes || Object.entries(s.changes || {}).sort().map(([path, status]) => ({ path, status }));
     const keep = state.draft !== null
       ? el("form", { class: "head", onsubmit: (e) => {
           e.preventDefault();
@@ -156,6 +165,8 @@ studioTabs.push((() => {
         twice(ctx, "sdrop:" + s.name, "Drop", "Drop?", "Dropping", "sandbox_drop", { name: s.name }, (t) => t, () => { state.picked = null; })),
       keep,
       ranView(ctx, s),
+      cmp.form,
+      cmp.body,
       changes.length ? changesList(el, changes) : el("div", { class: "meta" }, "The same as the game."));
   };
 

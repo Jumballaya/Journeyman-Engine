@@ -286,11 +286,16 @@ type comparison struct {
 	Frame   int          `json:"frame"`
 	Frames  [2]string    `json:"frames"` // image files
 	Errors  [2]string    `json:"errors"`
+	Sandbox bool         `json:"sandbox,omitempty"` // a is a sandbox: Changes are its files that differ from the game's now
 }
 
 func (c comparison) text() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s changed %d files since it split from %s.\n", c.A, len(c.Changes), c.B)
+	if c.Sandbox {
+		fmt.Fprintf(&b, "Sandbox %s differs from the game in %d files.\n", c.A, len(c.Changes))
+	} else {
+		fmt.Fprintf(&b, "%s changed %d files since it split from %s.\n", c.A, len(c.Changes), c.B)
+	}
 	b.WriteString(changesText(c.Changes))
 	for i, name := range []string{c.A, c.B} {
 		if c.Errors[i] != "" {
@@ -304,7 +309,8 @@ func (c comparison) text() string {
 
 // compareVariants compares variant a with b ("game": the game itself): what
 // a's commits changed since they split, uncommitted work aside, and a frame
-// of each.
+// of each. A sandbox a (no variant of that name) is compared with the game's
+// files as they are now: it is a copy of them, not a branch.
 func compareVariants(c *toolCall, root, a, b string, frame int, play string) (comparison, error) {
 	cmp := comparison{A: a, B: b, Frame: max(frame, 1)}
 	sides := [2]struct{ dir, rev string }{}
@@ -314,24 +320,47 @@ func compareVariants(c *toolCall, root, a, b string, frame int, play string) (co
 			continue
 		}
 		v, err := findVariant(root, name)
+		if err != nil && i == 0 && b == "game" {
+			if sb, sbErr := findSandbox(root, name); sbErr == nil {
+				sides[i].dir, cmp.Sandbox = sb.Dir, true
+				continue
+			}
+		}
 		if err != nil {
 			return cmp, err
 		}
 		sides[i].dir, sides[i].rev = v.Dir, "refs/heads/"+v.Branch
 	}
-	marks, base, err := vcs.Changed(root, sides[1].rev, sides[0].rev)
-	if err != nil {
-		return cmp, err
+	marks, before, after := map[string]string{}, func(string) []byte { return nil }, func(string) []byte { return nil }
+	if cmp.Sandbox {
+		marks = differences(root, sides[0].dir)
+		before = func(path string) []byte {
+			data, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+			return data
+		}
+		after = func(path string) []byte {
+			data, _ := os.ReadFile(filepath.Join(sides[0].dir, filepath.FromSlash(path)))
+			return data
+		}
+	} else {
+		var base string
+		var err error
+		if marks, base, err = vcs.Changed(root, sides[1].rev, sides[0].rev); err != nil {
+			return cmp, err
+		}
+		before = func(path string) []byte { return vcs.Show(root, base, path) }
+		after = func(path string) []byte { return vcs.Show(root, sides[0].rev, path) }
 	}
 	cmp.Changes = []fileChange{}
 	for path, mark := range marks {
 		c := fileChange{Path: path, Status: mark}
 		if strings.HasSuffix(path, ".scene.json") {
-			c.Entities = sceneChanges(vcs.Show(root, base, path), vcs.Show(root, sides[0].rev, path))
+			c.Entities = sceneChanges(before(path), after(path))
 		}
 		cmp.Changes = append(cmp.Changes, c)
 	}
 	sort.Slice(cmp.Changes, func(i, j int) bool { return cmp.Changes[i].Path < cmp.Changes[j].Path })
+	var err error
 	var p *plays.Play
 	if play != "" {
 		if p, err = plays.Find(root, play); err != nil {

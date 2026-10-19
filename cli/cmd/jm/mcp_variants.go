@@ -57,8 +57,8 @@ func (s *mcpServer) variantTools() []mcpTool {
 			})},
 		{Name: "variant_compare", Meta: callableMeta("Comparing…", "Compared"), Title: "Compare a variant",
 			Description: "A variant beside the game (or another variant): the files a's commits changed since it split from b (a scene's per entity) and a frame of each at the same moment, " +
-				"both run headless with GL, with a recorded play's inputs if given. Show the person both frames.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "a": nameArg, "b": strArg(`another variant, or "game" (default)`),
+				"both run headless with GL, with a recorded play's inputs if given. a may be a sandbox: then the files it differs in from the game now. Show the person both frames.",
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "a": strArg("the variant's name, or a sandbox's (compared with the game)"), "b": strArg(`another variant, or "game" (default)`),
 				"frame": intArg("the frame to show both at (default 120)"), "play": strArg("replay this recorded play's inputs in both (plays_list)")}, "a"),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				b := a.str("b")
@@ -69,7 +69,7 @@ func (s *mcpServer) variantTools() []mcpTool {
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				result := toolResult{Text: cmp.text(), Structured: map[string]any{"a": cmp.A, "b": cmp.B, "frame": cmp.Frame, "changes": cmp.Changes, "errors": cmp.Errors}}
+				result := toolResult{Text: cmp.text(), Structured: map[string]any{"a": cmp.A, "b": cmp.B, "frame": cmp.Frame, "changes": cmp.Changes, "errors": cmp.Errors, "sandbox": cmp.Sandbox}}
 				frames := []string{}
 				for _, f := range cmp.Frames {
 					uri := ""
