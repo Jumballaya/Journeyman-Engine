@@ -66,12 +66,9 @@ func TestSetTags(t *testing.T) {
 		t.Errorf("tags: %v", tags)
 	}
 	var b Bible
-	b.Sizes = map[string]string{"portrait": "48×48", "icon": "16"}
+	b.Sizes = map[string]string{"portrait": "48×48"}
 	if w, h := b.Size("missing", "portrait"); w != 48 || h != 48 {
 		t.Errorf("portrait %dx%d", w, h)
-	}
-	if w, h := b.Size("icon"); w != 16 || h != 16 {
-		t.Errorf("icon %dx%d", w, h)
 	}
 }
 

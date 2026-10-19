@@ -215,7 +215,7 @@ func (c *checker) atlases() (map[string]bool, [][]Finding) {
 			for _, src := range config.Sources {
 				src = filepath.ToSlash(filepath.Clean(src))
 				listed[src] = true
-				if strings.HasSuffix(src, ".json") {
+				if strings.EqualFold(filepath.Ext(src), ".json") {
 					found = append(found, c.sheet(src, "", ""))
 				} else {
 					found = append(found, c.image(src))
@@ -338,15 +338,11 @@ func (c *checker) image(rel string) []Finding {
 			say(rel, "it isn't there")
 			return
 		}
-		if len(c.colors) == 0 {
-			if _, _, err := image.DecodeConfig(bytes.NewReader(data)); err != nil {
+		img, _, err := image.Decode(bytes.NewReader(data))
+		if err != nil || len(c.colors) == 0 {
+			if err != nil {
 				say(rel, "it isn't a PNG jm can read: "+err.Error())
 			}
-			return
-		}
-		img, _, err := image.Decode(bytes.NewReader(data))
-		if err != nil {
-			say(rel, "it isn't a PNG jm can read: "+err.Error())
 			return
 		}
 		off, soft := 0, 0

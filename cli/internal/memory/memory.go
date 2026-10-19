@@ -551,9 +551,7 @@ light:
 outline:
 references: []
 sizes:
-  # a dossier type or animation set: its frame, e.g.
-  # character: 32x32
-  # portrait: 48x48
+  # a dossier type or animation set: its frame, e.g. character: 32x32
 animations:
   # a set: its directions, and each action's frames' milliseconds (or a frame
   # count); tagged <action>_<direction>, an undirected action by its name. e.g.
@@ -561,7 +559,6 @@ animations:
   #   directions: [down, up, left]
   #   undirected: [down]
   #   idle: [400, 400]
-  #   walk: [150, 150, 150, 150]
   #   down: [120, 120, 120, 600]
 tags: [design, art]
 ---
