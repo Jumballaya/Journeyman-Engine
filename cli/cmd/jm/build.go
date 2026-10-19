@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/art"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
@@ -82,6 +83,10 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 		// show, but not shipped on their own.
 		for _, d := range slices.Concat(scriptNameProblems(man), inputActionProblems(man)) {
 			emit(d)
+		}
+		// The art keeps the game's art note (design/Art.md): its palette, sizes and animation sets.
+		for _, f := range art.Check(projectRoot).Findings {
+			emit(Diagnostic{Level: "warning", Category: "art", File: f.File, Message: f.Message})
 		}
 		// The manifest too: a dedicated server's scripts are in net.server.scripts.
 		scripts := referencedScripts(slices.Concat([]string{archive.ManifestEntryKey}, man.Scenes, man.Assets))

@@ -23,7 +23,7 @@ func TestScaffoldMakesAVaultAndKeepsWhatsThere(t *testing.T) {
 		t.Errorf("the person's pitch was replaced: %q", data)
 	}
 	design, ok := Find(root, "design")
-	if !ok || design.Type != "index" || strings.Join(design.Links, ",") != "Pitch,Pillars,Levels,Systems,Decisions,Notes" {
+	if !ok || design.Type != "index" || strings.Join(design.Links, ",") != "Pitch,Pillars,Levels,Systems,Art,Decisions,Notes" {
 		t.Errorf("Design: %+v", design)
 	}
 	if again, _ := Scaffold(root); len(again) != 0 {

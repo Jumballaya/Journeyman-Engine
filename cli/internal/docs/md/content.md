@@ -234,6 +234,38 @@ plays them by the sheet's name:
 "SpriteAnimationComponent": { "atlasPath": "assets/atlases/game.atlas.json", "sheet": "kage", "current": "idle" }
 ```
 
+## Art direction
+
+`design/Art.md` (`jm init` writes it; any design note of `type: art`) is the
+game's look, and its properties are what `jm build` holds the art to (as
+warnings, category `art`):
+
+```yaml
+palette: assets/palettes/cormyr.gpl   # GIMP .gpl, JASC .pal or a hex per line
+grid: 16                              # tilesets' tiles are multiples of it
+view: three-quarter top-down
+light: upper-left
+outline: gold-1                       # a palette colour's name
+colors: 12                            # the most colours one frame uses
+references: [assets/art/characters/fighter.aseprite]
+sizes: { character: 32x32, portrait: 48x48 }
+animations:
+  character:
+    directions: [down, up, left]      # tags walk_down, walk_up, walk_left
+    undirected: [down]                # tagged by its name alone
+    idle: [400, 400]                  # each frame's milliseconds (or a count: 2)
+    walk: [150, 150, 150, 150]
+    down: [120, 120, 120, 600]
+```
+
+Every picture an atlas lists, and every tileset's, keeps the palette: opaque
+or clear pixels only, no colour off it. A dossier is a sprite to draw when it
+has a `sprite` (its `.aseprite` source) or its type is sized or has a set
+(`art_set` picks another): its sheet (the `.json` exported beside the source)
+must be the size, have the set's tags with their frames and timings, and be
+in an atlas. `health`'s `art` check lists each one: planned (no sprite yet),
+drawn (no sheet), exported, or done (`art: done`, and nothing's off).
+
 ## Normal maps
 
 A sprite image `x.png` with an `x.normal.png` beside it is lit by it: lights

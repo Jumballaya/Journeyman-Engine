@@ -537,15 +537,69 @@ func index(notes ...string) string {
 	return b.String()
 }
 
+// artNote is the game's art direction: what a sprite brief asks (palette,
+// grid, view, light, outline) answered once for every sprite, each kind's
+// frame size, and each animation set's tags. jm build holds the art to it.
+const artNote = `---
+title: "Art"
+type: art
+permalink: art
+palette:
+grid:
+view:
+light:
+outline:
+colors:
+references: []
+sizes:
+  # a dossier type or animation set: its frame, e.g.
+  # character: 32x32
+  # portrait: 48x48
+animations:
+  # a set: its directions, and each action's frames' milliseconds (or a frame
+  # count); tagged <action>_<direction>, an undirected action by its name. e.g.
+  # character:
+  #   directions: [down, up, left]
+  #   undirected: [down]
+  #   idle: [400, 400]
+  #   walk: [150, 150, 150, 150]
+  #   down: [120, 120, 120, 600]
+tags: [design, art]
+---
+
+# Art
+
+How the game looks, for whoever draws its sprites, tiles and maps. The
+properties above are the locks every picture keeps: the palette file
+(` + "`.gpl`, `.hex` or `.pal`" + ` in the game), the grid, the view and light, the
+outline colour (a palette colour's name), the most colours one frame uses,
+each kind's frame size, each animation set. A dossier with a ` + "`sprite`" + ` is
+drawn by them (` + "`art_set`" + ` picks a set other than its type; ` + "`art: done`" + `
+says it's finished); ` + "`references`" + ` are finished sprites new ones match.
+
+## Palette
+
+Its ramps by name, darkest to lightest, and what each is for.
+
+## Shading
+
+Light, shadows, anti-aliasing, dithering.
+
+## Visual language
+
+Each place's and faction's look: colours, shapes, materials.
+` + partOfDesign
+
 const partOfDesign = "\n## Observations\n\n## Relations\n- part_of [[Design]]\n"
 
 var scaffold = []struct{ path, text string }{
 	{"Design.md", page("Design", "index", "", "What this game is and why, for the person and their agent: the game's memory. "+
-		"Obsidian opens this folder as a vault; `jm memory` reads and adds to it.\n", index("Pitch", "Pillars", "Levels", "Systems", "Decisions", "Notes"))},
+		"Obsidian opens this folder as a vault; `jm memory` reads and adds to it.\n", index("Pitch", "Pillars", "Levels", "Systems", "Art", "Decisions", "Notes"))},
 	{"Pitch.md", page("Pitch", "note", "", "The game in a few sentences: who you are, what you do, and why it's fun.\n", partOfDesign)},
 	{"Pillars.md", page("Pillars", "note", "", "Three or so things every change should serve (e.g. `- [pillar] jumps feel exact`).\n", partOfDesign)},
 	{"Levels.md", page("Levels", "note", "", "Each level or area: its idea, what it teaches, how it should feel, and its scene (`scenes/main.scene.json`).\n", partOfDesign)},
 	{"Systems.md", page("Systems", "note", "", "The rules: movement, combat, items, progress. What each is for and its numbers.\n", partOfDesign)},
+	{"Art.md", artNote},
 	{"Decisions.md", page("Decisions", "index", "", "What was decided and why, a note each in decisions/ (`jm memory decide`).\n",
 		"\n## Relations\n- part_of [[Design]]\n")},
 	{"Notes.md", page("Notes", "note", "", "What comes up along the way: playtests, feelings, ideas (`jm memory note`).\n", partOfDesign)},

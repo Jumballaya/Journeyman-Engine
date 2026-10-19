@@ -1,13 +1,14 @@
 package main
 
 import (
-	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
-
 	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/art"
+	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 )
 
 // Project intelligence: the game's files and how they link (game_index), and
@@ -23,10 +24,11 @@ func (s *mcpServer) intelTools() []mcpTool {
 			run:         gameIndex},
 		{Name: "health", Title: "Is the game healthy?",
 			Description: "Checks the open game: doctor (setup), build (scripts and content), tests (tests/*.spec.ts), goldens (frames) " +
-				"and world (what its design notes state twice and differently: a road of two lengths, a place inside itself), " +
+				"world (what its design notes state twice and differently: a road of two lengths, a place inside itself) " +
+				"and art (the sprites, sheets and tilesets against design/Art.md's palette, sizes and animation sets; each dossier's sprite planned, drawn, exported or done), " +
 				"each with its problems and where they are. checks picks some (build and goldens take a while).",
 			Annotations: writes(), Meta: callableMeta("Checking the game…", "Checked"),
-			InputSchema: object(map[string]any{"checks": listArg(`some of "doctor", "build", "tests", "goldens", "world" (default: all)`)}),
+			InputSchema: object(map[string]any{"checks": listArg(`some of "doctor", "build", "tests", "goldens", "world", "art" (default: all)`)}),
 			run:         health},
 	}
 }
@@ -99,6 +101,7 @@ type healthCheck struct {
 	OK       bool         `json:"ok"`
 	Summary  string       `json:"summary"`
 	Problems []Diagnostic `json:"problems"`
+	Art      *art.Report  `json:"art,omitempty"` // the art check's sprites, each how far along
 }
 
 func health(a toolArgs) toolResult {
@@ -108,7 +111,7 @@ func health(a toolArgs) toolResult {
 	}
 	checks := a.list("checks")
 	if len(checks) == 0 {
-		checks = []string{"doctor", "build", "tests", "goldens", "world"}
+		checks = []string{"doctor", "build", "tests", "goldens", "world", "art"}
 	}
 	var out []healthCheck
 	var lines []string
@@ -171,8 +174,30 @@ func runCheck(call *toolCall, root, name string) healthCheck {
 			c.Summary = fmt.Sprintf("%d thing(s) the design notes say twice, differently", len(c.Problems))
 		}
 		return c
+	case "art":
+		r := art.Check(root)
+		for _, f := range r.Findings {
+			c.Problems = append(c.Problems, Diagnostic{Level: f.Level, Category: "art", Message: f.Message, File: f.File})
+		}
+		c.Art = &r
+		done := 0
+		for _, a := range r.Assets {
+			if a.Status == "done" {
+				done++
+			}
+		}
+		c.OK = len(c.Problems) == 0
+		switch {
+		case r.Bible == nil:
+			c.Summary = "no art note (design/Art.md; jm memory init writes it): nothing to hold the art to"
+		case c.OK:
+			c.Summary = fmt.Sprintf("the art keeps %s; %d of %d sprites done", r.Bible.Path, done, len(r.Assets))
+		default:
+			c.Summary = fmt.Sprintf("%d thing(s) off %s; %d of %d sprites done", len(c.Problems), r.Bible.Path, done, len(r.Assets))
+		}
+		return c
 	default:
-		c.Summary = "no such check (doctor, build, tests, goldens, world)"
+		c.Summary = "no such check (doctor, build, tests, goldens, world, art)"
 		return c
 	}
 	text, failed := jmIn(call, root, args...)

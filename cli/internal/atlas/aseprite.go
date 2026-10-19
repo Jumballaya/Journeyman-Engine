@@ -193,3 +193,34 @@ func atoi(s string) int {
 	n, _ := strconv.Atoi(s)
 	return n
 }
+
+// SheetFrame is a frame as checks see it: where it is on the sheet, its
+// untrimmed size and its milliseconds.
+type SheetFrame struct {
+	X, Y, W, H   int // on the sheet (trimmed)
+	SourceW      int
+	SourceH      int
+	Milliseconds int
+}
+
+// SheetTag is a tag's name and its frames, first to last.
+type SheetTag struct {
+	Name     string
+	From, To int
+}
+
+func (s Sheet) Frames() []SheetFrame {
+	out := make([]SheetFrame, len(s.frames))
+	for i, f := range s.frames {
+		out[i] = SheetFrame{f.Frame.X, f.Frame.Y, f.Frame.W, f.Frame.H, f.SourceSize.W, f.SourceSize.H, f.Duration}
+	}
+	return out
+}
+
+func (s Sheet) Tags() []SheetTag {
+	out := make([]SheetTag, len(s.tags))
+	for i, t := range s.tags {
+		out[i] = SheetTag{t.Name, t.From, t.To}
+	}
+	return out
+}

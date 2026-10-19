@@ -32,7 +32,8 @@ type Kind struct {
 // builtin are the kinds every game has, as their templates start; a game's
 // own template of the same folder replaces one.
 var builtin = []struct{ folder, text string }{
-	{"Characters", template("character", "role, faction, home, portrait", "Appearance", "Personality", "History")},
+	{"Characters", template("character", "role, faction, home, portrait, sprite, art", "Appearance", "Personality", "History")},
+	{"Creatures", template("creature", "habitat, faction, threat, sprite, art", "Appearance", "Behavior", "Lore")},
 	{"Items", template("item", "category, rarity, value, owner, icon", "Description", "Use", "Origin")},
 	{"Locations", template("location", "region, ruler, population, map", "Description", "People", "History")},
 	{"Factions", template("faction", "leader, seat, allies, rivals", "Goals", "Members", "History")},
