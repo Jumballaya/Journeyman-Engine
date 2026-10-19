@@ -195,6 +195,18 @@ test('the screen as the game starts frames the layout: a lone small entity stays
   assert.equal(svg.attributes.style, 'width: 100%');  // a screen fits the view
 });
 
+test('a level 50 screens long opens on its screen, and its points stay big enough to pick', async () => {
+  const { find, fromHost } = await scenePage();
+  const r = laid(64000);
+  r.structuredContent.screen = { x: 0, y: 0, w: 1280, h: 720 };
+  fromHost('ui/notifications/tool-result', r);
+  await settle();
+  const svg = find((e) => e.tag === 'svg')[0];
+  assert.match(svg.attributes.viewBox, /^-691\.2 -411\.2 /);  // the margin is the screen's, not 4% of the level
+  assert.equal(svg.attributes.style, 'width: 4683%');  // (640 + 64000 + 2 × 51.2) / 1382.4
+  assert.equal(find((e) => e.tag === 'circle')[0].attributes.r, 4 * 1382.4 / 640);  // 4 px in a 640 px view
+});
+
 test('each field is named for assistive tech: its label points at it, a vector\'s values by axis', async () => {
   const { find } = await scenePage({ answers: {
     'resources/read': { contents: [{ uri: file.resourceUri, text: raw, _meta: { 'openai/resource': { etag: 'v1', writable: true } } }] } } });

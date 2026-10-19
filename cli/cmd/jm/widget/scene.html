@@ -169,12 +169,15 @@
       y0 = Math.min(y0, -sc.y - sc.h / 2); y1 = Math.max(y1, -sc.y + sc.h / 2);
     }
     if (!es.length && !sc) { x0 = y0 = 0; x1 = y1 = 100; }
-    const m = Math.max(x1 - x0, y1 - y0, 1) * 0.04;
+    // The margin is the screen's (a long level's would push the screen out of the view).
+    const m = (sc ? Math.max(sc.w, sc.h) : Math.max(x1 - x0, y1 - y0, 1)) * 0.04;
     const w = x1 - x0 + 2 * m, h = y1 - y0 + 2 * m;
     // A unit a pixel where it fits (a long level scrolls), down to 4000 × 1200 at most; with
-    // the screen known, a screen's width fits the view and a level wider scrolls on.
+    // the screen known, a screen's width (and its margin) fits the view and a level wider scrolls on.
     const k = Math.min(1, 4000 / w, 1200 / h);
-    const width = sc ? `${Math.max(100, Math.round((w - 2 * m) / sc.w * 100))}%` : `max(100%, ${Math.round(w * k)}px)`;
+    const width = sc ? `${Math.max(100, Math.round(w / (sc.w + 2 * m) * 100))}%` : `max(100%, ${Math.round(w * k)}px)`;
+    // A point's 4 px: in a screen fitted to the view, about 640 px across.
+    const r = sc ? 4 * (sc.w + 2 * m) / 640 : 4 / k;
     const svg = $("svg:svg", { viewBox: `${x0 - m} ${y0 - m} ${w} ${h}`, style: `width: ${width}` });
     if (sc) svg.append($("svg:rect", { class: "screen", x: sc.x - sc.w / 2, y: -sc.y - sc.h / 2, width: sc.w, height: sc.h, "vector-effect": "non-scaling-stroke" },
       $("svg:title", {}, `The screen as the game starts (${sc.w}×${sc.h})`)));
@@ -184,7 +187,7 @@
       const shape = e.w > 0 && e.h > 0
         ? $("svg:rect", { class: cls, x: e.x - e.w / 2, y: -e.y - e.h / 2, width: e.w, height: e.h, "vector-effect": "non-scaling-stroke", onclick: pick,
             transform: e.rotation ? `rotate(${-e.rotation * 180 / Math.PI} ${e.x} ${-e.y})` : undefined })
-        : $("svg:circle", { class: cls, cx: e.x, cy: -e.y, r: 4 / k, onclick: pick });  // 4 px
+        : $("svg:circle", { class: cls, cx: e.x, cy: -e.y, r, onclick: pick });
       shape.append($("svg:title", {}, e.name || e.where));
       svg.append(shape);
     }
