@@ -1,17 +1,20 @@
 package art
 
 import (
+	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"image"
 	_ "image/png"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
+	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 )
 
@@ -59,7 +62,9 @@ func Check(root string) Report {
 		say("error", "the art note can't be read: "+err.Error())
 	}
 	if b.Palette != "" {
-		if r.Palette, err = LoadPalette(c.path(b.Palette)); err != nil {
+		if data, err := c.read(b.Palette); err != nil {
+			say("error", fmt.Sprintf("its palette %s can't be read: %v", b.Palette, err))
+		} else if r.Palette, err = ParsePalette(data); err != nil {
 			say("error", fmt.Sprintf("its palette %s can't be read: %v", b.Palette, err))
 			r.Palette = []Color{}
 		}
@@ -111,6 +116,18 @@ type checker struct {
 }
 
 func (c *checker) path(rel string) string { return gamePath(c.root, rel) }
+
+func (c *checker) read(rel string) ([]byte, error) { return readGame(c.root, rel) }
+
+// readGame reads a game file: a regular file in the game (not a pipe, nor
+// through a link out of it).
+func readGame(root, rel string) ([]byte, error) {
+	path := gamePath(root, rel)
+	if !exists(path) {
+		return nil, fmt.Errorf("%s isn't a file in the game", rel)
+	}
+	return os.ReadFile(path)
+}
 
 // gamePath is a game file's path on disk; one leading out of the game (by
 // .. or a link) is none.
@@ -176,29 +193,24 @@ func (c *checker) asset(n memory.Note, set, sprite string, listed map[string]boo
 	return a, found
 }
 
-// atlases checks every atlas's images, and every tileset's: the sheets the
-// atlases list, and the findings.
+// atlases checks the atlases and tilesets the game ships (its manifest's
+// assets): their pictures, and the sheets the atlases list.
 func (c *checker) atlases() (map[string]bool, [][]Finding) {
 	listed := map[string]bool{}
 	var found [][]Finding
-	_ = filepath.WalkDir(c.root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			if name := d.Name(); path != c.root && (strings.HasPrefix(name, ".") || name == "build" || name == "node_modules" || name == memory.Dir) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		rel, _ := filepath.Rel(c.root, path)
-		rel = filepath.ToSlash(rel)
+	data, err := c.read(archive.ManifestEntryKey)
+	man, err2 := manifest.LoadManifestFromBytes(data)
+	if err != nil || err2 != nil {
+		return listed, nil // the build says so
+	}
+	assets, _ := manifest.ExpandAssets(os.DirFS(c.root), man.Assets)
+	for _, rel := range assets {
 		switch {
 		case strings.HasSuffix(rel, ".atlas.json"):
-			data, _ := os.ReadFile(c.path(rel))
+			data, _ := c.read(rel)
 			config, err := atlas.LoadConfig(data)
 			if err != nil {
-				return nil // the build says so
+				continue // the build says so
 			}
 			for _, src := range config.Sources {
 				src = filepath.ToSlash(filepath.Clean(src))
@@ -212,23 +224,30 @@ func (c *checker) atlases() (map[string]bool, [][]Finding) {
 		case strings.HasSuffix(rel, ".tsj"):
 			found = append(found, c.tileset(rel))
 		}
-		return nil
-	})
+	}
 	return listed, found
 }
 
 // sheet checks an Aseprite sheet: its picture's colours, and (for a set or
 // type the note has) its frames' size and its tags.
 func (c *checker) sheet(rel, set, kind string) []Finding {
-	data, err := os.ReadFile(c.path(rel))
-	if err != nil {
-		return nil
+	data, err := c.read(rel)
+	s, err2 := atlas.ParseSheet(data)
+	if err != nil || err2 != nil {
+		return c.once(rel, func(say func(string, string)) { say(rel, cmp.Or(err, err2).Error()) })
 	}
-	s, err := atlas.ParseSheet(data)
-	if err != nil {
-		return c.once(rel, func(say func(string, string)) { say(rel, err.Error()) })
-	}
-	found := c.image(filepath.ToSlash(filepath.Join(filepath.Dir(rel), s.Image)))
+	img := filepath.ToSlash(filepath.Join(filepath.Dir(rel), s.Image))
+	found := slices.Concat(c.image(img), c.once(rel, func(say func(string, string)) {
+		if len(s.Frames()) == 0 {
+			say(rel, "it has no frames")
+		} else if picture, err := c.read(img); err == nil {
+			if size, _, err := image.DecodeConfig(bytes.NewReader(picture)); err == nil {
+				if i := s.Outside(size.Width, size.Height); i >= 0 {
+					say(rel, fmt.Sprintf("its frame %d is outside its %dx%d picture", i+1, size.Width, size.Height))
+				}
+			}
+		}
+	}))
 	if set == "" && kind == "" {
 		return found
 	}
@@ -278,7 +297,7 @@ func timing(tag string, frames []atlas.SheetFrame, want Timing) string {
 // tileset checks a Tiled tileset: its tiles keep the grid, its pictures the palette.
 func (c *checker) tileset(rel string) []Finding {
 	return c.once(rel, func(say func(string, string)) {
-		data, err := os.ReadFile(c.path(rel))
+		data, err := c.read(rel)
 		if err != nil {
 			return
 		}
@@ -314,16 +333,18 @@ func (c *checker) tileset(rel string) []Finding {
 func (c *checker) image(rel string) []Finding {
 	rel = filepath.ToSlash(filepath.Clean(rel))
 	return c.once(rel, func(say func(string, string)) {
-		f, err := os.Open(c.path(rel))
+		data, err := c.read(rel)
 		if err != nil {
 			say(rel, "it isn't there")
 			return
 		}
-		defer f.Close()
 		if len(c.colors) == 0 {
+			if _, _, err := image.DecodeConfig(bytes.NewReader(data)); err != nil {
+				say(rel, "it isn't a PNG jm can read: "+err.Error())
+			}
 			return
 		}
-		img, _, err := image.Decode(f)
+		img, _, err := image.Decode(bytes.NewReader(data))
 		if err != nil {
 			say(rel, "it isn't a PNG jm can read: "+err.Error())
 			return

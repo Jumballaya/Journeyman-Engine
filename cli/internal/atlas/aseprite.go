@@ -211,6 +211,13 @@ func (s Sheet) Frames() []SheetFrame {
 	return out
 }
 
+// Outside is the first frame that isn't inside a w by h picture, -1 if none.
+func (s Sheet) Outside(w, h int) int {
+	return slices.IndexFunc(s.frames, func(f sheetFrame) bool {
+		return !image.Rect(f.Frame.X, f.Frame.Y, f.Frame.X+f.Frame.W, f.Frame.Y+f.Frame.H).In(image.Rect(0, 0, w, h))
+	})
+}
+
 func (s Sheet) Tags() []SheetTag {
 	out := make([]SheetTag, len(s.tags))
 	for i, t := range s.tags {

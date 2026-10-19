@@ -96,7 +96,7 @@ func Load(root string) (Bible, bool, error) {
 		return Bible{}, false, nil
 	}
 	b := Bible{Path: path}
-	data, err := os.ReadFile(gamePath(root, path))
+	data, err := readGame(root, path)
 	if err != nil {
 		return b, true, err
 	}
@@ -132,12 +132,9 @@ type Color struct {
 	Name string `json:"name,omitempty"`
 }
 
-// LoadPalette reads a GIMP (.gpl), JASC (.pal) or hex-per-line (.hex) palette.
-func LoadPalette(path string) ([]Color, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+// ParsePalette reads a GIMP (.gpl), JASC (.pal) or hex-per-line (.hex) palette.
+func ParsePalette(data []byte) ([]Color, error) {
+	var err error
 	var out []Color
 	lines := bufio.NewScanner(bytes.NewReader(data))
 	for i := 1; lines.Scan(); i++ {

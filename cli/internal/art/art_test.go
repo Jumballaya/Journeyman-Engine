@@ -24,15 +24,13 @@ func write(t *testing.T, root, rel, text string) {
 	}
 }
 
-func TestLoadPalette(t *testing.T) {
-	dir := t.TempDir()
+func TestParsePalette(t *testing.T) {
 	for name, text := range map[string]string{
 		"a.gpl": "GIMP Palette\nName: Cormyr\nColumns: 6\n#\n 23  32  56\tblue-1 #172038\n255 255 255\tlight\n",
 		"a.hex": "172038\n#FFFFFF\n",
 		"a.pal": "JASC-PAL\n0100\n2\n23 32 56\n255 255 255\n",
 	} {
-		write(t, dir, name, text)
-		got, err := LoadPalette(filepath.Join(dir, name))
+		got, err := ParsePalette([]byte(text))
 		if err != nil || len(got) != 2 || got[0].Hex != "#172038" || got[1].Hex != "#ffffff" {
 			t.Errorf("%s: %+v %v", name, got, err)
 		}
@@ -40,8 +38,7 @@ func TestLoadPalette(t *testing.T) {
 			t.Errorf("gpl names: %+v", got)
 		}
 	}
-	write(t, dir, "bad.gpl", "GIMP Palette\n1 2 x\n")
-	if _, err := LoadPalette(filepath.Join(dir, "bad.gpl")); err == nil {
+	if _, err := ParsePalette([]byte("GIMP Palette\n1 2 x\n")); err == nil {
 		t.Error("a bad line reads")
 	}
 }
@@ -82,6 +79,7 @@ func TestSetTags(t *testing.T) {
 // the palette, its size and its set's tags and timings.
 func TestCheck(t *testing.T) {
 	root := t.TempDir()
+	write(t, root, ".jm.json", `{"assets": ["art/*.atlas.json"]}`)
 	write(t, root, "design/Art.md", "---\ntype: art\npalette: art/p.hex\nsizes:\n  character: 2x1\nanimations:\n  character:\n"+
 		"    directions: [down, up]\n    idle: [100, 100]\n---\n# Art\n")
 	write(t, root, "art/p.hex", "000000\nffffff\n")
@@ -154,6 +152,7 @@ func savePNG(t *testing.T, path string, img image.Image) {
 // game isn't read; tiles keep the grid.
 func TestCheckHoldsToTheLocks(t *testing.T) {
 	root := t.TempDir()
+	write(t, root, ".jm.json", `{"assets": ["art/*.atlas.json", "maps/*.tsj"]}`)
 	write(t, root, "design/Art.md", "---\ntype: art\npalette: art/p.hex\ngrid: 2\n---\n# Art\n")
 	write(t, root, "art/p.hex", "000000\nffffff\n")
 	write(t, root, "design/Characters/Kage.md", "---\ntype: character\nsprite: art/kage.aseprite\nart: done\n---\n# Kage\n")
@@ -174,6 +173,17 @@ func TestCheckHoldsToTheLocks(t *testing.T) {
 	write(t, root, "maps/t.tsj", `{"tilewidth": 3, "tileheight": 2, "image": "../art/kage.png"}`)
 	if r := Check(root); len(r.Findings) != 2 || !strings.Contains(r.Findings[1].Message, "off the 2 px grid") {
 		t.Errorf("a tileset off the grid: %+v", r.Findings)
+	}
+
+	write(t, root, "art/kage.json", `{"frames": [{"frame": {"x": 9, "y": 0, "w": 1, "h": 1}, "sourceSize": {"w": 1, "h": 1}, "duration": 100}], "meta": {"image": "kage.png"}}`)
+	savePNG(t, filepath.Join(root, "art", "kage.png"), img)
+	write(t, root, ".jm.json", `{"assets": []}`) // an atlas the game doesn't ship lists nothing
+	said := ""
+	for _, f := range Check(root).Findings {
+		said += f.Message + "; "
+	}
+	if !strings.Contains(said, "frame 1 is outside its 4x2 picture") || !strings.Contains(said, "no atlas lists it") {
+		t.Errorf("a frame off its picture, an atlas not shipped: %s", said)
 	}
 
 	outside := filepath.Join(t.TempDir(), "p.hex")
