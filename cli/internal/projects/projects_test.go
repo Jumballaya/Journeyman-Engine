@@ -222,6 +222,12 @@ func TestCopyDescribedEvenGone(t *testing.T) {
 	if list := WithCopies([]Project{describe(entry{Path: gone})}, game); len(list) != 2 || list[1].Path != game {
 		t.Errorf("a remembered copy's game: %+v", list)
 	}
+	nested := filepath.Join(here, ".jm", "sandboxes", "s")
+	os.MkdirAll(nested, 0o755)
+	os.WriteFile(filepath.Join(nested, ".jm.json"), []byte(`{}`), 0o644)
+	if list := WithCopies(nil, nested); len(list) != 3 || list[2].Path != canonical(game) {
+		t.Errorf("a variant's sandbox: %+v", list)
+	}
 	if list := WithCopies(nil, game); len(list) != 0 {
 		t.Errorf("a game's own folder isn't a copy: %+v", list)
 	}

@@ -163,9 +163,9 @@ func WithCopies(list []Project, open string) []Project {
 			}
 		}
 	}
-	for _, p := range list {
-		if p.CopyOf != "" && !listed(p.CopyOf) {
-			list = append(list, describe(entry{Path: p.CopyOf}))
+	for i := 0; i < len(list); i++ { // a copy's game may be a copy too: a variant's sandbox
+		if g := list[i].CopyOf; g != "" && !listed(g) {
+			list = append(list, describe(entry{Path: g}))
 		}
 	}
 	return list
