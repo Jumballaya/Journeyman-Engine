@@ -45,6 +45,11 @@ func TestAVariantIsTriedComparedAndMerged(t *testing.T) {
 	if _, err := vcs.Commit(v.Dir, "Add a bat"); err != nil {
 		t.Fatal(err)
 	}
+	// The game moving on meanwhile isn't the variant's doing.
+	os.WriteFile(filepath.Join(game, "later.md"), []byte("x"), 0o644)
+	if _, err := vcs.Commit(game, "Later"); err != nil {
+		t.Fatal(err)
+	}
 	cmp, err := compareVariants(nil, game, "floaty", "game", 60, "")
 	if err != nil || jsonOf(cmp.Changes) != `[{"path":"scenes/main.scene.json","status":"M","entities":[{"entity":"Bat","change":"added"}]}]` || cmp.Errors[0] == "" {
 		t.Errorf("compare: %v %+v", err, cmp)

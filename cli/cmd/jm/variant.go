@@ -290,7 +290,7 @@ type comparison struct {
 
 func (c comparison) text() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s against %s: %d files differ.\n", c.A, c.B, len(c.Changes))
+	fmt.Fprintf(&b, "%s changed %d files since it split from %s.\n", c.A, len(c.Changes), c.B)
 	b.WriteString(changesText(c.Changes))
 	for i, name := range []string{c.A, c.B} {
 		if c.Errors[i] != "" {
@@ -303,7 +303,8 @@ func (c comparison) text() string {
 }
 
 // compareVariants compares variant a with b ("game": the game itself): what
-// their last commits change and uncommitted work aside, and a frame of each.
+// a's commits changed since they split, uncommitted work aside, and a frame
+// of each.
 func compareVariants(c *toolCall, root, a, b string, frame int, play string) (comparison, error) {
 	cmp := comparison{A: a, B: b, Frame: max(frame, 1)}
 	sides := [2]struct{ dir, rev string }{}
@@ -318,7 +319,7 @@ func compareVariants(c *toolCall, root, a, b string, frame int, play string) (co
 		}
 		sides[i].dir, sides[i].rev = v.Dir, "refs/heads/"+v.Branch
 	}
-	marks, err := vcs.Changed(root, sides[1].rev, sides[0].rev)
+	marks, base, err := vcs.Changed(root, sides[1].rev, sides[0].rev)
 	if err != nil {
 		return cmp, err
 	}
@@ -326,7 +327,7 @@ func compareVariants(c *toolCall, root, a, b string, frame int, play string) (co
 	for path, mark := range marks {
 		c := fileChange{Path: path, Status: mark}
 		if strings.HasSuffix(path, ".scene.json") {
-			c.Entities = sceneChanges(vcs.Show(root, sides[1].rev, path), vcs.Show(root, sides[0].rev, path))
+			c.Entities = sceneChanges(vcs.Show(root, base, path), vcs.Show(root, sides[0].rev, path))
 		}
 		cmp.Changes = append(cmp.Changes, c)
 	}

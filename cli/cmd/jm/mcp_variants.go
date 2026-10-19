@@ -56,7 +56,7 @@ func (s *mcpServer) variantTools() []mcpTool {
 				return textResult("Variant "+v.Name+" is open for the person to play.", false)
 			})},
 		{Name: "variant_compare", Meta: callableMeta("Comparing…", "Compared"), Title: "Compare a variant",
-			Description: "A variant beside the game (or another variant): the files their commits change (a scene's per entity) and a frame of each at the same moment, " +
+			Description: "A variant beside the game (or another variant): the files a's commits changed since it split from b (a scene's per entity) and a frame of each at the same moment, " +
 				"both run headless with GL, with a recorded play's inputs if given. Show the person both frames.",
 			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "a": nameArg, "b": strArg(`another variant, or "game" (default)`),
 				"frame": intArg("the frame to show both at (default 120)"), "play": strArg("replay this recorded play's inputs in both (plays_list)")}, "a"),
