@@ -137,6 +137,7 @@ func scan(root string, maxDepth int) ([]string, error) {
 
 func describe(e entry) Project {
 	p := Project{Name: nameOf(e.Path, e.Name), Path: e.Path, Opened: e.Opened, Scenes: []string{}}
+	p.CopyOf, p.CopyKind, p.Copy = CopyOf(e.Path) // a dropped copy too: it's its game's, not a missing game
 	man, err := manifest.LoadManifest(filepath.Join(e.Path, archive.ManifestEntryKey))
 	if err != nil {
 		p.Missing = !isGame(e.Path)
@@ -146,8 +147,17 @@ func describe(e entry) Project {
 		p.Scenes = man.Scenes
 	}
 	p.Thumb = Thumb(e.Path)
-	p.CopyOf, p.CopyKind, p.Copy = CopyOf(e.Path)
 	return p
+}
+
+// Copy describes a variant's or sandbox's folder as a game when it's one (the
+// open game, though not remembered); ok is false for any other folder.
+func Copy(dir string) (p Project, ok bool) {
+	dir = canonical(dir)
+	if g, _, _ := CopyOf(dir); g == "" {
+		return Project{}, false
+	}
+	return describe(entry{Path: dir}), true
 }
 
 // CopyOf finds the game a folder is a copy of: <game>/.jm/sandboxes/<name>

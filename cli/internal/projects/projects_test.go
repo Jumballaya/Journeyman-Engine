@@ -198,3 +198,23 @@ func TestCopyOf(t *testing.T) {
 		}
 	}
 }
+
+// A copy dropped since it was opened is still its game's (not a missing game);
+// an open copy nobody remembered is described as one.
+func TestCopyDescribedEvenGone(t *testing.T) {
+	game := t.TempDir()
+	os.WriteFile(filepath.Join(game, ".jm.json"), []byte(`{}`), 0o644)
+	gone := filepath.Join(game, ".jm", "sandboxes", "old")
+	if p := describe(entry{Path: gone}); p.CopyOf == "" || p.Copy != "old" || p.CopyKind != "sandbox" {
+		t.Errorf("a dropped sandbox: %+v", p)
+	}
+	here := filepath.Join(game, ".jm", "variants", "v")
+	os.MkdirAll(here, 0o755)
+	os.WriteFile(filepath.Join(here, ".jm.json"), []byte(`{"name":"V"}`), 0o644)
+	if p, ok := Copy(here); !ok || p.Copy != "v" || p.Missing {
+		t.Errorf("an open variant: %+v %v", p, ok)
+	}
+	if _, ok := Copy(game); ok {
+		t.Error("a game's own folder isn't a copy")
+	}
+}

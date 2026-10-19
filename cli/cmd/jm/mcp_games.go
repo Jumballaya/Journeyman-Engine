@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
@@ -258,6 +259,12 @@ func (s *mcpServer) listGames(home string) toolResult {
 		list = []projects.Project{} // "games": [], not null
 	}
 	b.WriteString(projectsText(list, home))
+	// The open folder a variant's or sandbox's, not remembered (MCP started in it): listed for what it's a copy of.
+	if open != "" && !slices.ContainsFunc(list, func(p projects.Project) bool { return p.Path == open }) {
+		if p, ok := projects.Copy(open); ok {
+			list = append(list, p)
+		}
+	}
 	thumbs := map[string]string{}
 	for _, p := range list {
 		if uri := dataURI(p.Thumb, 320); uri != "" {
