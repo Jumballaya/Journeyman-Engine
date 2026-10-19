@@ -265,8 +265,17 @@ func TestASandboxIsComparedWithTheGameAsItIsNow(t *testing.T) {
 	if err != nil || !cmp.Sandbox || jsonOf(cmp.Changes) != `[{"path":"scenes/main.scene.json","status":"M","entities":[{"entity":"Bat","change":"added"}]}]` {
 		t.Errorf("compare: %v %+v", err, cmp)
 	}
-	if compareImage("w", 0, "game") == compareImage("w", 1, "game") {
+	if compareImage(game, "sandbox", "game") == compareImage(game, "game", "game") {
 		t.Error("the sandbox game's frame and the game's are one file")
+	}
+	// Its last compare's frame is its picture till it's played; dropped, it goes too.
+	os.MkdirAll(filepath.Join(game, ".jm", "compare"), 0o755)
+	os.WriteFile(compareImage(game, "sandbox", "game"), []byte("png"), 0o644)
+	if list, _ := sandboxesOf(game); len(list) != 1 || list[0].thumb != compareImage(game, "sandbox", "game") {
+		t.Errorf("thumb: %+v", list)
+	}
+	if err := dropSandbox(game, "game"); err != nil || exists(compareImage(game, "sandbox", "game")) {
+		t.Errorf("drop: %v", err)
 	}
 	if _, err := compareVariants(nil, game, "game", "other", 60, "", true); err == nil {
 		t.Error("a sandbox compared with a variant")

@@ -171,7 +171,7 @@ func variantsOf(root string) []variant {
 		if !e.IsDir() || vcs.Branch(dir) != branch {
 			continue // not one of ours (or half made)
 		}
-		v := variant{Name: e.Name(), Dir: dir, Branch: branch, Changed: len(vcs.Status(dir)), thumb: projects.Thumb(dir)}
+		v := variant{Name: e.Name(), Dir: dir, Branch: branch, Changed: len(vcs.Status(dir)), thumb: thumbOf(root, "variant", e.Name(), dir)}
 		v.Ahead, v.Behind = vcs.Distance(root, branch)
 		if log, _ := vcs.Log(dir, 1); len(log) > 0 {
 			v.Subject = log[0].Subject
@@ -259,6 +259,7 @@ func dropVariant(root, name string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	_ = os.Remove(compareImage(root, "variant", name)) // a new one of that name isn't this
 	return vcs.RemoveWorktree(root, filepath.Join(variantsDir(root), name), v.Branch)
 }
 
@@ -318,25 +319,25 @@ func compareVariants(c *toolCall, root, a, b string, frame int, play string, san
 	if sandbox && b != "game" {
 		return cmp, fmt.Errorf("a sandbox is compared with the game, not %s", b)
 	}
-	sides := [2]struct{ dir, rev string }{}
+	sides := [2]struct{ dir, rev, kind string }{}
 	for i, name := range []string{a, b} {
 		if sandbox && i == 0 { // a sandbox may be named game
 			sb, err := findSandbox(root, name)
 			if err != nil {
 				return cmp, err
 			}
-			sides[i].dir = sb.Dir
+			sides[i].dir, sides[i].kind = sb.Dir, "sandbox"
 			continue
 		}
 		if name == "game" {
-			sides[i].dir, sides[i].rev = root, "HEAD"
+			sides[i].dir, sides[i].rev, sides[i].kind = root, "HEAD", "game"
 			continue
 		}
 		v, err := findVariant(root, name)
 		if err != nil {
 			return cmp, err
 		}
-		sides[i].dir, sides[i].rev = v.Dir, "refs/heads/"+v.Branch
+		sides[i].dir, sides[i].rev, sides[i].kind = v.Dir, "refs/heads/"+v.Branch, "variant"
 	}
 	marks, before, after := map[string]string{}, func(string) []byte { return nil }, func(string) []byte { return nil }
 	if cmp.Sandbox {
@@ -374,12 +375,11 @@ func compareVariants(c *toolCall, root, a, b string, frame int, play string, san
 			return cmp, err
 		}
 	}
-	work := filepath.Join(root, ".jm", "compare") // kept for a look; the next compare replaces them
-	if err := os.MkdirAll(work, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, ".jm", "compare"), 0o755); err != nil {
 		return cmp, err
 	}
 	for i, s := range sides {
-		cmp.Frames[i], err = frameOf(c, i, s.dir, uint64(cmp.Frame), p, compareImage(work, i, []string{a, b}[i]))
+		cmp.Frames[i], err = frameOf(c, i, s.dir, uint64(cmp.Frame), p, compareImage(root, s.kind, []string{a, b}[i]))
 		if err != nil {
 			cmp.Errors[i] = err.Error()
 		}
@@ -387,10 +387,26 @@ func compareVariants(c *toolCall, root, a, b string, frame int, play string, san
 	return cmp, nil
 }
 
-// compareImage is where side 0 (a) or 1 (b) of a comparison keeps its frame:
-// by side too, as a sandbox named game is beside the game.
-func compareImage(work string, side int, name string) string {
-	return filepath.Join(work, []string{"a", "b"}[side]+"-"+name+".png")
+// compareImage is where a comparison keeps a side's frame (kind: variant,
+// sandbox or game), kept for a look and as its picture till it's played; the
+// next compare of it replaces it.
+func compareImage(root, kind, name string) string {
+	file := kind + "-" + name + ".png"
+	if kind == "game" {
+		file = "game.png"
+	}
+	return filepath.Join(root, ".jm", "compare", file)
+}
+
+// thumbOf is a variant's or sandbox's picture: its newest play's, else its last compare's.
+func thumbOf(root, kind, name, dir string) string {
+	if thumb := projects.Thumb(dir); thumb != "" {
+		return thumb
+	}
+	if path := compareImage(root, kind, name); exists(path) {
+		return path
+	}
+	return ""
 }
 
 // frameOf runs a game headless (built first if it needs it) to a frame, with

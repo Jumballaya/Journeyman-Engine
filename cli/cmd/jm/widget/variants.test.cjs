@@ -5,7 +5,8 @@ const { studio, settle } = require('./studio-host.cjs');
 const listing = { structuredContent: { open: '/g/pip', games: [{ name: 'Pip', path: '/g/pip', opened: 1, scenes: [] }] } };
 const variants = { structuredContent: { variants: [{ name: 'floaty', dir: '/g/pip/.jm/variants/floaty', branch: 'variant/floaty', ahead: 2, behind: 0, changed: 1, subject: 'Floatier jump' }] },
   _meta: { 'jm/thumbs': { floaty: 'data:image/jpeg;base64,f' } } };
-const sandboxes = { structuredContent: { sandboxes: [{ name: 'sb1', dir: '/g/pip/.jm/sandboxes/sb1', made: 1, expires: 1792200000, changes: { 'scenes/main.scene.json': 'M' } }] } };
+const sandboxes = { structuredContent: { sandboxes: [{ name: 'sb1', dir: '/g/pip/.jm/sandboxes/sb1', made: 1, expires: 1792200000, changes: { 'scenes/main.scene.json': 'M' } }] },
+  _meta: { 'jm/thumbs': { sb1: 'data:image/jpeg;base64,s' } } };
 const compared = { structuredContent: { a: 'floaty', b: 'game', frame: 30, errors: ['', ''],
   changes: [{ path: 'scenes/main.scene.json', status: 'M', entities: [{ entity: 'Player', change: 'changed', changed: ['VelocityComponent'] }] }] },
   _meta: { 'jm/frames': ['data:image/jpeg;base64,a', 'data:image/jpeg;base64,b'] } };
@@ -23,6 +24,7 @@ test('variants and sandboxes are listed; the first variant is shown and is the c
   const s = await open();
   assert.match(s.app.text, /floaty\s+2 ahead · 1 uncommitted/);
   assert.match(s.app.text, /sb1\s+1 file differs/);
+  assert.ok(s.find((e) => e.tag === 'img' && e.attributes.src === 'data:image/jpeg;base64,s').length, "a sandbox's picture");
   assert.equal(s.contexts().at(-1).structuredContent.variant, 'floaty');
 });
 
@@ -95,6 +97,7 @@ test('a sandbox is compared with the game too: both frames, and its changes per 
   assert.deepEqual(s.find((e) => e.tag === 'img' && e.attributes.alt && e.attributes.alt.includes('frame 30')).map((e) => e.attributes.alt),
     ['sb1 at frame 30', 'the game at frame 30']);
   assert.equal(s.app.text.match(/changed Player: VelocityComponent/g).length, 1);
+  assert.ok(s.find((e) => e.tag === 'img' && e.attributes.src === 'data:image/jpeg;base64,a' && !e.attributes.alt.includes('frame')).length, 'its row shows the frame');
   // Changed since: the list says so, not what Compare saw.
   changes = { 'scenes/main.scene.json': 'M', 'new.ts': 'A' };
   s.tab('Games').fire('click');

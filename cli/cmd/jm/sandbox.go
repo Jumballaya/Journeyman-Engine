@@ -110,6 +110,7 @@ type sandbox struct {
 	Made    int64             `json:"made"`
 	Expires int64             `json:"expires"`
 	Changes map[string]string `json:"changes"`
+	thumb   string            // a picture of it, or ""
 }
 
 func (s sandbox) summary() string {
@@ -166,7 +167,7 @@ func sandboxesOf(root string) ([]sandbox, error) {
 			_ = dropSandbox(root, name)
 			continue
 		}
-		out = append(out, sandbox{Name: name, Dir: dir, Made: m.Made, Expires: m.Expires, Changes: differences(root, dir)})
+		out = append(out, sandbox{Name: name, Dir: dir, Made: m.Made, Expires: m.Expires, Changes: differences(root, dir), thumb: thumbOf(root, "sandbox", name, dir)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
@@ -401,6 +402,7 @@ func dropSandbox(root, name string) error {
 		return err
 	}
 	_ = os.Remove(filepath.Join(store, name+".json"))
+	_ = os.Remove(compareImage(root, "sandbox", name))
 	return os.RemoveAll(filepath.Join(store, name))
 }
 

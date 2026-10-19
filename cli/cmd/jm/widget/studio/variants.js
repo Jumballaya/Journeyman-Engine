@@ -7,7 +7,7 @@ studioTabs.push((() => {
   // compared: { name, frame, play, result | null } while/after comparing. plays: the game's recorded plays, to compare
   // both with one's inputs (play: its id, "" none). confirm: the button asked once.
   // failed: { variants, sandboxes }: why the last ask for that list failed (its data then is the one before).
-  const fresh = (game) => ({ game, asking: "", seq: 0, variants: null, thumbs: {}, sandboxes: null, failed: {}, picked: null, compared: null,
+  const fresh = (game) => ({ game, asking: "", seq: 0, variants: null, thumbs: {}, sandboxes: null, sandboxThumbs: {}, failed: {}, picked: null, compared: null,
                              frame: 120, plays: [], play: "", draft: null, newName: "", confirm: "", routed: null, ran: Object.create(null) });  // ran: by sandbox name (any name, "constructor" too)
   let state = fresh(null);
 
@@ -29,7 +29,9 @@ studioTabs.push((() => {
     };
     if (list("variants", v)) state.thumbs = (v._meta && v._meta["jm/thumbs"]) || {};
     // A sandbox's files may have changed since it was compared (its list can't tell).
-    if (list("sandboxes", s) && state.compared && state.compared.kind === "sandbox" && state.compared.result) state.compared = null;
+    const listed = list("sandboxes", s);
+    if (listed) state.sandboxThumbs = (s._meta && s._meta["jm/thumbs"]) || {};
+    if (listed && state.compared && state.compared.kind === "sandbox" && state.compared.result) state.compared = null;
     if (!state.picked && state.variants && state.variants.length) state.picked = { kind: "variant", name: state.variants[0].name };
     ctx.rerender();
   };
@@ -192,6 +194,11 @@ studioTabs.push((() => {
       .var-compare, .var-changes { display: grid; gap: 6px; } .var-path { font: 12px ui-monospace, Menlo, monospace; } .var-entity { padding-left: 14px; }`));
   };
 
+  // Its frame from the compare just shown, newer than the listed picture.
+  const shot = (kind, name) => {
+    const c = state.compared, r = c && c.kind === kind && c.name === name && c.result;
+    return r && !r.isError && r._meta && (r._meta["jm/frames"] || [])[0] || "";
+  };
   const row = (ctx, kind, item, thumb, meta) => {
     const { el } = ctx.kit, on = state.picked && state.picked.kind === kind && state.picked.name === item.name;
     return el("button", { class: "var-row" + (on ? " on" : ""), "data-key": `${kind}:${item.name}`, title: item.dir,
@@ -222,10 +229,10 @@ studioTabs.push((() => {
     } }, el("h1", {}, "Variants"), name, el("button", { class: "primary", type: "submit", disabled: ctx.busy }, "New variant"));
     const left = el("div", { class: "pane" },
       kit.section(`Variants · ${variants.length}`, failing("variants"), variants.length ? el("div", { class: "var-list" }, variants.map((v) =>
-        row(ctx, "variant", v, state.thumbs[v.name], `${v.ahead ? v.ahead + " ahead" : "no new commits"}${v.behind ? ` · ${v.behind} behind` : ""}${v.changed ? ` · ${v.changed} uncommitted` : ""}`)))
+        row(ctx, "variant", v, shot("variant", v.name) || state.thumbs[v.name], `${v.ahead ? v.ahead + " ahead" : "no new commits"}${v.behind ? ` · ${v.behind} behind` : ""}${v.changed ? ` · ${v.changed} uncommitted` : ""}`)))
         : state.failed.variants ? null : el("div", { class: "meta" }, "None yet: a variant tries an idea beside the game, from its last commit.")),
       state.failed.sandboxes || (state.sandboxes || []).length ? kit.section(`Sandboxes · ${(state.sandboxes || []).length}`, failing("sandboxes"),
-        el("div", { class: "var-list" }, (state.sandboxes || []).map((s) => row(ctx, "sandbox", s, null, `${ctx.kit.plural(Object.keys(s.changes || {}).length, "file differs", "files differ")}`)))) : null);
+        el("div", { class: "var-list" }, (state.sandboxes || []).map((s) => row(ctx, "sandbox", s, shot("sandbox", s.name) || state.sandboxThumbs[s.name], `${ctx.kit.plural(Object.keys(s.changes || {}).length, "file differs", "files differ")}`)))) : null);
     const p = state.picked;
     const v = p && p.kind === "variant" && variants.find((x) => x.name === p.name);
     const s = p && p.kind === "sandbox" && (state.sandboxes || []).find((x) => x.name === p.name);
