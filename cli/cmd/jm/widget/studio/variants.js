@@ -28,7 +28,8 @@ studioTabs.push((() => {
       return Array.isArray(items);
     };
     if (list("variants", v)) state.thumbs = (v._meta && v._meta["jm/thumbs"]) || {};
-    list("sandboxes", s);
+    // A sandbox's files may have changed since it was compared (its list can't tell).
+    if (list("sandboxes", s) && state.compared && state.compared.kind === "sandbox" && state.compared.result) state.compared = null;
     if (!state.picked && state.variants && state.variants.length) state.picked = { kind: "variant", name: state.variants[0].name };
     ctx.rerender();
   };
@@ -140,10 +141,7 @@ studioTabs.push((() => {
   const sandboxView = (ctx, s) => {
     const { el } = ctx.kit, cmp = comparing(ctx, s, "sandbox");
     ctx.share(`The person is looking at sandbox ${s.name} of ${ctx.game.name}.`, { sandbox: s.name, dir: s.dir });
-    // Compare's changes (a scene's per entity) while the files that differ are still those.
-    const listed = Object.entries(s.changes || {}).sort().map(([path, status]) => ({ path, status }));
-    const same = cmp.changes && cmp.changes.length === listed.length && cmp.changes.every((c) => (s.changes || {})[c.path] === c.status);
-    const changes = same ? cmp.changes : listed;
+    const changes = cmp.changes || Object.entries(s.changes || {}).sort().map(([path, status]) => ({ path, status }));
     const keep = state.draft !== null
       ? el("form", { class: "head", onsubmit: (e) => {
           e.preventDefault();

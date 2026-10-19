@@ -320,16 +320,16 @@ func compareVariants(c *toolCall, root, a, b string, frame int, play string, san
 	}
 	sides := [2]struct{ dir, rev string }{}
 	for i, name := range []string{a, b} {
-		if name == "game" {
-			sides[i].dir, sides[i].rev = root, "HEAD"
-			continue
-		}
-		if sandbox && i == 0 {
+		if sandbox && i == 0 { // a sandbox may be named game
 			sb, err := findSandbox(root, name)
 			if err != nil {
 				return cmp, err
 			}
 			sides[i].dir = sb.Dir
+			continue
+		}
+		if name == "game" {
+			sides[i].dir, sides[i].rev = root, "HEAD"
 			continue
 		}
 		v, err := findVariant(root, name)
