@@ -171,9 +171,11 @@
     if (!es.length && !sc) { x0 = y0 = 0; x1 = y1 = 100; }
     const m = Math.max(x1 - x0, y1 - y0, 1) * 0.04;
     const w = x1 - x0 + 2 * m, h = y1 - y0 + 2 * m;
-    // A unit a pixel where it fits (a long level scrolls), down to 4000 × 1200 at most.
+    // A unit a pixel where it fits (a long level scrolls), down to 4000 × 1200 at most; with
+    // the screen known, a screen's width fits the view and a level wider scrolls on.
     const k = Math.min(1, 4000 / w, 1200 / h);
-    const svg = $("svg:svg", { viewBox: `${x0 - m} ${y0 - m} ${w} ${h}`, style: `width: max(100%, ${Math.round(w * k)}px)` });
+    const width = sc ? `${Math.max(100, Math.round((w - 2 * m) / sc.w * 100))}%` : `max(100%, ${Math.round(w * k)}px)`;
+    const svg = $("svg:svg", { viewBox: `${x0 - m} ${y0 - m} ${w} ${h}`, style: `width: ${width}` });
     if (sc) svg.append($("svg:rect", { class: "screen", x: sc.x - sc.w / 2, y: -sc.y - sc.h / 2, width: sc.w, height: sc.h, "vector-effect": "non-scaling-stroke" },
       $("svg:title", {}, `The screen as the game starts (${sc.w}×${sc.h})`)));
     for (const e of es) {

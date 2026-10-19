@@ -190,7 +190,9 @@ test('the screen as the game starts frames the layout: a lone small entity stays
   await settle();
   const screen = find((e) => e.attributes.class === 'screen')[0];
   assert.deepEqual([screen.attributes.x, screen.attributes.y, screen.attributes.width, screen.attributes.height], [-640, -360, 1280, 720]);
-  assert.match(find((e) => e.tag === 'svg')[0].attributes.viewBox, /^-691\.2 -411\.2 1382\.4 822\.4$/);
+  const svg = find((e) => e.tag === 'svg')[0];
+  assert.match(svg.attributes.viewBox, /^-691\.2 -411\.2 1382\.4 822\.4$/);
+  assert.equal(svg.attributes.style, 'width: 100%');  // a screen fits the view
 });
 
 test('each field is named for assistive tech: its label points at it, a vector\'s values by axis', async () => {
