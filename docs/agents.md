@@ -252,7 +252,10 @@ a route: "/" the games, "/game" the overview, "/editor" the editor bridge,
 "/files?file=<path>&line=<n>" a file with what's wrong in it,
 "/memory?note=Pillars" a design note, "/git?version=<hash>" a version,
 "/variants?variant=<name>" a variant to compare, "/tasks" the task board,
-`?game=<path>` to open another. `scene_view` shows the
+`?game=<path>` to open another. "Work here" on a variant or sandbox opens its
+folder as the game until "Back to the game": your tools then change that copy,
+not the game (`games` lists it with `copyOf`, `copyKind` and `copy`, and the
+page's context says so). `scene_view` shows the
 person a scene laid out (prefabs applied) and gives you each entity's place and
 components; .scene.json files they open in ChatGPT desktop open in it, and the
 entity they pick there is your context.

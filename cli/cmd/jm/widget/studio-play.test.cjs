@@ -210,3 +210,24 @@ test('a session value being typed isn\'t set by the polls redrawing it, only whe
     assert.deepEqual(plain(sets().slice(before)), [{ command: 'set score 99', game: '/g/pip', run: '1' }], range ? 'with a selection' : 'once');
   }
 });
+
+test('beside the chat: Play asks for picture-in-picture, then shows the game and its controls only', async () => {
+  const asked = [];
+  const s = await studio(games, { answers: { play_live: running(asked) }, widgetState: { route: '/play' },
+    context: { availableDisplayModes: ['inline', 'fullscreen', 'pip'] } });
+  await tick(); await settle(6);
+  s.button('Beside the chat').fire('click');
+  await settle(4);
+  assert.equal(plain(s.sent.filter((m) => m.method === 'ui/request-display-mode').at(-1).params).mode, 'pip');
+  await s.notify('ui/notifications/host-context-changed', { displayMode: 'pip' });
+  await tick(); await settle(6);
+  assert.equal(s.root.dataset.bar, 'none');
+  assert.ok(s.button('Back to Studio'));
+  assert.ok(s.button('Pause'));
+  assert.equal(s.find((e) => e.attributes['data-key'] === 'watch-add').length, 0, 'no watch list beside the chat');
+  await s.key({ altKey: true, code: 'Digit2' });
+  assert.equal(s.current(), 'Play', 'beside the chat, the page shown stays');
+  s.button('Back to Studio').fire('click');
+  await settle(4);
+  assert.equal(plain(s.sent.filter((m) => m.method === 'ui/request-display-mode').at(-1).params).mode, 'fullscreen');
+});

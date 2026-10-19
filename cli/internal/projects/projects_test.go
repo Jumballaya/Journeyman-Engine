@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -171,5 +172,84 @@ func TestFindGamesLooksThroughHome(t *testing.T) {
 	slices.Sort(names)
 	if strings.Join(names, ",") != "a,b,c" {
 		t.Errorf("found %v", names)
+	}
+}
+
+// A variant's or sandbox's folder says whose copy it is; a game that only sits
+// under such a path, or a sandbox's subfolder, doesn't.
+func TestCopyOf(t *testing.T) {
+	root := t.TempDir()
+	game := filepath.Join(root, "repo", "games", "pip")
+	for _, d := range []string{game, filepath.Join(game, ".jm", "sandboxes", "s"), filepath.Join(game, ".jm", "variants", "v"), filepath.Join(game, ".jm", "variants", "v", "games", "pip"),
+		filepath.Join(root, "archive", ".jm", "variants", "Mine")} {
+		os.MkdirAll(d, 0o755)
+		os.WriteFile(filepath.Join(d, ".jm.json"), []byte(`{}`), 0o644)
+	}
+	for dir, want := range map[string][3]string{
+		filepath.Join(game, ".jm", "sandboxes", "s"):                {game, "sandbox", "s"},
+		filepath.Join(game, ".jm", "variants", "v"):                 {game, "variant", "v"},
+		filepath.Join(game, ".jm", "variants", "v", "games", "pip"): {}, // no repository: the variant is its folder
+		filepath.Join(game, ".jm", "sandboxes", "s", "scenes"):      {},
+		filepath.Join(root, "archive", ".jm", "variants", "Mine"):   {},
+		game: {},
+	} {
+		g, kind, name := CopyOf(dir)
+		if [3]string{g, kind, name} != want {
+			t.Errorf("%s: got %q %q %q, want %q", dir, g, kind, name, want)
+		}
+	}
+}
+
+// A copy dropped since it was opened is still its game's (not a missing game);
+// an open copy nobody remembered is listed, and so is its game.
+func TestCopyDescribedEvenGone(t *testing.T) {
+	game := t.TempDir()
+	os.WriteFile(filepath.Join(game, ".jm.json"), []byte(`{}`), 0o644)
+	gone := filepath.Join(game, ".jm", "sandboxes", "old")
+	if p := describe(entry{Path: gone}); p.CopyOf == "" || p.Copy != "old" || p.CopyKind != "sandbox" {
+		t.Errorf("a dropped sandbox: %+v", p)
+	}
+	here := filepath.Join(game, ".jm", "variants", "v")
+	os.MkdirAll(here, 0o755)
+	os.WriteFile(filepath.Join(here, ".jm.json"), []byte(`{"name":"V"}`), 0o644)
+	list := WithCopies(nil, here)
+	if len(list) != 2 || list[0].Copy != "v" || list[0].Missing || list[1].Path != canonical(game) || list[1].CopyOf != "" {
+		t.Errorf("an open variant, its game not remembered: %+v", list)
+	}
+	if again := WithCopies(list, here); len(again) != 2 {
+		t.Errorf("listed again: %+v", again)
+	}
+	if list := WithCopies([]Project{describe(entry{Path: gone})}, game); len(list) != 2 || list[1].Path != game {
+		t.Errorf("a remembered copy's game: %+v", list)
+	}
+	nested := filepath.Join(here, ".jm", "sandboxes", "s")
+	os.MkdirAll(nested, 0o755)
+	os.WriteFile(filepath.Join(nested, ".jm.json"), []byte(`{}`), 0o644)
+	if list := WithCopies(nil, nested); len(list) != 3 || list[2].Path != canonical(game) {
+		t.Errorf("a variant's sandbox: %+v", list)
+	}
+	if list := WithCopies(nil, game); len(list) != 0 {
+		t.Errorf("a game's own folder isn't a copy: %+v", list)
+	}
+}
+
+// In a repository, a variant's game is where the game sits in it: a variant of
+// games/a, opened at its games/a, is a's; its games/b is not.
+func TestCopyOfInARepository(t *testing.T) {
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "-C", repo, "init", "-q").CombinedOutput(); err != nil {
+		t.Skipf("git: %v %s", err, out)
+	}
+	a := filepath.Join(repo, "games", "a")
+	v := filepath.Join(a, ".jm", "variants", "v")
+	for _, d := range []string{a, filepath.Join(repo, "games", "b"), filepath.Join(v, "games", "a"), filepath.Join(v, "games", "b")} {
+		os.MkdirAll(d, 0o755)
+		os.WriteFile(filepath.Join(d, ".jm.json"), []byte(`{}`), 0o644)
+	}
+	if g, _, name := CopyOf(filepath.Join(v, "games", "a")); g != a || name != "v" {
+		t.Errorf("a's variant: %q %q", g, name)
+	}
+	if g, _, _ := CopyOf(filepath.Join(v, "games", "b")); g != "" {
+		t.Errorf("b in a's variant: %q", g)
 	}
 }

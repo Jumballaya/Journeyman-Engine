@@ -27,7 +27,8 @@ const kit = (() => {
     const root = document.documentElement, c = host.context || {};
     root.dataset.theme = host.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     root.dataset.mode = host.displayMode || "inline";
-    root.dataset.bar = root.dataset.mode === "inline" || matchMedia("(max-width: 760px)").matches ? "top" : "side";
+    // Picture-in-picture: no tabs, the page only (its own way back).
+    root.dataset.bar = root.dataset.mode === "pip" ? "none" : root.dataset.mode === "inline" || matchMedia("(max-width: 760px)").matches ? "top" : "side";
     const vars = (c.styles && c.styles.variables) || {};
     for (const [k, v] of Object.entries(vars)) if (k.startsWith("--") && typeof v === "string") root.style.setProperty(k, v);
     const css = c.styles && c.styles.css && c.styles.css.fonts;

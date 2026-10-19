@@ -258,6 +258,7 @@ func (s *mcpServer) listGames(home string) toolResult {
 		list = []projects.Project{} // "games": [], not null
 	}
 	b.WriteString(projectsText(list, home))
+	list = projects.WithCopies(list, open)
 	thumbs := map[string]string{}
 	for _, p := range list {
 		if uri := dataURI(p.Thumb, 320); uri != "" {

@@ -178,9 +178,18 @@ studioTabs.push((() => {
     }
     const s = live.status || {};
     ctx.share(`The person is playing ${ctx.game.name}: ${s.scene}, frame ${s.frame}${s.paused ? ", paused" : ""}.`, { live: s });
-    return el("div", {}, controls(ctx, s),
-      kit.split("play", live.src ? el("img", { src: live.src, alt: "The game now", style: { width: "100%", maxHeight: "72vh", objectFit: "contain", background: "#000", borderRadius: "8px", imageRendering: "pixelated", display: "block" } })
-        : kit.empty("No picture yet."),
+    // Beside the chat (the host's picture-in-picture): the game and its controls only, as the person talks.
+    // (Its way back is the Studio's, shown whatever this tab shows.)
+    const host = ctx.host, pip = host.displayMode === "pip";
+    const bar = controls(ctx, s);
+    // A host that doesn't list its modes (ChatGPT's window.openai) is asked anyway: it says no if it can't.
+    if (!pip && host.can("displayMode") && (!host.displayModes || host.displayModes.includes("pip"))) bar.append(el("span", { class: "spacer" }),
+      el("button", { "data-key": "pip", title: "Keep the game beside the chat while you talk", onclick: () => host.requestDisplayMode("pip").catch(() => {}) }, "Beside the chat"));
+    const picture = live.src ? el("img", { src: live.src, alt: "The game now", style: { width: "100%", maxHeight: pip ? "none" : "72vh", objectFit: "contain", background: "#000", borderRadius: "8px", imageRendering: "pixelated", display: "block" } })
+      : kit.empty("No picture yet.");
+    if (pip) return el("div", {}, bar, picture);
+    return el("div", {}, bar,
+      kit.split("play", picture,
       el("div", { class: "pane" }, watchList(ctx, live.values || {}), profileStrip(ctx)), { ratio: 0.6 }));
   };
 

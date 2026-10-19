@@ -42,6 +42,8 @@
   .brand { display: flex; align-items: center; gap: 8px; padding: 4px 8px 10px; min-width: 0; }
   .mark { width: 18px; height: 18px; flex: none; color: var(--accent); }
   .game-name { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand { flex-wrap: wrap; row-gap: 4px; } .brand .game-name { flex: 1 0 calc(100% - 26px); } .brand .badge { margin-left: 26px; }  /* a variant's name: under the game's */
+  :root[data-bar="top"] .brand { flex-wrap: nowrap; } :root[data-bar="top"] .brand .game-name { flex: 0 1 auto; } :root[data-bar="top"] .brand .badge { margin-left: 0; }
   .tabs { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
   .group { font-size: 11px; font-weight: 600; color: var(--muted); padding: 12px 10px 4px; }
   .tab { display: flex; align-items: center; gap: 9px; border: 0; background: none; border-radius: 7px; padding: 5px 10px; min-height: 30px;
@@ -62,6 +64,12 @@
   :root[data-bar="top"] .tab { padding: 5px 8px; gap: 6px; }
   :root[data-bar="top"] .status { margin: 0 0 0 auto; padding: 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30%; }
   :root[data-mode="inline"] .studio { min-height: 0; }
+  :root[data-bar="none"] .studio { grid-template-columns: minmax(0, 1fr); min-height: 0; } :root[data-bar="none"] .side { display: none; }
+  :root[data-mode="pip"] .view { padding: 8px; }
+  .pipbar { display: flex; align-items: center; gap: 8px; padding: 6px 8px 0; }
+  .copybar { display: flex; align-items: center; gap: 8px; margin: 12px 22px 0; padding: 6px 8px 6px 12px; border-radius: 10px;
+    background: var(--accent-soft); color: var(--text); } .copybar svg { width: 16px; height: 16px; color: var(--accent); flex: none; }
+  :root[data-bar="top"] .copybar { margin: 10px 16px 0; }
   .update { margin: 12px 20px 0; padding: 8px 12px; border-radius: var(--radius); background: var(--accent-soft); color: var(--text); }
   .main { min-width: 0; display: flex; flex-direction: column; }
   .view { flex: 1; padding: 18px 22px 24px; min-width: 0; }
@@ -141,7 +149,7 @@ const studioTabs = [];
 <script>
 (() => {
   "use strict";
-  const host = jmHost({ name: "journeyman-studio", version: "__JM_VERSION__", displayModes: ["fullscreen", "inline"] });
+  const host = jmHost({ name: "journeyman-studio", version: "__JM_VERSION__", displayModes: ["fullscreen", "inline", "pip"] });
   const { el } = kit;
   const tabs = studioTabs.slice().sort((a, b) => a.order - b.order);
   const home = tabs.find((t) => t.home) || tabs[0];
@@ -331,7 +339,7 @@ const studioTabs = [];
     const n = e.altKey && !e.metaKey && !e.ctrlKey && /^Digit[1-9]$/.test(e.code || "") ? Number(e.code.slice(5)) : 0;
     const g = games();
     const t = state.route && shown(state.route.tab, g && g.open).flatMap(([, list]) => list)[n - 1];
-    if (t && (t.home || (g && g.open))) { e.preventDefault(); open(t); }
+    if (t && (t.home || (g && g.open)) && host.displayMode !== "pip") { e.preventDefault(); open(t); }  // beside the chat: the page shown stays
   });
 
   // A game's buttons for the editor, a play and an export (primary: the editor's is the main one).
@@ -418,10 +426,13 @@ const studioTabs = [];
     const game = g.games.find((x) => x.path === g.open) || (g.open ? { name: g.open.split(/[\\/]/).pop(), path: g.open, scenes: [] } : null);
     let { tab, params } = state.route;
     if (!tab.home && !game) tab = home;
-    const where = { studio: format({ tab, params }), game: game ? game.path : null };
-    state.context = { text: `The person is in Journeyman Studio: ${tab.title}${game ? ` of ${game.name} (${game.path})` : ""}.`, data: where };
+    // A variant or sandbox opened to work in: the tools change it, not the game.
+    const copy = game && game.copyOf ? { game: game.copyOf, kind: game.copyKind, name: game.copy } : null;  // jm says (games)
+    const where = { studio: format({ tab, params }), game: game ? game.path : null, ...(copy ? { copyOf: copy.game, [copy.kind]: copy.name } : {}) };
+    state.context = { text: `The person is in Journeyman Studio: ${tab.title}${game ? ` of ${game.name} (${game.path})` : ""}.` +
+      (copy ? ` That's the ${copy.kind} ${copy.name} of the game at ${copy.game}: changes go to the ${copy.kind}, not the game.` : ""), data: where };
     const ctx = {
-      host, kit, params, game, games: g, go, act, current: tab.id, busy: state.pending !== null, visit: state.visit, nav: state.nav,
+      host, kit, params, game, copy, games: g, go, act, current: tab.id, busy: state.pending !== null, visit: state.visit, nav: state.nav,
       call: (name, args) => host.callTool(name, args),
       say: (text) => { state.notice = text; render(); },
       has: (id) => tabs.some((t) => t.id === id),
@@ -439,12 +450,22 @@ const studioTabs = [];
         el("div", { class: "brand" },
           el("svg:svg", { class: "mark", viewBox: "0 0 20 20", fill: "none", stroke: "currentColor", "stroke-width": "1.33", "aria-hidden": "true" },
             el("svg:circle", { cx: "10", cy: "10", r: "5.6" }), el("svg:path", { d: "M10 1.8 11.6 8.4 18.2 10 11.6 11.6 10 18.2 8.4 11.6 1.8 10 8.4 8.4Z" })),
-          el("span", { class: "game-name", title: game ? game.path : "Journeyman Studio" }, game ? game.name : "Journeyman")),
+          el("span", { class: "game-name", title: game ? game.path : "Journeyman Studio" }, game ? game.name : "Journeyman"),
+          copy ? el("span", { class: "badge", title: `The ${copy.kind} ${copy.name}` }, copy.name) : null),
         tabBar(tab, game),
         el("div", { class: "status", role: "status", title: state.notice }, g.cached && !state.notice ? "Updating…" : state.notice)),
       el("div", { class: "main" },
         ...(host.outdated() ? [el("div", { class: "update", role: "note" },
           "This ChatGPT is older than Journeyman's pages need (26.928.20710): update it for forms, attachments and the file viewer.")] : []),
+        // Beside the chat (picture-in-picture): no tabs; the way back is always here.
+        host.displayMode === "pip" ? el("div", { class: "pipbar" }, el("span", { class: "meta" }, tab.title), el("span", { class: "spacer" }),
+          el("button", { "data-key": "pip-back", onclick: () => host.requestDisplayMode((host.displayModes || []).includes("fullscreen") ? "fullscreen" : "inline").catch(() => {}) }, "Back to Studio")) : null,
+        copy && host.displayMode !== "pip" ? el("div", { class: "copybar", role: "note" },
+          kit.icon(copy.kind === "sandbox" ? "M6 2h4M6.5 2v4L3 13h10L9.5 6V2M5 10h6" : "M8 2v4M8 6l-4.5 4v4M8 6l4.5 4v4"),
+          el("span", {}, `Working in ${copy.kind} `, el("b", {}, copy.name), `: changes go here, not to the game.`), el("span", { class: "spacer" }),
+          el("button", { disabled: state.pending !== null, "data-key": "back-to-game", onclick: async () => {
+            if (await act("Going back to the game", "open_game", { game: copy.game }, () => "Back in the game.")) go(format({ tab: tabs.find((t) => t.id === "variants") || tab, params: {} }));
+          } }, "Back to the game")) : null,
         el("main", { class: "view" }, body)));
     if (focused) kit.focusKey(focused);
     share();

@@ -78,6 +78,7 @@ studioTabs.push((() => {
     }
     return el("section", { class: "section var-detail" },
       el("div", { class: "head" }, el("h1", {}, v.name), el("span", { class: "meta" }, `${v.branch} · ${v.subject || ""}`), el("span", { class: "spacer" }),
+        workHere(ctx, v),
         el("button", { disabled: ctx.busy, onclick: () => ctx.act("Starting the variant", "variant_play", on(ctx, { name: v.name }), () => `Variant ${v.name} is open to play.`) }, "Play"),
         twice(ctx, "merge:" + v.name, "Merge", "Merge into the game?", "Merging", "variant_merge", { name: v.name }, () => `Variant ${v.name} is merged into the game.`),
         twice(ctx, "drop:" + v.name, "Drop", v.changed ? `Drop? (${v.changed} uncommitted files go)` : "Drop?",
@@ -114,6 +115,12 @@ studioTabs.push((() => {
       tail ? el("pre", { class: "var-out" }, tail) : null);
   };
 
+  // Opens the copy's folder as the game: every tool (and the editor) works there
+  // until Back to the game; the Studio says so on every tab.
+  const workHere = (ctx, item) => ctx.kit.el("button", { class: "primary", disabled: ctx.busy, title: item.dir, onclick: async () => {
+    if (await ctx.act("Opening it", "open_game", { game: item.dir }, () => `Working in ${item.name}: changes go there, not to the game.`)) ctx.go(ctx.link("game"));
+  } }, "Work here");
+
   const sandboxView = (ctx, s) => {
     const { el } = ctx.kit;
     ctx.share(`The person is looking at sandbox ${s.name} of ${ctx.game.name}.`, { sandbox: s.name, dir: s.dir });
@@ -135,6 +142,7 @@ studioTabs.push((() => {
     return el("section", { class: "section var-detail" },
       el("div", { class: "head" }, el("h1", {}, s.name), el("span", { class: "badge" }, "sandbox"),
         el("span", { class: "meta" }, `expires ${new Date(s.expires * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`), el("span", { class: "spacer" }),
+        workHere(ctx, s),
         el("button", { disabled: !!(state.ran[s.name] && state.ran[s.name].running), onclick: () => check(ctx, s, "build") }, "Build"),
         el("button", { disabled: !!(state.ran[s.name] && state.ran[s.name].running), onclick: () => check(ctx, s, "test") }, "Test"),
         el("button", { disabled: ctx.busy, onclick: () => { state.draft = ""; ctx.rerender(); } }, "Keep as a variant"),
@@ -176,6 +184,7 @@ studioTabs.push((() => {
     const { kit, game } = ctx, { el } = kit;
     styled(el);
     if (!ctx.host.can("callTool")) return kit.empty("This host can't run Journeyman's tools here.");
+    if (ctx.copy) return kit.empty(`This is the ${ctx.copy.kind} ${ctx.copy.name}: the game's variants and sandboxes are listed from the game. Back to the game, above, to see them.`);
     if (state.game !== game.path) state = fresh(game.path);
     if (state.asking !== String(ctx.visit)) { state.asking = String(ctx.visit); load(ctx); }
     const route = ctx.params.variant || ctx.params.sandbox ? ctx.params : null;  // /variants?variant=floaty

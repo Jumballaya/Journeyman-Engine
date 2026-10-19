@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -26,6 +27,11 @@ type Project struct {
 	Opened  int64    `json:"opened"` // unix seconds; 0: never opened
 	Scenes  []string `json:"scenes"`
 	Missing bool     `json:"missing,omitempty"` // moved or deleted since
+	// A variant's or sandbox's folder opened as a game: the game it's a copy of,
+	// which kind ("variant", "sandbox") and its name. Empty for a game's own.
+	CopyOf   string `json:"copyOf,omitempty"`
+	CopyKind string `json:"copyKind,omitempty"`
+	Copy     string `json:"copy,omitempty"`
 	// Thumb is an image of the game (its newest play or golden frame); "" if none.
 	Thumb string `json:"-"`
 }
@@ -132,6 +138,7 @@ func scan(root string, maxDepth int) ([]string, error) {
 
 func describe(e entry) Project {
 	p := Project{Name: nameOf(e.Path, e.Name), Path: e.Path, Opened: e.Opened, Scenes: []string{}}
+	p.CopyOf, p.CopyKind, p.Copy = CopyOf(e.Path) // a dropped copy too: it's its game's, not a missing game
 	man, err := manifest.LoadManifest(filepath.Join(e.Path, archive.ManifestEntryKey))
 	if err != nil {
 		p.Missing = !isGame(e.Path)
@@ -142,6 +149,58 @@ func describe(e entry) Project {
 	}
 	p.Thumb = Thumb(e.Path)
 	return p
+}
+
+// WithCopies is list as a game picker shows it: a copy (a variant's or
+// sandbox's folder) is listed under its game, so the open folder when it's a
+// copy not in list is added, and each copy's game list doesn't have.
+func WithCopies(list []Project, open string) []Project {
+	listed := func(dir string) bool { return slices.ContainsFunc(list, func(p Project) bool { return p.Path == dir }) }
+	if open != "" {
+		if open = canonical(open); !listed(open) {
+			if g, _, _ := CopyOf(open); g != "" {
+				list = append(list, describe(entry{Path: open}))
+			}
+		}
+	}
+	for i := 0; i < len(list); i++ { // a copy's game may be a copy too: a variant's sandbox
+		if g := list[i].CopyOf; g != "" && !listed(g) {
+			list = append(list, describe(entry{Path: g}))
+		}
+	}
+	return list
+}
+
+// inRepo is where dir sits in its git repository ("games/pip"), "" at its top or outside one.
+func inRepo(dir string) string {
+	c := exec.Command("git", "rev-parse", "--show-prefix")
+	c.Dir = dir
+	out, err := c.Output()
+	if err != nil {
+		return ""
+	}
+	return filepath.FromSlash(strings.TrimSuffix(strings.TrimSuffix(string(out), "\n"), "/"))
+}
+
+// CopyOf finds the game a folder is a copy of: <game>/.jm/sandboxes/<name>
+// (the game's folder copied), or <game>/.jm/variants/<name>[/<the game's
+// folder in its repository>] (a worktree). The game must be one.
+func CopyOf(dir string) (game, kind, name string) {
+	parts := strings.Split(filepath.ToSlash(filepath.Clean(dir)), "/")
+	for i := len(parts) - 3; i >= 1; i-- {
+		if parts[i] != ".jm" || (parts[i+1] != "variants" && parts[i+1] != "sandboxes") || (parts[i+1] == "sandboxes" && i+3 != len(parts)) {
+			continue
+		}
+		g := filepath.FromSlash(strings.Join(parts[:i], "/"))
+		if g == "" {
+			g = string(filepath.Separator)
+		}
+		// A variant's game sits where the game sits in its repository (vcs.GameIn), not anywhere below.
+		if isGame(g) && (parts[i+1] == "sandboxes" || filepath.Clean(dir) == filepath.Join(g, ".jm", "variants", parts[i+2], inRepo(g))) {
+			return g, map[string]string{"variants": "variant", "sandboxes": "sandbox"}[parts[i+1]], parts[i+2]
+		}
+	}
+	return "", "", ""
 }
 
 // Thumb is a picture of the game in dir: the newest play's last thumbnail, else the newest golden frame.

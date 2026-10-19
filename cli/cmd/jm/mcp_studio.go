@@ -16,7 +16,7 @@ var studioShell string
 //go:embed widget/studio/*.js
 var studioTabFiles embed.FS
 
-var studio = widget{name: "journeyman-studio", title: "Journeyman Studio", html: studioPage(), modes: []string{"fullscreen", "inline"},
+var studio = widget{name: "journeyman-studio", title: "Journeyman Studio", html: studioPage(), modes: []string{"fullscreen", "inline", "pip"},
 	description: "Journeyman Studio, beside the editor: the person's games, and the open game's scenes, plays and more in tabs."}
 
 func studioPage() string {
