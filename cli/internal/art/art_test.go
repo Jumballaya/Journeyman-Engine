@@ -137,3 +137,68 @@ func TestCheck(t *testing.T) {
 		t.Errorf("%+v", r)
 	}
 }
+
+func savePNG(t *testing.T, path string, img image.Image) {
+	t.Helper()
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	png.Encode(f, img)
+	f.Close()
+}
+
+// What breaks the locks shows wherever it's checked from: a sprite an atlas
+// lists isn't done with colours off the palette, nor with its picture gone;
+// a broken art note is an error, not no note; a palette leading out of the
+// game isn't read; tiles each keep the colours a frame.
+func TestCheckHoldsToTheLocks(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "design/Art.md", "---\ntype: art\npalette: art/p.hex\ngrid: 2\ncolors: 1\n---\n# Art\n")
+	write(t, root, "art/p.hex", "000000\nffffff\n")
+	write(t, root, "design/Characters/Kage.md", "---\ntype: character\nsprite: art/kage.aseprite\nart: done\n---\n# Kage\n")
+	write(t, root, "art/kage.aseprite", "")
+	write(t, root, "art/kage.json", `{"frames": [{"frame": {"x": 0, "y": 0, "w": 1, "h": 1}, "sourceSize": {"w": 1, "h": 1}, "duration": 100}], "meta": {"image": "kage.png"}}`)
+	write(t, root, "art/game.atlas.json", `{"sources": ["art/kage.json"]}`)
+	img := image.NewNRGBA(image.Rect(0, 0, 4, 2))
+	img.Set(0, 0, color.NRGBA{200, 0, 0, 255})
+	savePNG(t, filepath.Join(root, "art", "kage.png"), img)
+	if r := Check(root); r.Assets[0].Status != "exported" || r.Assets[0].Problems != 1 || len(r.Findings) != 1 {
+		t.Errorf("off the palette, listed: %+v", r)
+	}
+	os.Remove(filepath.Join(root, "art", "kage.png"))
+	if r := Check(root); r.Assets[0].Status == "done" || len(r.Findings) != 1 || !strings.Contains(r.Findings[0].Message, "isn't there") {
+		t.Errorf("its picture gone: %+v", r)
+	}
+
+	// Tiles: two of one colour each are fine; one of two isn't.
+	tiles := image.NewNRGBA(image.Rect(0, 0, 4, 2))
+	for x := 0; x < 4; x++ {
+		for y := 0; y < 2; y++ {
+			tiles.Set(x, y, map[bool]color.Color{true: color.Black, false: color.White}[x < 2])
+		}
+	}
+	savePNG(t, filepath.Join(root, "art", "kage.png"), tiles)
+	write(t, root, "maps/t.tsj", `{"tilewidth": 2, "tileheight": 2, "image": "../art/kage.png"}`)
+	if r := Check(root); len(r.Findings) != 0 {
+		t.Errorf("a colour a tile: %+v", r.Findings)
+	}
+	write(t, root, "maps/t.tsj", `{"tilewidth": 4, "tileheight": 2, "image": "../art/kage.png"}`)
+	if r := Check(root); len(r.Findings) != 1 || !strings.Contains(r.Findings[0].Message, "uses 2 colours") {
+		t.Errorf("two colours a tile: %+v", r.Findings)
+	}
+
+	outside := filepath.Join(t.TempDir(), "p.hex")
+	os.WriteFile(outside, []byte("000000\n"), 0o644)
+	os.Remove(filepath.Join(root, "art", "p.hex"))
+	if os.Symlink(outside, filepath.Join(root, "art", "p.hex")) == nil {
+		if r := Check(root); len(r.Palette) != 0 {
+			t.Errorf("a palette out of the game was read: %+v", r.Palette)
+		}
+	}
+
+	write(t, root, "design/Art.md", "---\ntype: art\npalette: [unclosed\n---\n# Art\n")
+	if r := Check(root); r.Bible == nil || len(r.Findings) == 0 || r.Findings[0].Level != "error" {
+		t.Errorf("a broken art note: %+v", r)
+	}
+}

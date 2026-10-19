@@ -81,11 +81,15 @@ func (s Set) Tags() map[string]Timing {
 	return out
 }
 
-// Load reads the game's art note: false when it has none.
+// Load reads the game's art note: false when it has none. design/Art.md is
+// it whatever its properties say (unreadable ones are an error, not no note).
 func Load(root string) (Bible, bool, error) {
 	path := ""
+	if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(Note))); err == nil {
+		path = Note
+	}
 	for _, n := range memory.Notes(root) {
-		if n.Type == "art" && (path == "" || n.Path == Note) {
+		if n.Type == "art" && path == "" {
 			path = n.Path
 		}
 	}
@@ -93,7 +97,7 @@ func Load(root string) (Bible, bool, error) {
 		return Bible{}, false, nil
 	}
 	b := Bible{Path: path}
-	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+	data, err := os.ReadFile(gamePath(root, path))
 	if err != nil {
 		return b, true, err
 	}
