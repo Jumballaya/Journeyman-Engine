@@ -64,6 +64,12 @@ func TestAGamesHistory(t *testing.T) {
 	if err != nil || v.Subject != "Change a b.ts, main.scene.json" || v.Author != "Journeyman" || v.Files["assets/scripts/a b.ts"] != "A" || v.Files["scenes/main.scene.json"] != "M" {
 		t.Fatalf("commit: %+v %v", v, err)
 	}
+	if c, err := Change(root, v.Hash, "assets/scripts/a b.ts"); err != nil || !strings.Contains(c, "+// new") || strings.Contains(c, "entities") {
+		t.Errorf("the version's own change (%v):\n%s", err, c)
+	}
+	if _, err := Change(root, v.Hash, "../x"); err == nil {
+		t.Error("a change out of the game")
+	}
 	log, _ := Log(root, 10)
 	if len(log) != 2 || log[1].Subject != "New game" || log[0].Hash != v.Hash || len(log[1].Files) != 2 {
 		t.Errorf("log: %+v", log)

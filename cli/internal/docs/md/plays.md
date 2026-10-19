@@ -121,6 +121,9 @@ MCP server to each one it finds (or name one: `jm setup chatgpt`). ChatGPT
 Desktop reads its MCP servers from Codex's settings (`~/.codex/config.toml`),
 so setting up one sets up both; restart ChatGPT after. The game is the folder
 the agent runs in; started elsewhere, `games` and `open_game` pick one.
+In ChatGPT Desktop, ask in **Work** (or from Journeyman Studio's composer):
+a Chat-mode conversation doesn't reach apps on your computer, so
+@Journeyman there can't call jm.
 
 **ChatGPT on the web** (the same timeline you scrub, ask about a moment from,
 and play on from): it talks to MCP servers over HTTPS, so serve jm over HTTP

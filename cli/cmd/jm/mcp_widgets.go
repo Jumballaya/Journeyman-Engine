@@ -1,9 +1,12 @@
 package main
 
 import (
+	"crypto/sha256"
 	_ "embed"
 	"encoding/base64"
+	"encoding/hex"
 	"strings"
+	"sync"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/plugin"
 )
@@ -28,8 +31,27 @@ type widget struct {
 	modes []string
 }
 
-func (w widget) appURI() string    { return "ui://widget/" + w.name + "-app.html" }
-func (w widget) legacyURI() string { return "ui://widget/" + w.name + ".html" }
+// Its URIs name the page's content: hosts keep a page by its URI (ChatGPT
+// until it restarts), so a jm with a changed page serves it at a new one.
+func (w widget) appURI() string    { return "ui://widget/" + w.name + "-" + w.stamp() + "-app.html" }
+func (w widget) legacyURI() string { return "ui://widget/" + w.name + "-" + w.stamp() + ".html" }
+
+var stamps sync.Map // a widget's name → its page's stamp
+
+func (w widget) stamp() string {
+	if s, ok := stamps.Load(w.name); ok {
+		return s.(string)
+	}
+	sum := sha256.Sum256([]byte(w.page()))
+	s, _ := stamps.LoadOrStore(w.name, hex.EncodeToString(sum[:4]))
+	return s.(string)
+}
+
+// page is w's HTML as served: the bridge, kit and version filled in.
+func (w widget) page() string {
+	page := strings.Replace(w.html, "/*__JM_BRIDGE__*/", widgetBridge+"\n"+widgetKit, 1)
+	return strings.ReplaceAll(page, "__JM_VERSION__", version)
+}
 
 // toolMeta marks a tool whose result w renders, with what the host says
 // while it runs; entrypoints (entrypoint(...)) open it from the host's UI too.
@@ -69,7 +91,7 @@ func (w widget) resources() []map[string]any {
 	var out []map[string]any
 	for _, uri := range []string{w.appURI(), w.legacyURI()} {
 		mime, meta := w.kind(uri)
-		out = append(out, map[string]any{"uri": uri, "name": strings.TrimSuffix(uri[len("ui://widget/"):], ".html"),
+		out = append(out, map[string]any{"uri": uri, "name": strings.Replace(strings.TrimSuffix(uri[len("ui://widget/"):], ".html"), "-"+w.stamp(), "", 1),
 			"title": w.title, "description": w.description, "mimeType": mime, "_meta": meta})
 	}
 	return out
@@ -81,9 +103,7 @@ func (w widget) read(uri string) (map[string]any, bool) {
 		return nil, false
 	}
 	mime, meta := w.kind(uri)
-	page := strings.Replace(w.html, "/*__JM_BRIDGE__*/", widgetBridge+"\n"+widgetKit, 1)
-	page = strings.ReplaceAll(page, "__JM_VERSION__", version)
-	return map[string]any{"uri": uri, "mimeType": mime, "_meta": meta, "text": page}, true
+	return map[string]any{"uri": uri, "mimeType": mime, "_meta": meta, "text": w.page()}, true
 }
 
 // kind is the MIME type and resource _meta of w served at uri.

@@ -5,7 +5,8 @@ const { studio, settle } = require('./studio-host.cjs');
 const listing = { structuredContent: { open: '/g/pip', games: [{ name: 'Pip', path: '/g/pip', opened: 1, scenes: [] }] } };
 const variants = { structuredContent: { variants: [{ name: 'floaty', dir: '/g/pip/.jm/variants/floaty', branch: 'variant/floaty', ahead: 2, behind: 0, changed: 1, subject: 'Floatier jump' }] },
   _meta: { 'jm/thumbs': { floaty: 'data:image/jpeg;base64,f' } } };
-const sandboxes = { structuredContent: { sandboxes: [{ name: 'sb1', dir: '/g/pip/.jm/sandboxes/sb1', made: 1, expires: 1792200000, changes: { 'scenes/main.scene.json': 'M' } }] } };
+const sandboxes = { structuredContent: { sandboxes: [{ name: 'sb1', dir: '/g/pip/.jm/sandboxes/sb1', made: 1, expires: 1792200000, changes: { 'scenes/main.scene.json': 'M' } }] },
+  _meta: { 'jm/thumbs': { sb1: 'data:image/jpeg;base64,s' } } };
 const compared = { structuredContent: { a: 'floaty', b: 'game', frame: 30, errors: ['', ''],
   changes: [{ path: 'scenes/main.scene.json', status: 'M', entities: [{ entity: 'Player', change: 'changed', changed: ['VelocityComponent'] }] }] },
   _meta: { 'jm/frames': ['data:image/jpeg;base64,a', 'data:image/jpeg;base64,b'] } };
@@ -23,6 +24,7 @@ test('variants and sandboxes are listed; the first variant is shown and is the c
   const s = await open();
   assert.match(s.app.text, /floaty\s+2 ahead · 1 uncommitted/);
   assert.match(s.app.text, /sb1\s+1 file differs/);
+  assert.ok(s.find((e) => e.tag === 'img' && e.attributes.src === 'data:image/jpeg;base64,s').length, "a sandbox's picture");
   assert.equal(s.contexts().at(-1).structuredContent.variant, 'floaty');
 });
 
@@ -35,6 +37,15 @@ test('compare shows both frames side by side and what differs', async () => {
   assert.deepEqual(s.find((e) => e.tag === 'img' && e.attributes.alt && e.attributes.alt.includes('frame 30')).map((e) => e.attributes.src),
     ['data:image/jpeg;base64,a', 'data:image/jpeg;base64,b']);
   assert.match(s.app.text, /changed Player: VelocityComponent/);
+});
+
+test("compare can replay a recorded play's inputs in both", async () => {
+  const plays = { structuredContent: { plays: [{ id: '20261015-101500', started: '2026-10-15T10:15:00Z', seconds: 75 }] } };
+  const s = await open_({ plays_list: plays });
+  s.find((e) => e.tag === 'select')[0].fire('change', { target: { value: '20261015-101500' } });
+  s.find((e) => e.tag === 'form').at(-1).fire('submit');
+  await settle(8);
+  assert.deepEqual(s.calls().find((c) => c.name === 'variant_compare').arguments, { a: 'floaty', frame: 120, play: '20261015-101500', game: '/g/pip' });
 });
 
 test('merge and drop ask first; a new variant is made from its name', async () => {
@@ -69,9 +80,40 @@ test('a sandbox is kept as a variant', async () => {
   assert.match(s.app.text, /scenes\/main\.scene\.json\s+changed/);
   s.button('Keep as a variant').fire('click');
   key(s, 'var-keep').fire('input', { target: { value: 'kept' } });
-  s.find((e) => e.tag === 'form').at(-1).fire('submit');
+  s.find((e) => e.tag === 'form' && e.all((k) => k.attributes['data-key'] === 'var-keep').length)[0].fire('submit');
   await settle(8);
   assert.deepEqual(s.calls().find((c) => c.name === 'sandbox_promote').arguments, { name: 'sb1', variant: 'kept', game: '/g/pip' });
+});
+
+test('a sandbox is compared with the game too: both frames, and its changes per entity', async () => {
+  let changes = { 'scenes/main.scene.json': 'M' };
+  const sb = () => ({ structuredContent: { sandboxes: [{ ...sandboxes.structuredContent.sandboxes[0], changes }] } });
+  const s = await open({ 'openai/deepLink': { url: '/variants?sandbox=sb1' } },
+    { sandboxes: sb, variant_compare: { ...compared, structuredContent: { ...compared.structuredContent, a: 'sb1', sandbox: true } } });
+  assert.match(s.app.text, /scenes\/main\.scene\.json\s+changed/);
+  s.find((e) => e.tag === 'form').at(-1).fire('submit');
+  await settle(8);
+  assert.deepEqual(s.calls().find((c) => c.name === 'variant_compare').arguments, { a: 'sb1', sandbox: true, frame: 120, game: '/g/pip' });
+  assert.deepEqual(s.find((e) => e.tag === 'img' && e.attributes.alt && e.attributes.alt.includes('frame 30')).map((e) => e.attributes.alt),
+    ['sb1 at frame 30', 'the game at frame 30']);
+  assert.equal(s.app.text.match(/changed Player: VelocityComponent/g).length, 1);
+  const rowShot = (key) => s.find((e) => e.attributes['data-key'] === key)[0].all((e) => e.tag === 'img')[0].attributes.src;
+  assert.equal(rowShot('sandbox:sb1'), 'data:image/jpeg;base64,a', 'its row shows the frame');
+  // Another compared then: each row keeps its own picture.
+  s.find((e) => e.attributes['data-key'] === 'variant:floaty')[0].fire('click');
+  await settle(8);
+  s.find((e) => e.tag === 'form').at(-1).fire('submit');
+  await settle(8);
+  assert.deepEqual([rowShot('variant:floaty'), rowShot('sandbox:sb1')], ['data:image/jpeg;base64,a', 'data:image/jpeg;base64,a'], 'both rows show their frames');
+  s.find((e) => e.attributes['data-key'] === 'sandbox:sb1')[0].fire('click');
+  await settle(8);
+  // Changed since: the list says so, not what Compare saw.
+  changes = { 'scenes/main.scene.json': 'M', 'new.ts': 'A' };
+  s.tab('Games').fire('click');
+  s.tab('Variants').fire('click');
+  await settle(8);
+  assert.match(s.app.text, /new\.ts\s+added/);
+  assert.doesNotMatch(s.app.text, /VelocityComponent/);
 });
 
 test('an action keeps the pick the person made after a deep link', async () => {

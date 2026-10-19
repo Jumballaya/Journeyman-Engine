@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/plugin"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
@@ -134,8 +135,8 @@ var resourceCalls = func() []struct {
 	return out
 }()
 
-// indexGame is every file of the game at root (build output, dot-folders and
-// packages left out), sorted by kind and path.
+// indexGame is every file of the game at root (build output, dot-folders,
+// packages and the agents' plugin left out), sorted by kind and path.
 func indexGame(root string) []indexEntry {
 	byPath := map[string]*indexEntry{}
 	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
@@ -144,7 +145,7 @@ func indexGame(root string) []indexEntry {
 		}
 		rel, _ := filepath.Rel(root, p)
 		rel = filepath.ToSlash(rel)
-		if d.IsDir() && rel != "." && hiddenFromAgents(rel) {
+		if d.IsDir() && rel != "." && (hiddenFromAgents(rel) || rel == "plugins/"+plugin.Name) { // the plugin: for agents, not the game
 			return filepath.SkipDir
 		}
 		// Regular files only: a link may lead out of the game.
@@ -205,7 +206,8 @@ func indexGame(root string) []indexEntry {
 				names = jsonStrings(v, nil)
 			}
 			if e.Kind == "scene" {
-				e.Detail = fmt.Sprintf("%d entities", countEntities(v))
+				n := countEntities(v)
+				e.Detail = fmt.Sprintf("%d entit%s", n, map[bool]string{true: "y", false: "ies"}[n == 1])
 			}
 		default:
 			for _, m := range quoted.FindAllStringSubmatch(string(text), -1) {

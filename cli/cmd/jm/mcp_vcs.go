@@ -20,10 +20,15 @@ func (s *mcpServer) vcsTools() []mcpTool {
 				changes := gameChanges(root)
 				return toolResult{Text: changesText(changes), Structured: map[string]any{"changes": changes}}
 			})},
-		{Name: "vcs_diff", Meta: callableMeta("", ""), Title: "The line diff", Description: "git's line diff of the open game (or one file) since the last commit or a version (jm vcs diff). Files new to git included.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "file": strArg("one file (default: the whole game)"), "from": fromArg}),
+		{Name: "vcs_diff", Meta: callableMeta("", ""), Title: "The line diff", Description: "git's line diff of the open game (or one file) since the last commit or a version (jm vcs diff), " +
+			"files new to git included; or, with of, what that one version changed.",
+			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "file": strArg("one file (default: the whole game)"), "from": fromArg,
+				"of": strArg("a version's hash from vcs_log: its own change instead")}),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				text, err := vcs.Diff(root, a.str("from"), a.str("file"))
+				if a.str("of") != "" {
+					text, err = vcs.Change(root, a.str("of"), a.str("file"))
+				}
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
@@ -32,7 +37,7 @@ func (s *mcpServer) vcsTools() []mcpTool {
 				}
 				text = clip(text, 60000)
 				// The file it's of, as asked: a page can tell a diff is the one it showed the name of.
-				return toolResult{Text: text, Structured: map[string]any{"file": a.str("file"), "diff": text}}
+				return toolResult{Text: text, Structured: map[string]any{"file": a.str("file"), "of": a.str("of"), "diff": text}}
 			})},
 		{Name: "vcs_commit", Title: "Commit", Meta: callableMeta("Committing…", "Committed"),
 			Description: "Save every change in the open game as a version (jm vcs commit), after a change that builds and plays right. " +

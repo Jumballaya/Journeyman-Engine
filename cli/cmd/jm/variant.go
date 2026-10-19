@@ -23,6 +23,7 @@ import (
 
 var variantFrom, variantPlay string
 var variantFrame int
+var variantSandbox bool
 
 var variantCmd = &cobra.Command{
 	Use:   "variant",
@@ -93,7 +94,7 @@ func init() {
 		if len(args) == 2 {
 			b = args[1]
 		}
-		cmp, err := compareVariants(nil, root, args[0], b, variantFrame, variantPlay)
+		cmp, err := compareVariants(nil, root, args[0], b, variantFrame, variantPlay, variantSandbox)
 		if err != nil {
 			return err
 		}
@@ -104,6 +105,7 @@ func init() {
 		return nil
 	})
 	c.Flags().IntVar(&variantFrame, "frame", 120, "the frame to show both at")
+	c.Flags().BoolVar(&variantSandbox, "sandbox", false, "a is a sandbox (b: the game): its files that differ from the game's now")
 	c.Flags().StringVar(&variantPlay, "play", "", "replay this recorded play's inputs in both (plays list; default: none)")
 	sub("merge <name>", "Commit what a variant has and merge it into the game", cobra.ExactArgs(1), func(w io.Writer, root string, args []string) error {
 		m, err := mergeVariant(root, args[0])
@@ -169,7 +171,7 @@ func variantsOf(root string) []variant {
 		if !e.IsDir() || vcs.Branch(dir) != branch {
 			continue // not one of ours (or half made)
 		}
-		v := variant{Name: e.Name(), Dir: dir, Branch: branch, Changed: len(vcs.Status(dir)), thumb: projects.Thumb(dir)}
+		v := variant{Name: e.Name(), Dir: dir, Branch: branch, Changed: len(vcs.Status(dir)), thumb: thumbOf(root, "variant", e.Name(), dir)}
 		v.Ahead, v.Behind = vcs.Distance(root, branch)
 		if log, _ := vcs.Log(dir, 1); len(log) > 0 {
 			v.Subject = log[0].Subject
@@ -257,6 +259,7 @@ func dropVariant(root, name string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	_ = os.Remove(compareImage(root, "variant", name)) // a new one of that name isn't this
 	return vcs.RemoveWorktree(root, filepath.Join(variantsDir(root), name), v.Branch)
 }
 
@@ -286,11 +289,16 @@ type comparison struct {
 	Frame   int          `json:"frame"`
 	Frames  [2]string    `json:"frames"` // image files
 	Errors  [2]string    `json:"errors"`
+	Sandbox bool         `json:"sandbox,omitempty"` // a is a sandbox: Changes are its files that differ from the game's now
 }
 
 func (c comparison) text() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s against %s: %d files differ.\n", c.A, c.B, len(c.Changes))
+	if c.Sandbox {
+		fmt.Fprintf(&b, "Sandbox %s differs from the game in %d files.\n", c.A, len(c.Changes))
+	} else {
+		fmt.Fprintf(&b, "%s changed %d files since it split from %s.\n", c.A, len(c.Changes), c.B)
+	}
 	b.WriteString(changesText(c.Changes))
 	for i, name := range []string{c.A, c.B} {
 		if c.Errors[i] != "" {
@@ -303,51 +311,103 @@ func (c comparison) text() string {
 }
 
 // compareVariants compares variant a with b ("game": the game itself): what
-// their last commits change and uncommitted work aside, and a frame of each.
-func compareVariants(c *toolCall, root, a, b string, frame int, play string) (comparison, error) {
-	cmp := comparison{A: a, B: b, Frame: max(frame, 1)}
-	sides := [2]struct{ dir, rev string }{}
+// a's commits changed since they split, uncommitted work aside, and a frame
+// of each. A sandbox a is compared with the game's files as they are now: it
+// is a copy of them, not a branch.
+func compareVariants(c *toolCall, root, a, b string, frame int, play string, sandbox bool) (comparison, error) {
+	cmp := comparison{A: a, B: b, Frame: max(frame, 1), Sandbox: sandbox}
+	if sandbox && b != "game" {
+		return cmp, fmt.Errorf("a sandbox is compared with the game, not %s", b)
+	}
+	sides := [2]struct{ dir, rev, kind string }{}
 	for i, name := range []string{a, b} {
+		if sandbox && i == 0 { // a sandbox may be named game
+			sb, err := findSandbox(root, name)
+			if err != nil {
+				return cmp, err
+			}
+			sides[i].dir, sides[i].kind = sb.Dir, "sandbox"
+			continue
+		}
 		if name == "game" {
-			sides[i].dir, sides[i].rev = root, "HEAD"
+			sides[i].dir, sides[i].rev, sides[i].kind = root, "HEAD", "game"
 			continue
 		}
 		v, err := findVariant(root, name)
 		if err != nil {
 			return cmp, err
 		}
-		sides[i].dir, sides[i].rev = v.Dir, "refs/heads/"+v.Branch
+		sides[i].dir, sides[i].rev, sides[i].kind = v.Dir, "refs/heads/"+v.Branch, "variant"
 	}
-	marks, err := vcs.Changed(root, sides[1].rev, sides[0].rev)
-	if err != nil {
-		return cmp, err
+	marks, before, after := map[string]string{}, func(string) []byte { return nil }, func(string) []byte { return nil }
+	if cmp.Sandbox {
+		marks = differences(root, sides[0].dir)
+		before = func(path string) []byte {
+			data, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+			return data
+		}
+		after = func(path string) []byte {
+			data, _ := os.ReadFile(filepath.Join(sides[0].dir, filepath.FromSlash(path)))
+			return data
+		}
+	} else {
+		var base string
+		var err error
+		if marks, base, err = vcs.Changed(root, sides[1].rev, sides[0].rev); err != nil {
+			return cmp, err
+		}
+		before = func(path string) []byte { return vcs.Show(root, base, path) }
+		after = func(path string) []byte { return vcs.Show(root, sides[0].rev, path) }
 	}
 	cmp.Changes = []fileChange{}
 	for path, mark := range marks {
 		c := fileChange{Path: path, Status: mark}
 		if strings.HasSuffix(path, ".scene.json") {
-			c.Entities = sceneChanges(vcs.Show(root, sides[1].rev, path), vcs.Show(root, sides[0].rev, path))
+			c.Entities = sceneChanges(before(path), after(path))
 		}
 		cmp.Changes = append(cmp.Changes, c)
 	}
 	sort.Slice(cmp.Changes, func(i, j int) bool { return cmp.Changes[i].Path < cmp.Changes[j].Path })
+	var err error
 	var p *plays.Play
 	if play != "" {
 		if p, err = plays.Find(root, play); err != nil {
 			return cmp, err
 		}
 	}
-	work := filepath.Join(root, ".jm", "compare") // kept for a look; the next compare replaces them
-	if err := os.MkdirAll(work, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, ".jm", "compare"), 0o755); err != nil {
 		return cmp, err
 	}
 	for i, s := range sides {
-		cmp.Frames[i], err = frameOf(c, i, s.dir, uint64(cmp.Frame), p, filepath.Join(work, []string{a, b}[i]+".png"))
+		cmp.Frames[i], err = frameOf(c, i, s.dir, uint64(cmp.Frame), p, compareImage(root, s.kind, []string{a, b}[i]))
 		if err != nil {
 			cmp.Errors[i] = err.Error()
 		}
 	}
 	return cmp, nil
+}
+
+// compareImage is where a comparison keeps a side's frame (kind: variant,
+// sandbox or game), kept for a look and as its picture till it's played; the
+// next compare of it replaces it.
+func compareImage(root, kind, name string) string {
+	file := kind + "-" + name + ".png"
+	if kind == "game" {
+		file = "game.png"
+	}
+	return filepath.Join(root, ".jm", "compare", file)
+}
+
+// thumbOf is a variant's or sandbox's picture: its newest play's, else its
+// last compare's, else a golden frame (maybe the game's, copied with it).
+func thumbOf(root, kind, name, dir string) string {
+	if thumb := projects.PlayThumb(dir); thumb != "" {
+		return thumb
+	}
+	if path := compareImage(root, kind, name); exists(path) {
+		return path
+	}
+	return projects.GoldenThumb(dir)
 }
 
 // frameOf runs a game headless (built first if it needs it) to a frame, with

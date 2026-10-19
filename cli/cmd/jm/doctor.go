@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"debug/macho"
 	"encoding/json"
@@ -264,11 +265,66 @@ func (r *doctorReport) checkInstall(self string) {
 	dir := filepath.Dir(self)
 	if onPath, err := exec.LookPath("jm"); err != nil {
 		r.problem("warning", "jm isn't on PATH", fmt.Sprintf(`export PATH=%s:"$PATH" (and add that line to your shell profile)`, shellQuote(dir)))
-	} else if !sameFile(onPath, self) {
+	} else if !sameFile(onPath, self) && !launches(onPath, self) {
 		r.problem("warning", fmt.Sprintf("PATH runs another jm first: %s, not %s", onPath, self), "remove the other one, or put "+dir+" first on PATH")
 	}
 	if _, err := resolveServerPath(); err != nil {
 		r.problem("warning", "no journeyman_server: jm export --server and dedicated servers won't work", "keep journeyman_server beside jm, as a release has it")
+	}
+}
+
+// launches says whether the program at path is a script that starts self: a
+// launcher whose first exec runs it (as jm's plugin writes them: exec 'path' "$@").
+func launches(path, self string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	head := make([]byte, 4096)
+	n, _ := io.ReadFull(f, head)
+	if !bytes.HasPrefix(head[:n], []byte("#!")) {
+		return false
+	}
+	for _, line := range strings.Split(string(head[:n]), "\n") {
+		if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "exec "); ok {
+			target, ok := execTarget(strings.TrimSpace(rest))
+			return ok && (target == self || sameFile(target, self))
+		}
+	}
+	return false
+}
+
+// execTarget is the program an exec line runs: its first word, unquoted
+// ('…' with '\” for a quote, "…", or bare).
+func execTarget(rest string) (string, bool) {
+	switch {
+	case strings.HasPrefix(rest, "'"):
+		var b strings.Builder
+		for rest != "" && rest[0] == '\'' {
+			end := strings.IndexByte(rest[1:], '\'')
+			if end < 0 {
+				return "", false
+			}
+			b.WriteString(rest[1 : 1+end])
+			rest = rest[2+end:]
+			if !strings.HasPrefix(rest, `\'`) {
+				break
+			}
+			b.WriteByte('\'')
+			rest = rest[2:]
+		}
+		return b.String(), rest == "" || rest[0] == ' ' || rest[0] == '\t'
+	case strings.HasPrefix(rest, `"`):
+		end := strings.IndexByte(rest[1:], '"')
+		if end < 0 {
+			return "", false
+		}
+		after := rest[2+end:]
+		return rest[1 : 1+end], after == "" || after[0] == ' ' || after[0] == '\t'
+	default:
+		word, _, _ := strings.Cut(rest, " ")
+		return word, word != "" && !strings.ContainsAny(word, `'"\$`) // one plain word, else unsure
 	}
 }
 

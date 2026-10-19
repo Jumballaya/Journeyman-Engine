@@ -12,7 +12,7 @@ const log = { structuredContent: { versions: [
   { hash: hash('a'), subject: 'New game', author: 'Pat', when: 1791000000, files: { '.jm.json': 'A', 'scenes/main.scene.json': 'A' } }] },
   _meta: { 'jm/thumbs': { [hash('b')]: 'data:image/jpeg;base64,b' } } };
 const diffText = 'diff --git a/x b/x\n@@ -1 +1 @@\n-old\n+new';
-const diff = (a) => ({ content: [{ type: 'text', text: diffText }], structuredContent: { file: a.file, diff: diffText } });
+const diff = (a) => ({ content: [{ type: 'text', text: diffText }], structuredContent: { file: a.file, of: a.of || '', diff: diffText } });
 const answers = { vcs_status: status, vcs_log: log, vcs_diff: diff, vcs_commit: { content: [{ type: 'text', text: '{"subject":"Add a bat"}' }] } };
 const open = async (context) => {
   const s = await studio(listing, { answers, context });
@@ -59,6 +59,17 @@ test('history has thumbnails; a version can be gone back to, or one file restore
   s.button('Go back? (changes kept in the stash)').fire('click');
   await settle(10);
   assert.deepEqual(s.calls().find((c) => c.name === 'vcs_restore').arguments, { files: ['.'], from: hash('a'), game: '/g/pip' });
+});
+
+test("a version's file opens what the version changed in it, and closes again", async () => {
+  const s = await open();
+  key(s, 'version:' + hash('b')).fire('click');
+  s.button('assets/scripts/player.ts').fire('click');
+  await settle(6);
+  assert.deepEqual(s.calls().find((c) => c.name === 'vcs_diff' && c.arguments.of).arguments, { file: 'assets/scripts/player.ts', of: hash('b'), game: '/g/pip' });
+  assert.ok(s.find((e) => e.attributes.class === 'git-add')[0].text.startsWith('+new'));
+  s.button('assets/scripts/player.ts').fire('click');
+  assert.equal(s.find((e) => e.attributes.class === 'git-add').length, 0);
 });
 
 test('a deep link with a short hash opens that version', async () => {

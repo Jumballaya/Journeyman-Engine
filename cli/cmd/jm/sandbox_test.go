@@ -252,3 +252,46 @@ func TestALinkedSandboxStoreIsLeftAlone(t *testing.T) {
 		}
 	}
 }
+
+func TestASandboxIsComparedWithTheGameAsItIsNow(t *testing.T) {
+	game := variantGame(t)
+	os.WriteFile(filepath.Join(game, "notes.md"), []byte("uncommitted"), 0o644) // the copy has it too: no difference
+	sb, err := newSandbox(game, "game", time.Hour)                              // named like the game, and still the sandbox
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(sb.Dir, "scenes/main.scene.json"), []byte(`{"entities":[{"name":"Bat","components":{}}]}`), 0o644)
+	cmp, err := compareVariants(nil, game, "game", "game", 60, "", true)
+	if err != nil || !cmp.Sandbox || jsonOf(cmp.Changes) != `[{"path":"scenes/main.scene.json","status":"M","entities":[{"entity":"Bat","change":"added"}]}]` {
+		t.Errorf("compare: %v %+v", err, cmp)
+	}
+	if compareImage(game, "sandbox", "game") == compareImage(game, "game", "game") {
+		t.Error("the sandbox game's frame and the game's are one file")
+	}
+	// Its last compare's frame is its picture till it's played; dropped, it goes too.
+	os.MkdirAll(filepath.Join(game, ".jm", "compare"), 0o755)
+	os.WriteFile(compareImage(game, "sandbox", "game"), []byte("png"), 0o644)
+	if list, _ := sandboxesOf(game); len(list) != 1 || list[0].thumb != compareImage(game, "sandbox", "game") {
+		t.Errorf("thumb: %+v", list)
+	}
+	if err := dropSandbox(game, "game"); err != nil || exists(compareImage(game, "sandbox", "game")) {
+		t.Errorf("drop: %v", err)
+	}
+	if _, err := compareVariants(nil, game, "game", "other", 60, "", true); err == nil {
+		t.Error("a sandbox compared with a variant")
+	}
+	red, err := newSandbox(game, "red", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(red.Dir, "scenes/main.scene.json"), []byte(`{"entities":[{"name":"Bat","components":{}}]}`), 0o644)
+	if _, err := newVariant(game, "red", ""); err != nil { // the same name as the sandbox: each is still itself
+		t.Fatal(err)
+	}
+	if cmp, err := compareVariants(nil, game, "red", "game", 60, "", true); err != nil || len(cmp.Changes) != 1 {
+		t.Errorf("the sandbox beside a same-named variant: %v %+v", err, cmp)
+	}
+	if cmp, err := compareVariants(nil, game, "red", "game", 60, "", false); err != nil || cmp.Sandbox || len(cmp.Changes) != 0 {
+		t.Errorf("the variant beside a same-named sandbox: %v %+v", err, cmp)
+	}
+}

@@ -21,14 +21,17 @@ func (s *mcpServer) sandboxTools() []mcpTool {
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				lines := []string{}
+				lines, thumbs := []string{}, map[string]string{}
 				for _, sb := range list {
 					lines = append(lines, fmt.Sprintf("%s: %s (%s)", sb.Name, sb.Dir, sb.summary()))
+					if uri := dataURI(sb.thumb, 320); uri != "" {
+						thumbs[sb.Name] = uri
+					}
 				}
 				if len(lines) == 0 {
 					lines = append(lines, "No sandboxes: sandbox_new makes one.")
 				}
-				return toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"sandboxes": list}}
+				return toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"sandboxes": list}, Meta: map[string]any{"jm/thumbs": thumbs}}
 			})},
 		{Name: "sandbox_new", Meta: callableMeta("Making a sandbox…", "The sandbox is made"), Title: "Make a sandbox",
 			Description: "Before an experiment you may throw away (a risky refactor, a tuning sweep, trying a library): copy the game as it is now into a sandbox. " +

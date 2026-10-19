@@ -87,29 +87,34 @@ func Distance(root, branch string) (ahead, behind int) {
 	return ahead, behind
 }
 
-// Changed is the game's files that differ between two versions (revs or
-// branches), by Status's marks.
-func Changed(root, a, b string) (map[string]string, error) {
+// Changed is the game's files that version b (a rev or branch) changed
+// since it and a split, by Status's marks, and the commit they split at:
+// what a changed meanwhile isn't b's doing.
+func Changed(root, a, b string) (marks map[string]string, base string, err error) {
 	ha, err := version(root, a)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	hb, err := version(root, b)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	out, err := git(root, "diff", "--no-renames", "--relative", "--name-status", "-z", ha, hb, "--", ".")
+	if base, err = git(root, "merge-base", ha, hb); err != nil {
+		return nil, "", fmt.Errorf("%s and %s share no history", a, b)
+	}
+	base = strings.TrimSpace(base)
+	out, err := git(root, "diff", "--no-renames", "--relative", "--name-status", "-z", base, hb, "--", ".")
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	marks := map[string]string{}
+	marks = map[string]string{}
 	f := strings.Split(out, "\x00")
 	for i := 0; i+1 < len(f); i += 2 {
 		if f[i] != "" {
 			marks[f[i+1]] = f[i][:1]
 		}
 	}
-	return marks, nil
+	return marks, base, nil
 }
 
 // Merge brings branch into the game's branch as a merge commit. One that
@@ -176,6 +181,6 @@ func Merge(root, branch, message string) (Version, error) {
 		return Version{}, fmt.Errorf("the game already has everything %s has", branch)
 	}
 	// Not Log: a log of the game's paths leaves merge commits out.
-	files, err := Changed(root, "HEAD^1", "HEAD")
+	files, _, err := Changed(root, "HEAD^1", "HEAD") // HEAD^1 is where they split
 	return Version{Hash: hash, Subject: message, Files: files}, err
 }

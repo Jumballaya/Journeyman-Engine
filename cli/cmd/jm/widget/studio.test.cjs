@@ -23,6 +23,18 @@ test('with no game open the Studio starts on the games; the game tabs wait for o
   assert.equal(tab('Overview').disabled, true);
 });
 
+test('games named alike say where they are', async () => {
+  const two = listing('');
+  two.structuredContent.games.push({ name: 'Neon Vow', path: '/old/g/neon/', opened: 0, scenes: [] },
+    { name: 'Tetris', path: 'C:\\g\\tetris-2', opened: 0, scenes: [] });
+  const { app } = await studio(two);
+  assert.match(app.text, /Neon Vow \/g\/neon · opened just now/);
+  assert.match(app.text, /Neon Vow old\/g\/neon · never opened/);
+  assert.match(app.text, /Tetris tetris · never opened/);
+  assert.match(app.text, /Tetris tetris-2 · never opened/);
+  assert.match(app.text, /Gone missing/);
+});
+
 test('the tabs go by group, and Alt+number follows the order shown; File shows only with no game or while open', async () => {
   const s = await studio(listing('/g/neon'), { answers: { plays_list: plays } });
   const titles = () => s.find((e) => e.attributes.role === 'tab').map((e) => e.text.trim());

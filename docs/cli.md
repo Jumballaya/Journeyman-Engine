@@ -1243,6 +1243,7 @@ Usage: jm variant compare <a> [b] [flags]
 Flags:
       --frame int     the frame to show both at (default 120)
       --play string   replay this recorded play's inputs in both (plays list; default: none)
+      --sandbox       a is a sandbox (b: the game): its files that differ from the game's now
 ```
 
 ## jm variant drop

@@ -152,6 +152,61 @@ test('ask about the picked entity: titled, in the draft or a new chat', async ()
   assert.deepEqual(m._meta['openai/message'], { target: 'new', send: false });
 });
 
+test('Rendered shows the scene as the engine draws it beside its layout, or why it couldn\'t, and hides it again', async () => {
+  const drawn = { content: [], _meta: { 'jm/image': 'data:image/jpeg;base64,x' } };
+  const { find, of } = await scenePage({ answers: { scene_render: drawn } });
+  pick(find, 'Rendered');
+  await settle();
+  // The file the host opened is drawn in its own game.
+  assert.deepEqual(plain(of('tools/call').find((m) => m.params.name === 'scene_render').params.arguments), { file });
+  assert.equal(find((e) => e.tag === 'img')[0].attributes.src, 'data:image/jpeg;base64,x');
+  pick(find, 'Rendered');
+  assert.equal(find((e) => e.tag === 'img').length, 0);
+  const agents = await scenePage({ input: null, answers: { scene_render: drawn } });
+  pick(agents.find, 'Rendered');
+  await settle();
+  assert.deepEqual(plain(agents.of('tools/call').find((m) => m.params.name === 'scene_render').params.arguments), { scene: 'scenes/level.scene.json' });
+  // Another scene shown before it's drawn: the drawing isn't put under it.
+  let finish;
+  const slow = await scenePage({ answers: { scene_render: () => new Promise((f) => { finish = f; }) } });
+  pick(slow.find, 'Rendered');
+  await settle();
+  slow.fromHost('ui/notifications/tool-result', laid(30));
+  await settle();
+  finish(drawn);
+  await settle();
+  assert.equal(slow.find((e) => e.tag === 'img').length, 0);
+  const failed = await scenePage({ answers: { scene_render: { isError: true, content: [{ type: 'text', text: 'the build failed' }] } } });
+  pick(failed.find, 'Rendered');
+  await settle();
+  assert.match(failed.app.text, /the build failed/);
+});
+
+test('the screen as the game starts frames the layout: a lone small entity stays small', async () => {
+  const { find, fromHost } = await scenePage();
+  const r = laid(10);
+  r.structuredContent.screen = { x: 0, y: 0, w: 1280, h: 720 };
+  fromHost('ui/notifications/tool-result', r);
+  await settle();
+  const screen = find((e) => e.attributes.class === 'screen')[0];
+  assert.deepEqual([screen.attributes.x, screen.attributes.y, screen.attributes.width, screen.attributes.height], [-640, -360, 1280, 720]);
+  const svg = find((e) => e.tag === 'svg')[0];
+  assert.match(svg.attributes.viewBox, /^-691\.2 -411\.2 1382\.4 822\.4$/);
+  assert.equal(svg.attributes.style, 'width: 100%');  // a screen fits the view
+});
+
+test('a level 50 screens long opens on its screen, and its points stay big enough to pick', async () => {
+  const { find, fromHost } = await scenePage();
+  const r = laid(64000);
+  r.structuredContent.screen = { x: 0, y: 0, w: 1280, h: 720 };
+  fromHost('ui/notifications/tool-result', r);
+  await settle();
+  const svg = find((e) => e.tag === 'svg')[0];
+  assert.match(svg.attributes.viewBox, /^-691\.2 -411\.2 /);  // the margin is the screen's, not 4% of the level
+  assert.equal(svg.attributes.style, 'width: 4683%');  // (640 + 64000 + 2 × 51.2) / 1382.4
+  assert.equal(find((e) => e.tag === 'circle')[0].attributes.r, 4 * 1382.4 / 640);  // 4 px in a 640 px view
+});
+
 test('each field is named for assistive tech: its label points at it, a vector\'s values by axis', async () => {
   const { find } = await scenePage({ answers: {
     'resources/read': { contents: [{ uri: file.resourceUri, text: raw, _meta: { 'openai/resource': { etag: 'v1', writable: true } } }] } } });

@@ -137,3 +137,61 @@ func TestSceneRenderTakesOnlyAScene(t *testing.T) {
 		}
 	}
 }
+
+// The screen a scene starts on: the logical size (else the window's) about the
+// first camera, its zoom applied, else about the origin.
+func TestSceneScreenIsTheGamesView(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{"config":{"window":{"width":800,"height":600},"renderer":{"logicalWidth":320,"logicalHeight":180}}}`), 0o644)
+	if s, ok := screenOf(root, nil); !ok || s["w"] != 320 || s["h"] != 180 || s["x"] != 0 {
+		t.Errorf("logical: %v %v", s, ok)
+	}
+	at := map[string]any{"position": []any{}}
+	cam := placedEntity{X: 50, Y: -10, Components: map[string]any{"CameraComponent": map[string]any{"zoom": 2.0}, "TransformComponent": at}}
+	if s, _ := screenOf(root, []placedEntity{{}, cam}); s["x"] != 50 || s["y"] != -10 || s["w"] != 160 || s["h"] != 90 {
+		t.Errorf("a camera's: %v", s)
+	}
+	// The highest priority camera is shown, on the entity it follows.
+	follow := placedEntity{X: 9, Components: map[string]any{"CameraComponent": map[string]any{"priority": 1.0, "target": "Kage"}, "TransformComponent": at}}
+	unplaced := placedEntity{Components: map[string]any{"CameraComponent": map[string]any{"priority": 5.0}}} // no transform: no camera to the engine
+	kage := placedEntity{Name: "Kage", X: 300, Y: 40, Components: map[string]any{"TransformComponent": at}}
+	if s, _ := screenOf(root, []placedEntity{cam, follow, unplaced, kage}); s["x"] != 300 || s["y"] != 40 || s["w"] != 320 {
+		t.Errorf("the shown camera's: %v", s)
+	}
+	// The first of that name only, and only if it's placed: else where the camera is.
+	if s, _ := screenOf(root, []placedEntity{follow, {Name: "Kage", X: 7}, kage}); s["x"] != 9 || s["y"] != 0 {
+		t.Errorf("an unplaced target: %v", s)
+	}
+	if s, _ := screenOf(root, []placedEntity{follow}); s["x"] != 9 {
+		t.Errorf("no target: %v", s)
+	}
+	// Kept inside the first region the target is in, else the bounds; a box narrower than the view: its middle.
+	rect := func(x0, y0, x1, y1 float64) map[string]any {
+		return map[string]any{"min": []any{x0, y0}, "max": []any{x1, y1}}
+	}
+	bounded := func(regions ...any) placedEntity {
+		return placedEntity{Components: map[string]any{"TransformComponent": at, "CameraComponent": map[string]any{"target": "Kage",
+			"bounds": rect(0, -100, 1000, 100), "regions": regions}}}
+	}
+	for _, c := range []struct {
+		cam  placedEntity
+		x, y float64
+	}{
+		{bounded(), 300, 10}, // 300 ± 160 is inside; 40 + 90 is past 100
+		{bounded(rect(250, 0, 600, 200), rect(0, 0, 1000, 200)), 410, 90}, // the first region it's in
+		{bounded(rect(500, 0, 600, 100)), 300, 10},                        // in none: the bounds
+		{bounded(rect(250, 0, 350, 100)), 300, 50},                        // narrower than the view: its middle
+	} {
+		if s, _ := screenOf(root, []placedEntity{c.cam, kage}); s["x"] != c.x || s["y"] != c.y {
+			t.Errorf("bounded %v: %v, want %v, %v", c.cam.Components["CameraComponent"], s, c.x, c.y)
+		}
+	}
+	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{"config":{"window":{"width":800,"height":600},"renderer":{"logicalWidth":320}}}`), 0o644)
+	if s, _ := screenOf(root, nil); s["w"] != 320 || s["h"] != 600 {
+		t.Errorf("by axis: %v", s)
+	}
+	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{}`), 0o644)
+	if _, ok := screenOf(root, nil); ok {
+		t.Error("no size, a screen")
+	}
+}

@@ -59,7 +59,9 @@ const kit = (() => {
   };
 
   // A tree of { id, label, meta?, children? }: click or Enter picks, ←/→
-  // fold and unfold, ↑/↓ move. folded: a Set of ids the caller keeps.
+  // fold and unfold, ↑/↓ move. folded: a Set of ids the caller keeps. A row
+  // with children onPick returns false for (a folder, not a thing to pick)
+  // folds or unfolds instead.
   const tree = ({ items, selected, folded = new Set(), onPick, label = "Tree" }) => {
     const root = el("div", { class: "tree", role: "tree", "aria-label": label });
     const rows = [];
@@ -74,7 +76,7 @@ const kit = (() => {
           const row = el("button", { class: "row" + (item.id === selected ? " on" : ""), role: "treeitem", "data-key": "tree:" + item.id,
             "aria-selected": item.id === selected ? "true" : "false", "aria-expanded": kids ? String(!!open) : undefined,
             style: { paddingLeft: 6 + depth * 14 + "px" }, title: item.title || item.label,
-            onclick: () => onPick && onPick(item),
+            onclick: () => { if ((!onPick || onPick(item) === false) && kids) fold(!!open); },
             onkeydown: (e) => {
               if (e.key === "ArrowLeft" && open) { e.preventDefault(); fold(true); }
               else if (e.key === "ArrowRight" && kids && !open) { e.preventDefault(); fold(false); }

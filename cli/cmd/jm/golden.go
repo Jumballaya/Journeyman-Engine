@@ -113,15 +113,15 @@ func windowSize(man manifest.GameManifest) (int, int) {
 	return width, height
 }
 
-// captureFrames runs the built game (in build/) headless up to the last of
+// captureFrames runs the built game in folder game (its build/) headless up to the last of
 // frames, saving each as work/frames/frame_<n>.png; env: more JM_* variables.
-func captureFrames(ctx context.Context, engine, work string, frames []int, env ...string) error {
+func captureFrames(ctx context.Context, engine, game, work string, frames []int, env ...string) error {
 	list := make([]string, len(frames))
 	for i, f := range frames {
 		list[i] = fmt.Sprint(f)
 	}
 	run := exec.CommandContext(ctx, engine, ".")
-	run.Dir = "build"
+	run.Dir = filepath.Join(game, "build")
 	run.Env = append(append(os.Environ(), "JM_HEADLESS=1", "JM_STRICT=1",
 		"JM_EXIT_AFTER_FRAMES="+fmt.Sprint(slices.Max(frames)+1),
 		"JM_SAVE_DIR="+filepath.Join(work, "save"), "JM_CAPTURE_DIR="+filepath.Join(work, "frames"),
@@ -178,7 +178,7 @@ func checkGolden(engine, name string, width, height int) bool {
 		}
 		env = append(env, "JM_SESSION="+session)
 	}
-	if err := captureFrames(context.Background(), engine, work, spec.Frames, env...); err != nil {
+	if err := captureFrames(context.Background(), engine, ".", work, spec.Frames, env...); err != nil {
 		emit(Diagnostic{Level: "error", Category: "golden", File: specPath, Message: err.Error()})
 		return false
 	}

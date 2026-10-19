@@ -236,7 +236,7 @@ studioTabs.push((() => {
     const left = el("div", { class: "pane" }, el("div", { class: "head" }, searchBox(ctx)),
       state.found ? kit.section(`Search: ${state.found.text}`, results(ctx)) : null,
       kit.section("Files", el("div", { class: "files-tree" }, kit.tree({ label: "Files", items, folded: state.folded.ids, selected: p && p.path,
-        onPick: (item) => { if (item.file) pick(ctx, item.id); } }))));
+        onPick: (item) => item.file ? pick(ctx, item.id) : false }))));
     const entry = p && listed.files.find((f) => f.path === p.path);
     const right = p
       ? el("section", { class: "section files-side" },

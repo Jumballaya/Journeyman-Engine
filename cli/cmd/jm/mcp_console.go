@@ -13,7 +13,7 @@ import (
 func (s *mcpServer) consoleTools() []mcpTool {
 	home := gamesHome()
 	return []mcpTool{{Name: "game_log", Title: "The game's log",
-		Description: "The last lines of the open game's log (its latest run: played, built or tested), each with its level, " +
+		Description: "The last lines of the open game's log (its latest run: played or tested), each with its level, " +
 			"and how many warnings and errors there are. errors: only warnings and errors.",
 		Annotations: readOnly(), Meta: callableMeta("", ""),
 		InputSchema: object(map[string]any{"lines": intArg("how many of the last lines (default 200, at most 2000)"),

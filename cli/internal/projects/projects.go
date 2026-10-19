@@ -205,12 +205,25 @@ func CopyOf(dir string) (game, kind, name string) {
 
 // Thumb is a picture of the game in dir: the newest play's last thumbnail, else the newest golden frame.
 func Thumb(dir string) string {
+	if thumb := PlayThumb(dir); thumb != "" {
+		return thumb
+	}
+	return GoldenThumb(dir)
+}
+
+// PlayThumb is the newest play's last thumbnail, or "".
+func PlayThumb(dir string) string {
 	list, _ := plays.List(dir)
 	for _, p := range list {
 		if thumbs := p.Thumbs(); len(thumbs) > 0 {
 			return thumbs[len(thumbs)-1].Path
 		}
 	}
+	return ""
+}
+
+// GoldenThumb is the newest golden frame, or "".
+func GoldenThumb(dir string) string {
 	frames, _ := filepath.Glob(filepath.Join(dir, "tests", "golden", "*", "frame_*.png"))
 	newest, newestTime := "", time.Time{}
 	for _, f := range frames {
