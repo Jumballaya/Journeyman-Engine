@@ -269,7 +269,7 @@ func TestAFormIsAnsweredWhileItsToolWaits(t *testing.T) {
 	if form["method"] != "openai/elicitation/create" {
 		t.Fatalf("not a form: %v", form)
 	}
-	io.WriteString(inW, `{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"ui://widget/journeyman-scene-app.html"}}`+"\n")
+	io.WriteString(inW, `{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"`+sceneWidget.appURI()+`"}}`+"\n")
 	if preview := next(); preview["id"] != 3.0 {
 		t.Fatalf("a preview waits for the picker: %v", preview)
 	}

@@ -311,7 +311,7 @@ func TestModernListsSayHowToCache(t *testing.T) {
 	inProject(t, map[string]string{".jm.json": `{}`, "a.scene.json": `{}`})
 	s := newMCPServer()
 	for _, body := range []string{modernBody(1, "tools/list", map[string]any{}), modernBody(2, "resources/list", map[string]any{}),
-		modernBody(3, "resources/read", map[string]any{"uri": "ui://widget/journeyman-scene-app.html"})} {
+		modernBody(3, "resources/read", map[string]any{"uri": sceneWidget.appURI()})} {
 		reply, _ := s.respond([]byte(body))
 		if m, _ := reply.Result.(map[string]any); m == nil || m["ttlMs"] != 0 || m["cacheScope"] != "private" {
 			t.Errorf("%s: %v %+v", body, reply.Result, reply.Error)

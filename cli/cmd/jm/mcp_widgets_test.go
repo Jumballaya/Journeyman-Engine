@@ -35,8 +35,8 @@ func TestMCPAdvertisesExtensionsAndIcons(t *testing.T) {
 func TestMCPWidgetsAreServedWithTheirBridge(t *testing.T) {
 	replies := mcpSession(t,
 		`{"jsonrpc":"2.0","id":1,"method":"resources/list"}`,
-		`{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"ui://widget/journeyman-plays-app.html"}}`,
-		`{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"ui://widget/journeyman-plays.html"}}`)
+		`{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"`+timeline.appURI()+`"}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"`+timeline.legacyURI()+`"}}`)
 	listed := map[string]string{}
 	for _, r := range replies[1]["result"].(map[string]any)["resources"].([]any) {
 		r := r.(map[string]any)
@@ -51,7 +51,7 @@ func TestMCPWidgetsAreServedWithTheirBridge(t *testing.T) {
 	if a, b := jsonOf(listed), jsonOf(want); a != b {
 		t.Fatalf("widgets listed: %s, want %s", a, b)
 	}
-	for id, uri := range map[float64]string{2: "ui://widget/journeyman-plays-app.html", 3: "ui://widget/journeyman-plays.html"} {
+	for id, uri := range map[float64]string{2: timeline.appURI(), 3: timeline.legacyURI()} {
 		content := replies[id]["result"].(map[string]any)["contents"].([]any)[0].(map[string]any)
 		page := content["text"].(string)
 		if !strings.Contains(page, "function jmHost(") || strings.Contains(page, "__JM_BRIDGE__") || strings.Contains(page, `"__JM_VERSION__"`) {
