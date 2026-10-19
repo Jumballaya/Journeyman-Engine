@@ -206,6 +206,9 @@ func TestALauncherIsThisJMOnlyWhenItExecsIt(t *testing.T) {
 		{"exec " + quoted + ` "$@"`, odd, true},
 		{"exec " + quoted + ` "$@"`, self, false},
 		{"exec " + self + `-old "$@"`, self, false},
+		{`exec "` + self + `"-old "$@"`, self, false},
+		{"exec '" + self + `'-old "$@"`, self, false},
+		{"exec " + self + `'' "$@"`, self, false},
 		{"# " + self + "\nexec /opt/jm \"$@\"", self, false},
 		{"exec /opt/jm " + self, self, false},
 	} {

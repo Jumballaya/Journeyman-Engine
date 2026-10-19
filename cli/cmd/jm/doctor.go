@@ -317,10 +317,14 @@ func execTarget(rest string) (string, bool) {
 		return b.String(), rest == "" || rest[0] == ' ' || rest[0] == '\t'
 	case strings.HasPrefix(rest, `"`):
 		end := strings.IndexByte(rest[1:], '"')
-		return rest[1 : 1+max(end, 0)], end >= 0
+		if end < 0 {
+			return "", false
+		}
+		after := rest[2+end:]
+		return rest[1 : 1+end], after == "" || after[0] == ' ' || after[0] == '\t'
 	default:
 		word, _, _ := strings.Cut(rest, " ")
-		return word, word != ""
+		return word, word != "" && !strings.ContainsAny(word, `'"\$`) // one plain word, else unsure
 	}
 }
 
