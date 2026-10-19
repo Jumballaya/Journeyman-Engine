@@ -178,9 +178,17 @@ studioTabs.push((() => {
     }
     const s = live.status || {};
     ctx.share(`The person is playing ${ctx.game.name}: ${s.scene}, frame ${s.frame}${s.paused ? ", paused" : ""}.`, { live: s });
-    return el("div", {}, controls(ctx, s),
-      kit.split("play", live.src ? el("img", { src: live.src, alt: "The game now", style: { width: "100%", maxHeight: "72vh", objectFit: "contain", background: "#000", borderRadius: "8px", imageRendering: "pixelated", display: "block" } })
-        : kit.empty("No picture yet."),
+    // Beside the chat (the host's picture-in-picture): the game and its controls only, as the person talks.
+    const host = ctx.host, pip = host.displayMode === "pip";
+    const canPip = host.can("displayMode") && (host.displayModes || []).includes("pip");
+    const bar = controls(ctx, s);
+    if (pip || canPip) bar.append(el("span", { class: "spacer" }), el("button", { "data-key": "pip", title: pip ? "Back to the whole Studio" : "Keep the game beside the chat while you talk",
+      onclick: () => host.requestDisplayMode(pip ? "fullscreen" : "pip").catch(() => {}) }, pip ? "Back to Studio" : "Beside the chat"));
+    const picture = live.src ? el("img", { src: live.src, alt: "The game now", style: { width: "100%", maxHeight: pip ? "none" : "72vh", objectFit: "contain", background: "#000", borderRadius: "8px", imageRendering: "pixelated", display: "block" } })
+      : kit.empty("No picture yet.");
+    if (pip) return el("div", {}, bar, picture);
+    return el("div", {}, bar,
+      kit.split("play", picture,
       el("div", { class: "pane" }, watchList(ctx, live.values || {}), profileStrip(ctx)), { ratio: 0.6 }));
   };
 

@@ -34,7 +34,9 @@ studioTabs.push((() => {
 
   const render = (ctx) => {
     const { kit } = ctx, { el } = kit;
-    const { games, open, thumbs } = ctx.games;
+    // A variant or sandbox opened to work in is its game's, not a game of its own.
+    const { open, thumbs } = ctx.games, games = ctx.games.games.filter((g) => !ctx.kit.copyOf(g.path));
+    const inCopy = ctx.kit.copyOf(open);
     const can = ctx.host.can("callTool");
     if (!games.length && can && !state.looked && !ctx.busy) { state.looked = true; Promise.resolve().then(() => find(ctx)); }
     const picked = games.find((g) => g.path === state.selected);
@@ -59,7 +61,7 @@ studioTabs.push((() => {
       games.length ? kit.grid({ label: "Your games", selected: state.selected,
         items: games.map((g) => ({ id: g.path, title: g.name || g.path, thumb: thumbs[g.path],
           meta: `${g.opened ? "opened " + kit.ago(g.opened) : "never opened"} · ${(g.scenes || []).length} scene${(g.scenes || []).length === 1 ? "" : "s"}`,
-          badges: [g.path === open && { text: "open" }, g.missing && { text: "missing", warn: true }].filter(Boolean) })),
+          badges: [g.path === open && { text: "open" }, inCopy && inCopy.game === g.path && { text: "in " + inCopy.name }, g.missing && { text: "missing", warn: true }].filter(Boolean) })),
         onPick: (item) => { state.selected = item.id; ctx.rerender(); },
         onOpen: (item) => { const g = games.find((x) => x.path === item.id); if (!g.missing && can) openHere(ctx, g); },
         actions }) : kit.empty("No games yet: make one with New game, or Find my games."));

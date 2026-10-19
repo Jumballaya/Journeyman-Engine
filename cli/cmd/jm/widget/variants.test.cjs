@@ -16,6 +16,7 @@ const open = async (context, more = {}) => {
   await settle(8);
   return s;
 };
+const open_ = (more) => open(undefined, more);
 const key = (s, k) => s.find((e) => e.attributes['data-key'] === k)[0];
 
 test('variants and sandboxes are listed; the first variant is shown and is the context', async () => {
@@ -146,4 +147,28 @@ test('a first list that fails shows its error beside the other list, or both err
   s.tab('Variants').fire('click');
   await settle(8);
   assert.match(s.app.text, /variants broke[\s\S]*sandboxes broke/);
+});
+
+test('work in a variant: every tab says so, the games fold it into its game, and Back returns', async () => {
+  let open = '/g/pip';
+  const dir = '/g/pip/.jm/variants/floaty';
+  const games = () => ({ structuredContent: { open, games: [{ name: 'Pip', path: '/g/pip', opened: 1, scenes: [] },
+    { name: 'Pip', path: dir, opened: 2, scenes: [] }] } });
+  const s = await open_({ games, open_game: (a) => { open = a.game; return { content: [{ type: 'text', text: 'Opened.' }] }; } });
+  s.button('Work here').fire('click');
+  await settle(10);
+  assert.deepEqual(s.calls().find((c) => c.name === 'open_game').arguments, { game: dir });
+  assert.match(s.app.text, /Working in variant\s+floaty\s*: changes go here, not to the game\./);
+  assert.ok(s.contexts().at(-1).structuredContent.copyOf === '/g/pip');
+  s.tab('Variants').fire('click');
+  await settle(8);
+  assert.match(s.app.text, /This is the variant floaty/);
+  s.tab('Games').fire('click');
+  await settle(8);
+  assert.match(s.app.text, /Your games 1/);
+  assert.match(s.app.text, /in floaty/);
+  s.button('Back to the game').fire('click');
+  await settle(10);
+  assert.equal(s.calls().filter((c) => c.name === 'open_game').at(-1).arguments.game, '/g/pip');
+  assert.doesNotMatch(s.app.text, /Working in variant/);
 });
