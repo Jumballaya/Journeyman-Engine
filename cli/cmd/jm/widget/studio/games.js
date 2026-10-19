@@ -32,11 +32,27 @@ studioTabs.push((() => {
   // The page's own field: a form asked from a page's call isn't shown by every host (ChatGPT's isn't).
   const startNew = (ctx) => { state.draft = ""; ctx.rerender(); ctx.kit.focusKey("new-name"); };
 
+  // Games named alike say where they are: the fewest folders at the end of
+  // their paths that tell them apart (Windows' or not), else the whole path.
+  const places = (games) => {
+    const out = {}, parts = (g) => g.path.split(/[\\/]/).filter(Boolean);
+    for (const g of games) {
+      const alike = games.filter((x) => x.name === g.name);
+      if (alike.length < 2) continue;
+      out[g.path] = g.path;
+      for (let n = 1; n <= parts(g).length; n++) {
+        const tail = (x) => parts(x).slice(-n).join("/");
+        if (alike.every((x) => x === g || tail(x) !== tail(g))) { out[g.path] = tail(g); break; }
+      }
+    }
+    return out;
+  };
+
   const render = (ctx) => {
     const { kit } = ctx, { el } = kit;
     // A variant or sandbox opened to work in is its game's, not a game of its own.
     const { open, thumbs } = ctx.games, games = ctx.games.games.filter((g) => !g.copyOf);
-    const inCopy = ctx.copy;
+    const inCopy = ctx.copy, where = places(games);
     const can = ctx.host.can("callTool");
     if (!games.length && can && !state.looked && !ctx.busy) { state.looked = true; Promise.resolve().then(() => find(ctx)); }
     const picked = games.find((g) => g.path === state.selected);
@@ -60,7 +76,7 @@ studioTabs.push((() => {
       state.draft !== null ? newGame(ctx) : null,
       games.length ? kit.grid({ label: "Your games", selected: state.selected,
         items: games.map((g) => ({ id: g.path, title: g.name || g.path, thumb: thumbs[g.path],
-          meta: `${g.opened ? "opened " + kit.ago(g.opened) : "never opened"} · ${(g.scenes || []).length} scene${(g.scenes || []).length === 1 ? "" : "s"}`,
+          meta: `${where[g.path] ? where[g.path] + " · " : ""}${g.opened ? "opened " + kit.ago(g.opened) : "never opened"} · ${(g.scenes || []).length} scene${(g.scenes || []).length === 1 ? "" : "s"}`,
           badges: [g.path === open && { text: "open" }, inCopy && inCopy.game === g.path && { text: "in " + inCopy.name }, g.missing && { text: "missing", warn: true }].filter(Boolean) })),
         onPick: (item) => { state.selected = item.id; ctx.rerender(); },
         onOpen: (item) => { const g = games.find((x) => x.path === item.id); if (!g.missing && can) openHere(ctx, g); },
