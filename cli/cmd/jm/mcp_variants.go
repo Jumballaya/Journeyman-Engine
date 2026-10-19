@@ -57,15 +57,15 @@ func (s *mcpServer) variantTools() []mcpTool {
 			})},
 		{Name: "variant_compare", Meta: callableMeta("Comparing…", "Compared"), Title: "Compare a variant",
 			Description: "A variant beside the game (or another variant): the files a's commits changed since it split from b (a scene's per entity) and a frame of each at the same moment, " +
-				"both run headless with GL, with a recorded play's inputs if given. a may be a sandbox: then the files it differs in from the game now. Show the person both frames.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "a": strArg("the variant's name, or a sandbox's (compared with the game)"), "b": strArg(`another variant, or "game" (default)`),
+				"both run headless with GL, with a recorded play's inputs if given. With sandbox: true, a is a sandbox: the files it differs in from the game now. Show the person both frames.",
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "a": strArg("the variant's name (or the sandbox's)"), "sandbox": boolArg("a is a sandbox, compared with the game"), "b": strArg(`another variant, or "game" (default)`),
 				"frame": intArg("the frame to show both at (default 120)"), "play": strArg("replay this recorded play's inputs in both (plays_list)")}, "a"),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				b := a.str("b")
 				if b == "" {
 					b = "game"
 				}
-				cmp, err := compareVariants(a.call(), root, a.str("a"), b, int(a.num("frame", 120, 1, 1e6)), a.str("play"))
+				cmp, err := compareVariants(a.call(), root, a.str("a"), b, int(a.num("frame", 120, 1, 1e6)), a.str("play"), a.flag("sandbox"))
 				if err != nil {
 					return textResult(err.Error(), true)
 				}

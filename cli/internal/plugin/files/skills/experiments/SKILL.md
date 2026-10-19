@@ -34,6 +34,8 @@ sweep, a library).
 2. `open_game` its dir to change its files, then `open_game` the game again
    and `sandbox_run` jm there, e.g. `args` `["test", "--json"]`, with a
    `timeout` in seconds.
+   `variant_compare` with `a` the sandbox and `sandbox: true` shows it beside
+   the game: the files that differ now and a frame of each.
 3. It worked: `sandbox_promote` with a `variant` name makes it a variant for
    the person to compare. It didn't: `sandbox_drop` (or let it expire).
 

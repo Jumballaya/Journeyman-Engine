@@ -84,15 +84,24 @@ test('a sandbox is kept as a variant', async () => {
 });
 
 test('a sandbox is compared with the game too: both frames, and its changes per entity', async () => {
+  let changes = { 'scenes/main.scene.json': 'M' };
+  const sb = () => ({ structuredContent: { sandboxes: [{ ...sandboxes.structuredContent.sandboxes[0], changes }] } });
   const s = await open({ 'openai/deepLink': { url: '/variants?sandbox=sb1' } },
-    { variant_compare: { ...compared, structuredContent: { ...compared.structuredContent, a: 'sb1', sandbox: true } } });
+    { sandboxes: sb, variant_compare: { ...compared, structuredContent: { ...compared.structuredContent, a: 'sb1', sandbox: true } } });
   assert.match(s.app.text, /scenes\/main\.scene\.json\s+changed/);
   s.find((e) => e.tag === 'form').at(-1).fire('submit');
   await settle(8);
-  assert.deepEqual(s.calls().find((c) => c.name === 'variant_compare').arguments, { a: 'sb1', frame: 120, game: '/g/pip' });
+  assert.deepEqual(s.calls().find((c) => c.name === 'variant_compare').arguments, { a: 'sb1', sandbox: true, frame: 120, game: '/g/pip' });
   assert.deepEqual(s.find((e) => e.tag === 'img' && e.attributes.alt && e.attributes.alt.includes('frame 30')).map((e) => e.attributes.alt),
     ['sb1 at frame 30', 'the game at frame 30']);
   assert.equal(s.app.text.match(/changed Player: VelocityComponent/g).length, 1);
+  // Changed since: the list says so, not what Compare saw.
+  changes = { 'scenes/main.scene.json': 'M', 'new.ts': 'A' };
+  s.tab('Games').fire('click');
+  s.tab('Variants').fire('click');
+  await settle(8);
+  assert.match(s.app.text, /new\.ts\s+added/);
+  assert.doesNotMatch(s.app.text, /VelocityComponent/);
 });
 
 test('an action keeps the pick the person made after a deep link', async () => {

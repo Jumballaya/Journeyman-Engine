@@ -23,6 +23,7 @@ import (
 
 var variantFrom, variantPlay string
 var variantFrame int
+var variantSandbox bool
 
 var variantCmd = &cobra.Command{
 	Use:   "variant",
@@ -93,7 +94,7 @@ func init() {
 		if len(args) == 2 {
 			b = args[1]
 		}
-		cmp, err := compareVariants(nil, root, args[0], b, variantFrame, variantPlay)
+		cmp, err := compareVariants(nil, root, args[0], b, variantFrame, variantPlay, variantSandbox)
 		if err != nil {
 			return err
 		}
@@ -104,6 +105,7 @@ func init() {
 		return nil
 	})
 	c.Flags().IntVar(&variantFrame, "frame", 120, "the frame to show both at")
+	c.Flags().BoolVar(&variantSandbox, "sandbox", false, "a is a sandbox (b: the game): its files that differ from the game's now")
 	c.Flags().StringVar(&variantPlay, "play", "", "replay this recorded play's inputs in both (plays list; default: none)")
 	sub("merge <name>", "Commit what a variant has and merge it into the game", cobra.ExactArgs(1), func(w io.Writer, root string, args []string) error {
 		m, err := mergeVariant(root, args[0])
@@ -309,23 +311,28 @@ func (c comparison) text() string {
 
 // compareVariants compares variant a with b ("game": the game itself): what
 // a's commits changed since they split, uncommitted work aside, and a frame
-// of each. A sandbox a (no variant of that name) is compared with the game's
-// files as they are now: it is a copy of them, not a branch.
-func compareVariants(c *toolCall, root, a, b string, frame int, play string) (comparison, error) {
-	cmp := comparison{A: a, B: b, Frame: max(frame, 1)}
+// of each. A sandbox a is compared with the game's files as they are now: it
+// is a copy of them, not a branch.
+func compareVariants(c *toolCall, root, a, b string, frame int, play string, sandbox bool) (comparison, error) {
+	cmp := comparison{A: a, B: b, Frame: max(frame, 1), Sandbox: sandbox}
+	if sandbox && b != "game" {
+		return cmp, fmt.Errorf("a sandbox is compared with the game, not %s", b)
+	}
 	sides := [2]struct{ dir, rev string }{}
 	for i, name := range []string{a, b} {
 		if name == "game" {
 			sides[i].dir, sides[i].rev = root, "HEAD"
 			continue
 		}
-		v, err := findVariant(root, name)
-		if err != nil && i == 0 && b == "game" {
-			if sb, sbErr := findSandbox(root, name); sbErr == nil {
-				sides[i].dir, cmp.Sandbox = sb.Dir, true
-				continue
+		if sandbox && i == 0 {
+			sb, err := findSandbox(root, name)
+			if err != nil {
+				return cmp, err
 			}
+			sides[i].dir = sb.Dir
+			continue
 		}
+		v, err := findVariant(root, name)
 		if err != nil {
 			return cmp, err
 		}

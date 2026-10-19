@@ -43,10 +43,10 @@ studioTabs.push((() => {
     await load(ctx);
   };
 
-  const compare = async (ctx, name) => {
-    const c = state.compared = { name, frame: state.frame, play: state.play, result: null };
+  const compare = async (ctx, name, kind) => {
+    const c = state.compared = { name, kind, frame: state.frame, play: state.play, result: null };
     ctx.rerender();
-    const r = await ctx.call("variant_compare", on(ctx, { a: name, frame: c.frame, ...(c.play ? { play: c.play } : {}) })).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
+    const r = await ctx.call("variant_compare", on(ctx, { a: name, ...(kind === "sandbox" ? { sandbox: true } : {}), frame: c.frame, ...(c.play ? { play: c.play } : {}) })).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
     if (state.compared === c) { c.result = r || { isError: true }; ctx.rerender(); }
   };
 
@@ -65,7 +65,7 @@ studioTabs.push((() => {
   // game at a frame. The changes are a variant's commits since it split; a
   // sandbox lists its own (comparing adds each scene's per entity).
   const comparing = (ctx, item, kind) => {
-    const { el } = ctx.kit, c = state.compared && state.compared.name === item.name ? state.compared : null;
+    const { el } = ctx.kit, c = state.compared && state.compared.name === item.name && state.compared.kind === kind ? state.compared : null;
     const frameInput = el("input", { type: "number", min: "1", "aria-label": "Frame", class: "var-frame", "data-key": "var-frame",
       oninput: (e) => { state.frame = Math.max(1, Number(e.target.value) || 1); } });
     frameInput.value = String(state.frame);
@@ -85,7 +85,7 @@ studioTabs.push((() => {
           el("figcaption", {}, `${label} · frame ${s.frame}`)))),
         kind === "sandbox" ? null : (s.changes || []).length ? changesList(el, s.changes) : el("div", { class: "meta" }, "Its commits changed no files since it split from the game."));
     }
-    const form = el("form", { class: "head", onsubmit: (e) => { e.preventDefault(); compare(ctx, item.name); } },
+    const form = el("form", { class: "head", onsubmit: (e) => { e.preventDefault(); compare(ctx, item.name, kind); } },
       el("span", { class: "meta" }, "Against the game at frame"), frameInput, playPick ? el("span", { class: "meta" }, "with") : null, playPick,
       el("button", { class: "primary", type: "submit", disabled: !!(c && !c.result) }, "Compare"));
     return { form, body, changes: c && c.result && !c.result.isError && (c.result.structuredContent || {}).changes };
@@ -140,7 +140,10 @@ studioTabs.push((() => {
   const sandboxView = (ctx, s) => {
     const { el } = ctx.kit, cmp = comparing(ctx, s, "sandbox");
     ctx.share(`The person is looking at sandbox ${s.name} of ${ctx.game.name}.`, { sandbox: s.name, dir: s.dir });
-    const changes = cmp.changes || Object.entries(s.changes || {}).sort().map(([path, status]) => ({ path, status }));
+    // Compare's changes (a scene's per entity) while the files that differ are still those.
+    const listed = Object.entries(s.changes || {}).sort().map(([path, status]) => ({ path, status }));
+    const same = cmp.changes && cmp.changes.length === listed.length && cmp.changes.every((c) => (s.changes || {})[c.path] === c.status);
+    const changes = same ? cmp.changes : listed;
     const keep = state.draft !== null
       ? el("form", { class: "head", onsubmit: (e) => {
           e.preventDefault();
