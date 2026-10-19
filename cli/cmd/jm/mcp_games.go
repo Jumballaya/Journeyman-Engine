@@ -40,7 +40,8 @@ func (s *mcpServer) gameTools() []mcpTool {
 				return toolResult{Text: fmt.Sprintf("Found %d new games.", len(added)), Structured: map[string]any{"added": added}}
 			}},
 		{Name: "new_game", Meta: callableMeta("Making the game…", "The game is made"), Description: "Make a new game in the games folder (jm init, or a copy of an example) and open it: every other tool then works on it. " +
-			"Leave the name out to let the person choose in a form (what to start from, the name, the picture's shape), where the host shows forms.",
+			"The person hasn't named it: call it without a name rather than asking first, and they choose in a form (what to start from, the name, the picture's shape); " +
+				"where the host shows no form, you're told to ask.",
 			Annotations: writes(), InputSchema: object(map[string]any{"name": strArg("the game's name, e.g. \"Neon Vow\""), "from": strArg("an example to start from (jm examples; default: an empty game)")}),
 			run: func(a toolArgs) toolResult {
 				choice := newGameChoice{name: a.str("name"), from: a.str("from")}
