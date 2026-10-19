@@ -265,6 +265,9 @@ func TestASandboxIsComparedWithTheGameAsItIsNow(t *testing.T) {
 	if err != nil || !cmp.Sandbox || jsonOf(cmp.Changes) != `[{"path":"scenes/main.scene.json","status":"M","entities":[{"entity":"Bat","change":"added"}]}]` {
 		t.Errorf("compare: %v %+v", err, cmp)
 	}
+	if compareImage("w", 0, "game") == compareImage("w", 1, "game") {
+		t.Error("the sandbox game's frame and the game's are one file")
+	}
 	if _, err := compareVariants(nil, game, "game", "other", 60, "", true); err == nil {
 		t.Error("a sandbox compared with a variant")
 	}

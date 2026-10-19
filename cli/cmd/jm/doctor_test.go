@@ -184,3 +184,33 @@ func TestDoctorSaysWhenNoAgentAppIsHere(t *testing.T) {
 		t.Errorf("all connected: %q", message)
 	}
 }
+
+func TestALauncherIsThisJMOnlyWhenItExecsIt(t *testing.T) {
+	dir := t.TempDir()
+	self := fakeProgram(t, dir, "jm", "")
+	odd := filepath.Join(dir, "it's jm")
+	os.WriteFile(odd, []byte("x"), 0o755)
+	quoted := "'" + strings.ReplaceAll(odd, "'", `'\''`) + "'" // as the plugin quotes it
+	script := func(body string) string {
+		path := filepath.Join(t.TempDir(), "jm")
+		os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755)
+		return path
+	}
+	for _, c := range []struct {
+		body, self string
+		want       bool
+	}{
+		{"exec " + self + ` "$@"`, self, true},
+		{"exec '" + self + `' "$@"`, self, true},
+		{`exec "` + self + `" "$@"`, self, true},
+		{"exec " + quoted + ` "$@"`, odd, true},
+		{"exec " + quoted + ` "$@"`, self, false},
+		{"exec " + self + `-old "$@"`, self, false},
+		{"# " + self + "\nexec /opt/jm \"$@\"", self, false},
+		{"exec /opt/jm " + self, self, false},
+	} {
+		if got := launches(script(c.body), c.self); got != c.want {
+			t.Errorf("%q runs %s: %v", c.body, c.self, got)
+		}
+	}
+}

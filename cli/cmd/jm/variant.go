@@ -379,12 +379,18 @@ func compareVariants(c *toolCall, root, a, b string, frame int, play string, san
 		return cmp, err
 	}
 	for i, s := range sides {
-		cmp.Frames[i], err = frameOf(c, i, s.dir, uint64(cmp.Frame), p, filepath.Join(work, []string{a, b}[i]+".png"))
+		cmp.Frames[i], err = frameOf(c, i, s.dir, uint64(cmp.Frame), p, compareImage(work, i, []string{a, b}[i]))
 		if err != nil {
 			cmp.Errors[i] = err.Error()
 		}
 	}
 	return cmp, nil
+}
+
+// compareImage is where side 0 (a) or 1 (b) of a comparison keeps its frame:
+// by side too, as a sandbox named game is beside the game.
+func compareImage(work string, side int, name string) string {
+	return filepath.Join(work, []string{"a", "b"}[side]+"-"+name+".png")
 }
 
 // frameOf runs a game headless (built first if it needs it) to a frame, with

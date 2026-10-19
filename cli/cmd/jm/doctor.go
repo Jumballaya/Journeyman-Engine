@@ -273,8 +273,8 @@ func (r *doctorReport) checkInstall(self string) {
 	}
 }
 
-// launches says whether the program at path is a script that starts self
-// (an install from source: ~/bin/jm running the build's jm).
+// launches says whether the program at path is a script that starts self: a
+// launcher whose first exec runs it (as jm's plugin writes them: exec 'path' "$@").
 func launches(path, self string) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -283,7 +283,45 @@ func launches(path, self string) bool {
 	defer f.Close()
 	head := make([]byte, 4096)
 	n, _ := io.ReadFull(f, head)
-	return bytes.HasPrefix(head[:n], []byte("#!")) && bytes.Contains(head[:n], []byte(self))
+	if !bytes.HasPrefix(head[:n], []byte("#!")) {
+		return false
+	}
+	for _, line := range strings.Split(string(head[:n]), "\n") {
+		if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "exec "); ok {
+			target, ok := execTarget(strings.TrimSpace(rest))
+			return ok && (target == self || sameFile(target, self))
+		}
+	}
+	return false
+}
+
+// execTarget is the program an exec line runs: its first word, unquoted
+// ('…' with '\” for a quote, "…", or bare).
+func execTarget(rest string) (string, bool) {
+	switch {
+	case strings.HasPrefix(rest, "'"):
+		var b strings.Builder
+		for rest != "" && rest[0] == '\'' {
+			end := strings.IndexByte(rest[1:], '\'')
+			if end < 0 {
+				return "", false
+			}
+			b.WriteString(rest[1 : 1+end])
+			rest = rest[2+end:]
+			if !strings.HasPrefix(rest, `\'`) {
+				break
+			}
+			b.WriteByte('\'')
+			rest = rest[2:]
+		}
+		return b.String(), rest == "" || rest[0] == ' ' || rest[0] == '\t'
+	case strings.HasPrefix(rest, `"`):
+		end := strings.IndexByte(rest[1:], '"')
+		return rest[1 : 1+max(end, 0)], end >= 0
+	default:
+		word, _, _ := strings.Cut(rest, " ")
+		return word, word != ""
+	}
 }
 
 // startFix is why a program that won't start doesn't (", ..." or "") and

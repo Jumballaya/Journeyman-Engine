@@ -175,18 +175,62 @@ func screenOf(root string, placed []placedEntity) (map[string]float64, bool) {
 	if shown == nil {
 		return s, true
 	}
+	zoom, _ := shown["zoom"].(float64)
+	if zoom <= 0 {
+		zoom = 1
+	}
+	s["w"], s["h"] = w/zoom, h/zoom
+	// As the engine starts following: on the first entity of that name, if it's
+	// placed, kept inside the first region it's in, else the bounds.
 	if name, _ := shown["target"].(string); name != "" {
 		for _, e := range placed {
-			if e.Name == name {
-				s["x"], s["y"] = e.X, e.Y
-				break
+			if e.Name != name {
+				continue
 			}
+			if _, placedSo := e.Components["TransformComponent"]; placedSo {
+				box, ok := cameraRect(shown["bounds"])
+				regions, _ := shown["regions"].([]any)
+				for _, r := range regions {
+					if rect, isRect := cameraRect(r); isRect && rect[0] <= e.X && e.X <= rect[2] && rect[1] <= e.Y && e.Y <= rect[3] {
+						box, ok = rect, true
+						break
+					}
+				}
+				s["x"], s["y"] = e.X, e.Y
+				if ok {
+					s["x"], s["y"] = keptInside(e.X, box[0], box[2], s["w"]/2), keptInside(e.Y, box[1], box[3], s["h"]/2)
+				}
+			}
+			break
 		}
 	}
-	if zoom, _ := shown["zoom"].(float64); zoom > 0 {
-		s["w"], s["h"] = w/zoom, h/zoom
-	}
 	return s, true
+}
+
+// cameraRect is a camera's {"min": [x, y], "max": [x, y]} as minX, minY, maxX,
+// maxY (corners in either order).
+func cameraRect(v any) ([4]float64, bool) {
+	m, _ := v.(map[string]any)
+	pair := func(key string) (float64, float64, bool) {
+		p, _ := m[key].([]any)
+		if len(p) != 2 {
+			return 0, 0, false
+		}
+		x, okX := p[0].(float64)
+		y, okY := p[1].(float64)
+		return x, y, okX && okY
+	}
+	ax, ay, okA := pair("min")
+	bx, by, okB := pair("max")
+	return [4]float64{min(ax, bx), min(ay, by), max(ax, bx), max(ay, by)}, okA && okB
+}
+
+// keptInside is a center keeping a view half wide inside [lo, hi] (centered if it's wider).
+func keptInside(center, lo, hi, half float64) float64 {
+	if hi-lo <= half*2 {
+		return (lo + hi) / 2
+	}
+	return max(lo+half, min(center, hi-half))
 }
 
 // scenePath is the scene a call means: the file a host opened, else a scene
