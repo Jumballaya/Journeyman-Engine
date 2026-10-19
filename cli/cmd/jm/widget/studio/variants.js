@@ -47,10 +47,14 @@ studioTabs.push((() => {
   };
 
   const compare = async (ctx, name, kind) => {
-    const c = state.compared = { name, kind, frame: state.frame, play: state.play, result: null };
+    const mine = state, c = state.compared = { name, kind, frame: state.frame, play: state.play, result: null };
     ctx.rerender();
     const r = await ctx.call("variant_compare", on(ctx, { a: name, ...(kind === "sandbox" ? { sandbox: true } : {}), frame: c.frame, ...(c.play ? { play: c.play } : {}) })).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
-    if (state.compared === c) { c.result = r || { isError: true }; ctx.rerender(); }
+    if (mine !== state) return;  // another game shown meanwhile
+    const frame = r && !r.isError && r._meta && (r._meta["jm/frames"] || [])[0];
+    if (frame) (kind === "sandbox" ? state.sandboxThumbs : state.thumbs)[name] = frame;  // its picture now, as the next list says
+    if (state.compared === c) c.result = r || { isError: true };
+    ctx.rerender();
   };
 
   // A button that asks first (ctx.confirm: in the host's modal, else pressed twice here), then runs name.
@@ -194,11 +198,6 @@ studioTabs.push((() => {
       .var-compare, .var-changes { display: grid; gap: 6px; } .var-path { font: 12px ui-monospace, Menlo, monospace; } .var-entity { padding-left: 14px; }`));
   };
 
-  // Its frame from the compare just shown, newer than the listed picture.
-  const shot = (kind, name) => {
-    const c = state.compared, r = c && c.kind === kind && c.name === name && c.result;
-    return r && !r.isError && r._meta && (r._meta["jm/frames"] || [])[0] || "";
-  };
   const row = (ctx, kind, item, thumb, meta) => {
     const { el } = ctx.kit, on = state.picked && state.picked.kind === kind && state.picked.name === item.name;
     return el("button", { class: "var-row" + (on ? " on" : ""), "data-key": `${kind}:${item.name}`, title: item.dir,
@@ -229,10 +228,10 @@ studioTabs.push((() => {
     } }, el("h1", {}, "Variants"), name, el("button", { class: "primary", type: "submit", disabled: ctx.busy }, "New variant"));
     const left = el("div", { class: "pane" },
       kit.section(`Variants · ${variants.length}`, failing("variants"), variants.length ? el("div", { class: "var-list" }, variants.map((v) =>
-        row(ctx, "variant", v, shot("variant", v.name) || state.thumbs[v.name], `${v.ahead ? v.ahead + " ahead" : "no new commits"}${v.behind ? ` · ${v.behind} behind` : ""}${v.changed ? ` · ${v.changed} uncommitted` : ""}`)))
+        row(ctx, "variant", v, state.thumbs[v.name], `${v.ahead ? v.ahead + " ahead" : "no new commits"}${v.behind ? ` · ${v.behind} behind` : ""}${v.changed ? ` · ${v.changed} uncommitted` : ""}`)))
         : state.failed.variants ? null : el("div", { class: "meta" }, "None yet: a variant tries an idea beside the game, from its last commit.")),
       state.failed.sandboxes || (state.sandboxes || []).length ? kit.section(`Sandboxes · ${(state.sandboxes || []).length}`, failing("sandboxes"),
-        el("div", { class: "var-list" }, (state.sandboxes || []).map((s) => row(ctx, "sandbox", s, shot("sandbox", s.name) || state.sandboxThumbs[s.name], `${ctx.kit.plural(Object.keys(s.changes || {}).length, "file differs", "files differ")}`)))) : null);
+        el("div", { class: "var-list" }, (state.sandboxes || []).map((s) => row(ctx, "sandbox", s, state.sandboxThumbs[s.name], `${ctx.kit.plural(Object.keys(s.changes || {}).length, "file differs", "files differ")}`)))) : null);
     const p = state.picked;
     const v = p && p.kind === "variant" && variants.find((x) => x.name === p.name);
     const s = p && p.kind === "sandbox" && (state.sandboxes || []).find((x) => x.name === p.name);

@@ -398,15 +398,16 @@ func compareImage(root, kind, name string) string {
 	return filepath.Join(root, ".jm", "compare", file)
 }
 
-// thumbOf is a variant's or sandbox's picture: its newest play's, else its last compare's.
+// thumbOf is a variant's or sandbox's picture: its newest play's, else its
+// last compare's, else a golden frame (maybe the game's, copied with it).
 func thumbOf(root, kind, name, dir string) string {
-	if thumb := projects.Thumb(dir); thumb != "" {
+	if thumb := projects.PlayThumb(dir); thumb != "" {
 		return thumb
 	}
 	if path := compareImage(root, kind, name); exists(path) {
 		return path
 	}
-	return ""
+	return projects.GoldenThumb(dir)
 }
 
 // frameOf runs a game headless (built first if it needs it) to a frame, with

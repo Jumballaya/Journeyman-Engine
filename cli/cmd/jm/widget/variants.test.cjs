@@ -97,7 +97,16 @@ test('a sandbox is compared with the game too: both frames, and its changes per 
   assert.deepEqual(s.find((e) => e.tag === 'img' && e.attributes.alt && e.attributes.alt.includes('frame 30')).map((e) => e.attributes.alt),
     ['sb1 at frame 30', 'the game at frame 30']);
   assert.equal(s.app.text.match(/changed Player: VelocityComponent/g).length, 1);
-  assert.ok(s.find((e) => e.tag === 'img' && e.attributes.src === 'data:image/jpeg;base64,a' && !e.attributes.alt.includes('frame')).length, 'its row shows the frame');
+  const rowShot = (key) => s.find((e) => e.attributes['data-key'] === key)[0].all((e) => e.tag === 'img')[0].attributes.src;
+  assert.equal(rowShot('sandbox:sb1'), 'data:image/jpeg;base64,a', 'its row shows the frame');
+  // Another compared then: each row keeps its own picture.
+  s.find((e) => e.attributes['data-key'] === 'variant:floaty')[0].fire('click');
+  await settle(8);
+  s.find((e) => e.tag === 'form').at(-1).fire('submit');
+  await settle(8);
+  assert.deepEqual([rowShot('variant:floaty'), rowShot('sandbox:sb1')], ['data:image/jpeg;base64,a', 'data:image/jpeg;base64,a'], 'both rows show their frames');
+  s.find((e) => e.attributes['data-key'] === 'sandbox:sb1')[0].fire('click');
+  await settle(8);
   // Changed since: the list says so, not what Compare saw.
   changes = { 'scenes/main.scene.json': 'M', 'new.ts': 'A' };
   s.tab('Games').fire('click');
