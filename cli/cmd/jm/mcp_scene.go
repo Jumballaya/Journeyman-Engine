@@ -164,7 +164,8 @@ func screenOf(root string, placed []placedEntity) (map[string]float64, bool) {
 	var shown map[string]any
 	best := math.Inf(-1)
 	for _, e := range placed {
-		if c, ok := e.Components["CameraComponent"].(map[string]any); ok {
+		_, placedSo := e.Components["TransformComponent"] // the engine's cameras have both
+		if c, ok := e.Components["CameraComponent"].(map[string]any); ok && placedSo {
 			if p, _ := c["priority"].(float64); p > best {
 				best, shown = p, c
 				s["x"], s["y"] = e.X, e.Y

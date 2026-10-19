@@ -146,13 +146,15 @@ func TestSceneScreenIsTheGamesView(t *testing.T) {
 	if s, ok := screenOf(root, nil); !ok || s["w"] != 320 || s["h"] != 180 || s["x"] != 0 {
 		t.Errorf("logical: %v %v", s, ok)
 	}
-	cam := placedEntity{X: 50, Y: -10, Components: map[string]any{"CameraComponent": map[string]any{"zoom": 2.0}}}
+	at := map[string]any{"position": []any{}}
+	cam := placedEntity{X: 50, Y: -10, Components: map[string]any{"CameraComponent": map[string]any{"zoom": 2.0}, "TransformComponent": at}}
 	if s, _ := screenOf(root, []placedEntity{{}, cam}); s["x"] != 50 || s["y"] != -10 || s["w"] != 160 || s["h"] != 90 {
 		t.Errorf("a camera's: %v", s)
 	}
 	// The highest priority camera is shown, on the entity it follows.
-	follow := placedEntity{X: 9, Components: map[string]any{"CameraComponent": map[string]any{"priority": 1.0, "target": "Kage"}}}
-	if s, _ := screenOf(root, []placedEntity{cam, follow, {Name: "Kage", X: 300, Y: 40}}); s["x"] != 300 || s["y"] != 40 || s["w"] != 320 {
+	follow := placedEntity{X: 9, Components: map[string]any{"CameraComponent": map[string]any{"priority": 1.0, "target": "Kage"}, "TransformComponent": at}}
+	unplaced := placedEntity{Components: map[string]any{"CameraComponent": map[string]any{"priority": 5.0}}} // no transform: no camera to the engine
+	if s, _ := screenOf(root, []placedEntity{cam, follow, unplaced, {Name: "Kage", X: 300, Y: 40}}); s["x"] != 300 || s["y"] != 40 || s["w"] != 320 {
 		t.Errorf("the shown camera's: %v", s)
 	}
 	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{"config":{"window":{"width":800,"height":600},"renderer":{"logicalWidth":320}}}`), 0o644)
