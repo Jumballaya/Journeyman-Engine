@@ -152,6 +152,21 @@ test('ask about the picked entity: titled, in the draft or a new chat', async ()
   assert.deepEqual(m._meta['openai/message'], { target: 'new', send: false });
 });
 
+test('Rendered shows the scene as the engine draws it beside its layout, or why it couldn\'t, and hides it again', async () => {
+  const drawn = { content: [], _meta: { 'jm/image': 'data:image/jpeg;base64,x' } };
+  const { find, of } = await scenePage({ answers: { scene_render: drawn } });
+  pick(find, 'Rendered');
+  await settle();
+  assert.deepEqual(plain(of('tools/call').find((m) => m.params.name === 'scene_render').params.arguments), { scene: 'scenes/level.scene.json' });
+  assert.equal(find((e) => e.tag === 'img')[0].attributes.src, 'data:image/jpeg;base64,x');
+  pick(find, 'Rendered');
+  assert.equal(find((e) => e.tag === 'img').length, 0);
+  const failed = await scenePage({ answers: { scene_render: { isError: true, content: [{ type: 'text', text: 'the build failed' }] } } });
+  pick(failed.find, 'Rendered');
+  await settle();
+  assert.match(failed.app.text, /the build failed/);
+});
+
 test('each field is named for assistive tech: its label points at it, a vector\'s values by axis', async () => {
   const { find } = await scenePage({ answers: {
     'resources/read': { contents: [{ uri: file.resourceUri, text: raw, _meta: { 'openai/resource': { etag: 'v1', writable: true } } }] } } });

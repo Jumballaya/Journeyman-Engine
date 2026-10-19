@@ -258,6 +258,23 @@ func local(path string) bool {
 	return path == "." || filepath.IsLocal(filepath.FromSlash(path))
 }
 
+// Change is git's line diff of what version rev itself changed in a file
+// (path "": the whole game); a merge's, from the game's side of it.
+func Change(root, rev, path string) (string, error) {
+	hash, err := version(root, rev)
+	if err != nil {
+		return "", err
+	}
+	spec := "."
+	if path != "" && path != "." {
+		spec = filepath.ToSlash(filepath.Clean(path))
+	}
+	if !local(spec) {
+		return "", fmt.Errorf("%s isn't in the game", path)
+	}
+	return git(root, "show", "--no-color", "--no-ext-diff", "--format=", "--diff-merges=first-parent", hash, "--", spec)
+}
+
 // Diff is git's line diff of a file (path "": the whole game) since rev
 // ("": the last commit), files new to git included.
 func Diff(root, rev, path string) (string, error) {

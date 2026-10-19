@@ -4,7 +4,7 @@
 studioTabs.push((() => {
   "use strict";
   // changes / versions: vcs_status's and vcs_log's answers. picked: { kind: "change", path, diff }
-  // or { kind: "version", hash }. confirm: the button asked once ("discard:<path>", "back:<hash>", …).
+  // or { kind: "version", hash, file?, diff? } (a file of it opened: what the version changed in it). confirm: the button asked once ("discard:<path>", "back:<hash>", …).
   const fresh = (game) => ({ game, asking: "", seq: 0, changes: null, versions: null, thumbs: {}, error: "", statusError: "", picked: null,
                              message: "", confirm: "", routed: null });
   let state = fresh(null);
@@ -38,6 +38,18 @@ studioTabs.push((() => {
     if (state.picked !== picked) return;
     const s = r && r.structuredContent;
     picked.diff = s && s.file === path ? s.diff : "Couldn't read the diff.";  // only this file's: the header names it
+    ctx.rerender();
+  };
+
+  const pickVersionFile = async (ctx, path) => {
+    const picked = state.picked;
+    if (picked.file === path) { picked.file = null; return ctx.rerender(); }  // open: closes it
+    Object.assign(picked, { file: path, diff: null });
+    ctx.rerender();
+    const r = await ctx.call("vcs_diff", on(ctx, { file: path, of: picked.hash })).catch(() => null);
+    if (state.picked !== picked || picked.file !== path) return;
+    const s = r && r.structuredContent;
+    picked.diff = s && s.file === path && s.of === picked.hash ? s.diff : "Couldn't read the diff.";
     ctx.rerender();
   };
 
@@ -121,10 +133,12 @@ studioTabs.push((() => {
         el("button", { onclick: () => ctx.host.message([ctx.host.text(`About version ${short(v.hash)} (“${v.subject}”) of ${ctx.game.name}: `)], { send: false }) }, "Ask about this")),
       el("div", { class: "meta" }, `${v.hash} · ${v.author} · ${new Date(v.when * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`),
       state.thumbs[v.hash] ? el("img", { class: "git-shot", src: state.thumbs[v.hash], alt: "The game then" }) : null,
-      el("div", { class: "git-files" }, files.map(([path, mark]) => el("div", { class: "git-file" },
-        el("span", { class: "git-path" }, path), el("span", { class: "meta" }, marks[mark] || mark),
+      el("div", { class: "git-files" }, files.map(([path, mark]) => [el("div", { class: "git-file" },
+        el("button", { class: "git-path git-open" + (p.file === path ? " on" : ""), "aria-expanded": String(p.file === path), title: "What this version changed in it",
+          onclick: () => pickVersionFile(ctx, path) }, path), el("span", { class: "meta" }, marks[mark] || mark),
         mark !== "D" ? twice(ctx, `file:${v.hash}:${path}`, "Restore", "Restore it?",
-          "Restoring", "vcs_restore", { files: [path], from: v.hash }, () => `${path} is as it was at ${short(v.hash)}.`) : null))));
+          "Restoring", "vcs_restore", { files: [path], from: v.hash }, () => `${path} is as it was at ${short(v.hash)}.`) : null),
+        p.file === path ? (p.diff === null ? el("div", { class: "meta" }, "Reading the diff…") : diffView(el, p.diff)) : null])));
   };
 
   const styled = (el) => {
@@ -146,7 +160,9 @@ studioTabs.push((() => {
       .git-add { background: color-mix(in srgb, #2f9e44 16%, transparent); } .git-del { background: color-mix(in srgb, #e03131 16%, transparent); }
       .git-shot { max-width: min(100%, 480px); max-height: 300px; justify-self: start; border-radius: var(--radius); image-rendering: pixelated; }
       .git-files { display: grid; gap: 2px; } .git-file { display: flex; gap: 8px; align-items: center; min-width: 0; }
-      .git-file .git-path { flex: 1; }`));
+      .git-file .git-path { flex: 1; } .git-open { all: unset; cursor: pointer; flex: 1; font: 12px ui-monospace, Menlo, monospace;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .git-open:hover, .git-open.on { color: var(--accent); }
+      .git-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }`));
   };
 
   const render = (ctx) => {

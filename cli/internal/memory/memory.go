@@ -224,7 +224,7 @@ func Decide(root, title, why string) (Note, error) {
 }
 
 func addToIndex(root string, index Note, title string) error {
-	if err := write(root, index.Path, addToSection(index.Text, "Relations", "- includes [["+title+"]]")); err != nil {
+	if err := write(root, index.Path, addToSection(index.Text, "Relations", "- has_part [["+title+"]]")); err != nil {
 		return fmt.Errorf("the decision is saved, but %s couldn't list it (%v): decide it again to finish", index.Path, err)
 	}
 	return nil
@@ -532,7 +532,7 @@ func index(notes ...string) string {
 	var b strings.Builder
 	b.WriteString("\n## Relations\n")
 	for _, n := range notes {
-		fmt.Fprintf(&b, "- includes [[%s]]\n", n)
+		fmt.Fprintf(&b, "- has_part [[%s]]\n", n)
 	}
 	return b.String()
 }

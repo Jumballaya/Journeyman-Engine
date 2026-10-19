@@ -74,6 +74,8 @@
   .main { min-width: 0; display: flex; flex-direction: column; }
   .view { flex: 1; padding: 18px 22px 24px; min-width: 0; }
   :root[data-mode="inline"] .view { max-height: 560px; overflow: auto; padding: 14px 16px; }
+  /* Fullscreen, ChatGPT floats its composer over the page's foot (safe area or not): room to scroll past it. */
+  :root[data-mode="fullscreen"] .view { padding-bottom: max(140px, var(--safe-bottom)); }
   h1 { font-size: 20px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
   .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
   .head input { flex: 1; min-width: 160px; }
