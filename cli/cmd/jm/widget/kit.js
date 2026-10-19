@@ -171,15 +171,8 @@ const kit = (() => {
   const nothumb = (d) => el("span", { class: "nothumb" }, icon(d));
   const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
 
-  // A variant's or sandbox's folder (<game>/.jm/variants/<name>, …/sandboxes/<name>):
-  // { game, kind: "variant" | "sandbox", name }; null for a game's own.
-  const copyOf = (path) => {
-    const m = /^(.*)[\\/]\.jm[\\/](variants|sandboxes)[\\/]([^\\/]+)[\\/]?$/.exec(path || "");
-    return m ? { game: m[1], kind: m[2] === "variants" ? "variant" : "sandbox", name: m[3] } : null;
-  };
-
   const empty = (text, ...kids) => el("div", { class: "empty" }, el("div", {}, text), kids);
   const section = (title, ...kids) => el("section", { class: "section" }, el("h2", {}, title), kids);
 
-  return { el, theme, ago, tree, grid, split, empty, section, focusKey, jsonText, icon, nothumb, plural, copyOf };
+  return { el, theme, ago, tree, grid, split, empty, section, focusKey, jsonText, icon, nothumb, plural };
 })();

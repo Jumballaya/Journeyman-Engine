@@ -35,8 +35,8 @@ studioTabs.push((() => {
   const render = (ctx) => {
     const { kit } = ctx, { el } = kit;
     // A variant or sandbox opened to work in is its game's, not a game of its own.
-    const { open, thumbs } = ctx.games, games = ctx.games.games.filter((g) => !ctx.kit.copyOf(g.path));
-    const inCopy = ctx.kit.copyOf(open);
+    const { open, thumbs } = ctx.games, games = ctx.games.games.filter((g) => !g.copyOf);
+    const inCopy = ctx.copy;
     const can = ctx.host.can("callTool");
     if (!games.length && can && !state.looked && !ctx.busy) { state.looked = true; Promise.resolve().then(() => find(ctx)); }
     const picked = games.find((g) => g.path === state.selected);

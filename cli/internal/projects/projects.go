@@ -26,6 +26,11 @@ type Project struct {
 	Opened  int64    `json:"opened"` // unix seconds; 0: never opened
 	Scenes  []string `json:"scenes"`
 	Missing bool     `json:"missing,omitempty"` // moved or deleted since
+	// A variant's or sandbox's folder opened as a game: the game it's a copy of,
+	// which kind ("variant", "sandbox") and its name. Empty for a game's own.
+	CopyOf   string `json:"copyOf,omitempty"`
+	CopyKind string `json:"copyKind,omitempty"`
+	Copy     string `json:"copy,omitempty"`
 	// Thumb is an image of the game (its newest play or golden frame); "" if none.
 	Thumb string `json:"-"`
 }
@@ -141,7 +146,28 @@ func describe(e entry) Project {
 		p.Scenes = man.Scenes
 	}
 	p.Thumb = Thumb(e.Path)
+	p.CopyOf, p.CopyKind, p.Copy = CopyOf(e.Path)
 	return p
+}
+
+// CopyOf finds the game a folder is a copy of: <game>/.jm/sandboxes/<name>
+// (the game's folder copied), or <game>/.jm/variants/<name>[/<the game's
+// folder in its repository>] (a worktree). The game must be one.
+func CopyOf(dir string) (game, kind, name string) {
+	parts := strings.Split(filepath.ToSlash(filepath.Clean(dir)), "/")
+	for i := len(parts) - 3; i >= 1; i-- {
+		if parts[i] != ".jm" || (parts[i+1] != "variants" && parts[i+1] != "sandboxes") || (parts[i+1] == "sandboxes" && i+3 != len(parts)) {
+			continue
+		}
+		g := filepath.FromSlash(strings.Join(parts[:i], "/"))
+		if g == "" {
+			g = string(filepath.Separator)
+		}
+		if isGame(g) {
+			return g, map[string]string{"variants": "variant", "sandboxes": "sandbox"}[parts[i+1]], parts[i+2]
+		}
+	}
+	return "", "", ""
 }
 
 // Thumb is a picture of the game in dir: the newest play's last thumbnail, else the newest golden frame.

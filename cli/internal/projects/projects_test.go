@@ -173,3 +173,28 @@ func TestFindGamesLooksThroughHome(t *testing.T) {
 		t.Errorf("found %v", names)
 	}
 }
+
+// A variant's or sandbox's folder says whose copy it is; a game that only sits
+// under such a path, or a sandbox's subfolder, doesn't.
+func TestCopyOf(t *testing.T) {
+	root := t.TempDir()
+	game := filepath.Join(root, "repo", "games", "pip")
+	for _, d := range []string{game, filepath.Join(game, ".jm", "sandboxes", "s"), filepath.Join(game, ".jm", "variants", "v", "games", "pip"),
+		filepath.Join(root, "archive", ".jm", "variants", "Mine")} {
+		os.MkdirAll(d, 0o755)
+		os.WriteFile(filepath.Join(d, ".jm.json"), []byte(`{}`), 0o644)
+	}
+	for dir, want := range map[string][3]string{
+		filepath.Join(game, ".jm", "sandboxes", "s"):                {game, "sandbox", "s"},
+		filepath.Join(game, ".jm", "variants", "v"):                 {game, "variant", "v"},
+		filepath.Join(game, ".jm", "variants", "v", "games", "pip"): {game, "variant", "v"},
+		filepath.Join(game, ".jm", "sandboxes", "s", "scenes"):      {},
+		filepath.Join(root, "archive", ".jm", "variants", "Mine"):   {},
+		game: {},
+	} {
+		g, kind, name := CopyOf(dir)
+		if [3]string{g, kind, name} != want {
+			t.Errorf("%s: got %q %q %q, want %q", dir, g, kind, name, want)
+		}
+	}
+}

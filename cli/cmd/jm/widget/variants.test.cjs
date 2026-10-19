@@ -153,7 +153,7 @@ test('work in a variant: every tab says so, the games fold it into its game, and
   let open = '/g/pip';
   const dir = '/g/pip/.jm/variants/floaty';
   const games = () => ({ structuredContent: { open, games: [{ name: 'Pip', path: '/g/pip', opened: 1, scenes: [] },
-    { name: 'Pip', path: dir, opened: 2, scenes: [] }] } });
+    { name: 'Pip', path: dir, opened: 2, scenes: [], copyOf: '/g/pip', copyKind: 'variant', copy: 'floaty' }] } });
   const s = await open_({ games, open_game: (a) => { open = a.game; return { content: [{ type: 'text', text: 'Opened.' }] }; } });
   s.button('Work here').fire('click');
   await settle(10);

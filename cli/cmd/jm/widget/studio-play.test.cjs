@@ -225,6 +225,8 @@ test('beside the chat: Play asks for picture-in-picture, then shows the game and
   assert.ok(s.button('Back to Studio'));
   assert.ok(s.button('Pause'));
   assert.equal(s.find((e) => e.attributes['data-key'] === 'watch-add').length, 0, 'no watch list beside the chat');
+  await s.key({ altKey: true, code: 'Digit2' });
+  assert.equal(s.current(), 'Play', 'beside the chat, the page shown stays');
   s.button('Back to Studio').fire('click');
   await settle(4);
   assert.equal(plain(s.sent.filter((m) => m.method === 'ui/request-display-mode').at(-1).params).mode, 'fullscreen');
