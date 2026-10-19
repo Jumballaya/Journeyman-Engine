@@ -169,7 +169,7 @@ func inRepo(dir string) string {
 	if err != nil {
 		return ""
 	}
-	return filepath.FromSlash(strings.TrimSuffix(strings.TrimSpace(string(out)), "/"))
+	return filepath.FromSlash(strings.TrimSuffix(strings.TrimSuffix(string(out), "\n"), "/"))
 }
 
 // CopyOf finds the game a folder is a copy of: <game>/.jm/sandboxes/<name>
