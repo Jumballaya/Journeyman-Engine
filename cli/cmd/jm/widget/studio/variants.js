@@ -194,7 +194,7 @@ studioTabs.push((() => {
     } }, el("h1", {}, "Variants"), name, el("button", { class: "primary", type: "submit", disabled: ctx.busy }, "New variant"));
     const left = el("div", { class: "pane" },
       kit.section(`Variants · ${variants.length}`, failing("variants"), variants.length ? el("div", { class: "var-list" }, variants.map((v) =>
-        row(ctx, "variant", v, state.thumbs[v.name], `${v.ahead ? v.ahead + " ahead" : "no commits yet"}${v.behind ? ` · ${v.behind} behind` : ""}${v.changed ? ` · ${v.changed} uncommitted` : ""}`)))
+        row(ctx, "variant", v, state.thumbs[v.name], `${v.ahead ? v.ahead + " ahead" : "no new commits"}${v.behind ? ` · ${v.behind} behind` : ""}${v.changed ? ` · ${v.changed} uncommitted` : ""}`)))
         : state.failed.variants ? null : el("div", { class: "meta" }, "None yet: a variant tries an idea beside the game, from its last commit.")),
       state.failed.sandboxes || (state.sandboxes || []).length ? kit.section(`Sandboxes · ${(state.sandboxes || []).length}`, failing("sandboxes"),
         el("div", { class: "var-list" }, (state.sandboxes || []).map((s) => row(ctx, "sandbox", s, null, `${ctx.kit.plural(Object.keys(s.changes || {}).length, "file differs", "files differ")}`)))) : null);
