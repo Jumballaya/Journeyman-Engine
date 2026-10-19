@@ -151,14 +151,24 @@ func describe(e entry) Project {
 	return p
 }
 
-// Copy describes a variant's or sandbox's folder as a game when it's one (the
-// open game, though not remembered); ok is false for any other folder.
-func Copy(dir string) (p Project, ok bool) {
-	dir = canonical(dir)
-	if g, _, _ := CopyOf(dir); g == "" {
-		return Project{}, false
+// WithCopies is list as a game picker shows it: a copy (a variant's or
+// sandbox's folder) is listed under its game, so the open folder when it's a
+// copy not in list is added, and each copy's game list doesn't have.
+func WithCopies(list []Project, open string) []Project {
+	listed := func(dir string) bool { return slices.ContainsFunc(list, func(p Project) bool { return p.Path == dir }) }
+	if open != "" {
+		if open = canonical(open); !listed(open) {
+			if g, _, _ := CopyOf(open); g != "" {
+				list = append(list, describe(entry{Path: open}))
+			}
+		}
 	}
-	return describe(entry{Path: dir}), true
+	for _, p := range list {
+		if p.CopyOf != "" && !listed(p.CopyOf) {
+			list = append(list, describe(entry{Path: p.CopyOf}))
+		}
+	}
+	return list
 }
 
 // inRepo is where dir sits in its git repository ("games/pip"), "" at its top or outside one.

@@ -201,7 +201,7 @@ func TestCopyOf(t *testing.T) {
 }
 
 // A copy dropped since it was opened is still its game's (not a missing game);
-// an open copy nobody remembered is described as one.
+// an open copy nobody remembered is listed, and so is its game.
 func TestCopyDescribedEvenGone(t *testing.T) {
 	game := t.TempDir()
 	os.WriteFile(filepath.Join(game, ".jm.json"), []byte(`{}`), 0o644)
@@ -212,11 +212,18 @@ func TestCopyDescribedEvenGone(t *testing.T) {
 	here := filepath.Join(game, ".jm", "variants", "v")
 	os.MkdirAll(here, 0o755)
 	os.WriteFile(filepath.Join(here, ".jm.json"), []byte(`{"name":"V"}`), 0o644)
-	if p, ok := Copy(here); !ok || p.Copy != "v" || p.Missing {
-		t.Errorf("an open variant: %+v %v", p, ok)
+	list := WithCopies(nil, here)
+	if len(list) != 2 || list[0].Copy != "v" || list[0].Missing || list[1].Path != canonical(game) || list[1].CopyOf != "" {
+		t.Errorf("an open variant, its game not remembered: %+v", list)
 	}
-	if _, ok := Copy(game); ok {
-		t.Error("a game's own folder isn't a copy")
+	if again := WithCopies(list, here); len(again) != 2 {
+		t.Errorf("listed again: %+v", again)
+	}
+	if list := WithCopies([]Project{describe(entry{Path: gone})}, game); len(list) != 2 || list[1].Path != game {
+		t.Errorf("a remembered copy's game: %+v", list)
+	}
+	if list := WithCopies(nil, game); len(list) != 0 {
+		t.Errorf("a game's own folder isn't a copy: %+v", list)
 	}
 }
 
