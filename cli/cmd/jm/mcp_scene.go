@@ -23,14 +23,16 @@ var scenePage string
 var sceneWidget = widget{name: "journeyman-scene", title: "Scene", html: scenePage, modes: []string{"fullscreen", "inline"},
 	description: "A scene of the game: its entities where they are, and an inspector to change one."}
 
+var sceneFileArg = map[string]any{"type": "object", "description": "the scene file a host opened (its file entrypoint)", "properties": map[string]any{
+	"name": map[string]any{"type": "string"}, "resourceUri": map[string]any{"type": "string"}}}
+
 func (s *mcpServer) sceneTools() []mcpTool {
 	return []mcpTool{{Name: "scene_view", Title: "Scene",
 		Description: "Shows the person a scene: its entities laid out where they are (prefabs applied), to pick one and change it. " +
 			"Gives you each entity's place, size and components.",
 		Annotations: readOnly(), InputSchema: object(map[string]any{
 			"scene": strArg("a scene file of the open game, e.g. scenes/main.scene.json"),
-			"file": map[string]any{"type": "object", "description": "the scene file a host opened (its file entrypoint)", "properties": map[string]any{
-				"name": map[string]any{"type": "string"}, "resourceUri": map[string]any{"type": "string"}}},
+			"file":  sceneFileArg,
 		}),
 		Meta: sceneWidget.toolMeta("Opening the scene…", "The scene", fileEntrypoint(".scene.json")),
 		run:  sceneView},
@@ -39,20 +41,19 @@ func (s *mcpServer) sceneTools() []mcpTool {
 				"to see a change without the person playing. Scripts run; nothing is recorded.",
 			Annotations: readOnly(), Meta: callableMeta("Rendering the scene…", "The scene"),
 			InputSchema: object(map[string]any{"scene": strArg("a scene file of the open game, e.g. scenes/main.scene.json"),
-				"frame": intArg("the frame to draw (default 2: the scene as it starts)")}, "scene"),
+				"frame": intArg("the frame to draw (default 2: the scene as it starts)"), "file": sceneFileArg}),
 			run: sceneRender}}
 }
 
 // sceneRender draws a scene in the engine (headless) and gives it as an image,
 // and to a widget as a data URI (jm/image).
+// A scene a host opened (file) is drawn in its own game, open or not.
 func sceneRender(a toolArgs) toolResult {
-	root, err := projectRoot()
-	var scene, engine string
+	var root, scene, engine string
+	path, err := scenePath(a)
 	if err == nil {
-		scene, err = projectFile(a.str("scene"))
-	}
-	if err == nil && !strings.HasSuffix(scene, ".scene.json") {
-		err = fmt.Errorf("%s isn't a scene (.scene.json)", scene)
+		root = gameRootOf(path)
+		scene, err = filepath.Rel(root, path)
 	}
 	if err == nil && buildIsStale(root) {
 		if out, failed := jmIn(a.call(), root, "build", "--json"); failed {
@@ -74,7 +75,7 @@ func sceneRender(a toolArgs) toolResult {
 	}
 	defer os.RemoveAll(work)
 	frame := int(a.num("frame", 2, 0, 3600))
-	if err := captureFrames(a.call().context(), engine, work, []int{frame}, "JM_ENTRY_SCENE="+filepath.ToSlash(scene)); err != nil {
+	if err := captureFrames(a.call().context(), engine, root, work, []int{frame}, "JM_ENTRY_SCENE="+filepath.ToSlash(scene)); err != nil {
 		return textResult(err.Error(), true)
 	}
 	png := filepath.Join(work, "frames", fmt.Sprintf("frame_%05d.png", frame))
@@ -136,7 +137,8 @@ func sceneView(a toolArgs) toolResult {
 }
 
 // screenOf is what the game shows of a scene as it starts: its logical size
-// (config.renderer, else the window's) about the first camera, else the origin.
+// (config.renderer, else the window's, by axis) about the shown camera (the
+// highest priority, on its target if it follows one), else the origin.
 func screenOf(root string, placed []placedEntity) (map[string]float64, bool) {
 	var m struct {
 		Config struct {
@@ -149,22 +151,39 @@ func screenOf(root string, placed []placedEntity) (map[string]float64, bool) {
 		return nil, false
 	}
 	w, h := m.Config.Renderer.LogicalWidth, m.Config.Renderer.LogicalHeight
-	if w <= 0 || h <= 0 {
-		w, h = m.Config.Window.Width, m.Config.Window.Height
+	if w <= 0 {
+		w = m.Config.Window.Width
+	}
+	if h <= 0 {
+		h = m.Config.Window.Height
 	}
 	if w <= 0 || h <= 0 {
 		return nil, false
 	}
 	s := map[string]float64{"x": 0, "y": 0, "w": w, "h": h}
+	var shown map[string]any
+	best := math.Inf(-1)
 	for _, e := range placed {
 		if c, ok := e.Components["CameraComponent"].(map[string]any); ok {
-			zoom, _ := c["zoom"].(float64)
-			if zoom <= 0 {
-				zoom = 1
+			if p, _ := c["priority"].(float64); p > best {
+				best, shown = p, c
+				s["x"], s["y"] = e.X, e.Y
 			}
-			s["x"], s["y"], s["w"], s["h"] = e.X, e.Y, w/zoom, h/zoom
-			break
 		}
+	}
+	if shown == nil {
+		return s, true
+	}
+	if name, _ := shown["target"].(string); name != "" {
+		for _, e := range placed {
+			if e.Name == name {
+				s["x"], s["y"] = e.X, e.Y
+				break
+			}
+		}
+	}
+	if zoom, _ := shown["zoom"].(float64); zoom > 0 {
+		s["w"], s["h"] = w/zoom, h/zoom
 	}
 	return s, true
 }

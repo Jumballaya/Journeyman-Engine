@@ -79,7 +79,8 @@
   // laid: a scene_view answer this page asked for after a save, over the
   // host's. file: the opened file as read (uri, doc, etag, writable), when the
   // host opened one. selected: an entity's where. shared: what the model has.
-  // drawn: the engine's frame of a scene (scene_render), { scene, src | "", error }; src "" while it draws.
+  // drawn: the engine's frame of the scene shown (scene_render), { of, src | "", error }; src "" while it
+  // draws; of: the scene result it's of, so another shown since drops it.
   const state = { laid: null, file: null, loading: "", selected: null, notice: "", saving: false, shared: "", drawn: null };
 
   const data = () => {
@@ -190,10 +191,11 @@
 
   // The scene as the engine draws it, beside its layout: one that's all UI or tiles shows here.
   const draw = async (s) => {
-    const drawn = state.drawn = { scene: s.scene, src: "", error: "" };
+    const drawn = state.drawn = { of: s, src: "", error: "" };
     render();
     try {
-      const r = await host.callTool("scene_render", { scene: s.scene });
+      // A file the host opened is drawn in its own game, whichever is open.
+      const r = await host.callTool("scene_render", host.input && host.input.file ? { file: host.input.file } : { scene: s.scene });
       const src = r && !r.isError && r._meta && r._meta["jm/image"];
       drawn.src = src || null;
       drawn.error = src ? "" : ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ") || "The engine drew nothing.";
@@ -201,7 +203,7 @@
     if (state.drawn === drawn) render();
   };
   const drawing = (s) => {
-    const d = state.drawn && state.drawn.scene === s.scene ? state.drawn : null;
+    const d = state.drawn && state.drawn.of === s ? state.drawn : null;
     if (!d) return null;
     if (d.src === "") return $("div", { class: "drawn none" }, "Drawing it in the engine…");
     return d.src ? $("img", { class: "drawn", src: d.src, alt: `${s.scene} as the engine draws it` }) : $("div", { class: "drawn none" }, d.error);
@@ -295,7 +297,7 @@
     if (d.loading) { app.append($("div", { class: "none" }, "Loading the scene…")); return; }
     if (!d.scene) { app.append($("div", { class: "none" }, d.said || "This answer isn't a scene.")); return; }
     const s = d.scene;
-    const shown = state.drawn && state.drawn.scene === s.scene;
+    const shown = !!state.drawn && state.drawn.of === s;
     app.append($("header", {}, $("h1", {}, s.name || s.scene), $("span", { class: "meta" }, `${s.scene}${s.game ? " · " + s.game : ""} · ${s.entities.length} ${s.entities.length === 1 ? "entity" : "entities"}`),
         host.can("callTool") ? $("span", { class: "asks" }, $("button", { "aria-pressed": String(shown), disabled: shown && state.drawn.src === "",
           onclick: () => shown ? (state.drawn = null, render()) : draw(s) }, "Rendered")) : null),

@@ -157,10 +157,25 @@ test('Rendered shows the scene as the engine draws it beside its layout, or why 
   const { find, of } = await scenePage({ answers: { scene_render: drawn } });
   pick(find, 'Rendered');
   await settle();
-  assert.deepEqual(plain(of('tools/call').find((m) => m.params.name === 'scene_render').params.arguments), { scene: 'scenes/level.scene.json' });
+  // The file the host opened is drawn in its own game.
+  assert.deepEqual(plain(of('tools/call').find((m) => m.params.name === 'scene_render').params.arguments), { file });
   assert.equal(find((e) => e.tag === 'img')[0].attributes.src, 'data:image/jpeg;base64,x');
   pick(find, 'Rendered');
   assert.equal(find((e) => e.tag === 'img').length, 0);
+  const agents = await scenePage({ input: null, answers: { scene_render: drawn } });
+  pick(agents.find, 'Rendered');
+  await settle();
+  assert.deepEqual(plain(agents.of('tools/call').find((m) => m.params.name === 'scene_render').params.arguments), { scene: 'scenes/level.scene.json' });
+  // Another scene shown before it's drawn: the drawing isn't put under it.
+  let finish;
+  const slow = await scenePage({ answers: { scene_render: () => new Promise((f) => { finish = f; }) } });
+  pick(slow.find, 'Rendered');
+  await settle();
+  slow.fromHost('ui/notifications/tool-result', laid(30));
+  await settle();
+  finish(drawn);
+  await settle();
+  assert.equal(slow.find((e) => e.tag === 'img').length, 0);
   const failed = await scenePage({ answers: { scene_render: { isError: true, content: [{ type: 'text', text: 'the build failed' }] } } });
   pick(failed.find, 'Rendered');
   await settle();

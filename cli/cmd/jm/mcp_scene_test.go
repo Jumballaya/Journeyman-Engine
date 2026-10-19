@@ -150,6 +150,15 @@ func TestSceneScreenIsTheGamesView(t *testing.T) {
 	if s, _ := screenOf(root, []placedEntity{{}, cam}); s["x"] != 50 || s["y"] != -10 || s["w"] != 160 || s["h"] != 90 {
 		t.Errorf("a camera's: %v", s)
 	}
+	// The highest priority camera is shown, on the entity it follows.
+	follow := placedEntity{X: 9, Components: map[string]any{"CameraComponent": map[string]any{"priority": 1.0, "target": "Kage"}}}
+	if s, _ := screenOf(root, []placedEntity{cam, follow, {Name: "Kage", X: 300, Y: 40}}); s["x"] != 300 || s["y"] != 40 || s["w"] != 320 {
+		t.Errorf("the shown camera's: %v", s)
+	}
+	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{"config":{"window":{"width":800,"height":600},"renderer":{"logicalWidth":320}}}`), 0o644)
+	if s, _ := screenOf(root, nil); s["w"] != 320 || s["h"] != 600 {
+		t.Errorf("by axis: %v", s)
+	}
 	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{}`), 0o644)
 	if _, ok := screenOf(root, nil); ok {
 		t.Error("no size, a screen")
