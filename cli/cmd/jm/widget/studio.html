@@ -73,7 +73,7 @@
   .empty { color: var(--muted); padding: 28px 16px; text-align: center; display: grid; gap: 10px; justify-items: center;
     border: 1px dashed var(--line); border-radius: 12px; }
   .section { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px; min-width: 0; }
-  .section + .section { margin-top: 12px; }
+  div:not(.grid):not(.pane):not(.tasks-board) > .section + .section { margin-top: 12px; }  /* stacked; a grid's gap spaces its own */
   .section h2 { font-size: 12px; font-weight: 600; color: var(--text); margin: 0 4px 8px; display: flex; gap: 6px; align-items: baseline; }
   .section > .meta { padding: 2px 4px; }
   .hero { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 16px; align-items: center; margin-bottom: 16px; }
@@ -99,7 +99,10 @@
     border-radius: 6px; min-width: 0; }
   .tree .row:hover { background: var(--panel); }
   .tree .row.on { background: var(--accent-soft); color: var(--accent); }
-  .tree .twisty { width: 12px; flex: none; color: var(--muted); font-size: 10px; }
+  .tree .twisty { width: 14px; height: 14px; flex: none; color: var(--muted); align-self: center; display: grid; place-items: center; }
+  .tree .twisty svg { width: 12px; height: 12px; transition: transform .12s; } .tree .twisty.open svg { transform: rotate(90deg); }
+  .nothumb { display: grid; place-items: center; color: var(--muted); background: var(--panel); border: 1px solid var(--line); }
+  .nothumb svg { width: 16px; height: 16px; opacity: .8; }
   .tree .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tree .meta { margin-left: auto; padding-left: 8px; font-size: 11px; white-space: nowrap; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
@@ -115,7 +118,6 @@
   .name span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .badge { font-size: 11px; padding: 0 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); flex: none; font-weight: 500; }
   .badge.idle { background: var(--raised); color: var(--muted); }
-  .grid > .section + .section { margin-top: 0; }
   .dense .grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
   .dense .thumb img { object-fit: contain; }
   .dense .name { font-size: 12px; }

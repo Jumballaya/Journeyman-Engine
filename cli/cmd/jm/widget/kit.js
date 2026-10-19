@@ -78,7 +78,7 @@ const kit = (() => {
               if (e.key === "ArrowLeft" && open) { e.preventDefault(); fold(true); }
               else if (e.key === "ArrowRight" && kids && !open) { e.preventDefault(); fold(false); }
             } },
-            el("span", { class: "twisty", onclick: (e) => { e.stopPropagation(); fold(!!open); } }, kids ? (open ? "▾" : "▸") : ""),
+            el("span", { class: "twisty" + (open ? " open" : ""), onclick: (e) => { e.stopPropagation(); fold(!!open); } }, kids ? icon("M6 4l4 4-4 4") : ""),
             el("span", { class: "label" }, item.label), item.meta ? el("span", { class: "meta" }, item.meta) : null);
           rows.push(row);
           root.append(row);
@@ -163,8 +163,15 @@ const kit = (() => {
     return JSON.stringify(v);
   };
 
+  // A 16px line icon from an SVG path (in a 16 by 16 box).
+  const icon = (d) => el("svg:svg", { viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", "stroke-width": "1.4", "stroke-linejoin": "round",
+    "stroke-linecap": "round", "aria-hidden": "true" }, el("svg:path", { d }));
+  // A picture's place when there's none: the kind's icon on a plain tile.
+  const nothumb = (d) => el("span", { class: "nothumb" }, icon(d));
+  const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
+
   const empty = (text, ...kids) => el("div", { class: "empty" }, el("div", {}, text), kids);
   const section = (title, ...kids) => el("section", { class: "section" }, el("h2", {}, title), kids);
 
-  return { el, theme, ago, tree, grid, split, empty, section, focusKey, jsonText };
+  return { el, theme, ago, tree, grid, split, empty, section, focusKey, jsonText, icon, nothumb, plural };
 })();

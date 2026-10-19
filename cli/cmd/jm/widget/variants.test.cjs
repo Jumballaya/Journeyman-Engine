@@ -10,8 +10,8 @@ const compared = { structuredContent: { a: 'floaty', b: 'game', frame: 30, error
   changes: [{ path: 'scenes/main.scene.json', status: 'M', entities: [{ entity: 'Player', change: 'changed', changed: ['VelocityComponent'] }] }] },
   _meta: { 'jm/frames': ['data:image/jpeg;base64,a', 'data:image/jpeg;base64,b'] } };
 const answers = { variants, sandboxes, variant_compare: compared };
-const open = async (context) => {
-  const s = await studio(listing, { answers, context });
+const open = async (context, more = {}) => {
+  const s = await studio(listing, { answers: { ...answers, ...more }, context });
   if (!context) s.tab('Variants').fire('click');
   await settle(8);
   return s;
@@ -21,7 +21,7 @@ const key = (s, k) => s.find((e) => e.attributes['data-key'] === k)[0];
 test('variants and sandboxes are listed; the first variant is shown and is the context', async () => {
   const s = await open();
   assert.match(s.app.text, /floaty\s+2 ahead · 1 uncommitted/);
-  assert.match(s.app.text, /sb1\s+1 files differ/);
+  assert.match(s.app.text, /sb1\s+1 file differs/);
   assert.equal(s.contexts().at(-1).structuredContent.variant, 'floaty');
 });
 
@@ -48,6 +48,19 @@ test('merge and drop ask first; a new variant is made from its name', async () =
   s.find((e) => e.tag === 'form')[0].fire('submit');
   await settle(8);
   assert.deepEqual(s.calls().find((c) => c.name === 'variant_new').arguments, { name: 'big-player', game: '/g/pip' });
+});
+
+test('a sandbox builds and tests in place: what jm said shows beside it, a failure marked', async () => {
+  const s = await open({ 'openai/deepLink': { url: '/variants?sandbox=sb1' } },
+    { sandbox_run: (args) => args.args[0] === 'build' ? { content: [{ type: 'text', text: 'built\n3 scripts, 7 scenes' }] }
+      : { isError: true, content: [{ type: 'text', text: '1 test failed: jump height' }] } });
+  s.button('Build').fire('click');
+  await settle(8);
+  assert.deepEqual(s.calls().find((c) => c.name === 'sandbox_run').arguments, { name: 'sb1', args: ['build'], game: '/g/pip' });
+  assert.match(s.app.text, /build passed[\s\S]*3 scripts, 7 scenes/);
+  s.button('Test').fire('click');
+  await settle(8);
+  assert.match(s.app.text, /test failed[\s\S]*jump height/);
 });
 
 test('a sandbox is kept as a variant', async () => {
