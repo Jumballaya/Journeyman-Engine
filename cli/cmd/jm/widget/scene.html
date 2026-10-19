@@ -30,6 +30,7 @@
   .drawn { max-width: 100%; border-radius: 10px; image-rendering: pixelated; } .drawn.none { padding: 20px 16px; }
   .asks button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
   .view .shape { fill: var(--shape); fill-opacity: .35; stroke: var(--shape); cursor: pointer; }
+  .view .screen { fill: none; stroke: var(--muted); stroke-dasharray: 6 4; pointer-events: none; }
   .view .shape.prefab { fill: var(--prefab); stroke: var(--prefab); }
   .view .shape.on { fill: var(--accent); fill-opacity: .6; stroke: var(--accent); }
   .side { display: grid; gap: 10px; align-content: start; min-width: 0; }
@@ -160,12 +161,20 @@
       x0 = Math.min(x0, e.x - hw); x1 = Math.max(x1, e.x + hw);
       y0 = Math.min(y0, -e.y - hh); y1 = Math.max(y1, -e.y + hh);
     }
-    if (!es.length) { x0 = y0 = 0; x1 = y1 = 100; }
+    // The screen as the game starts (scene_view's screen): the frame the layout is seen in.
+    const sc = s.screen && s.screen.w > 0 && s.screen.h > 0 ? s.screen : null;
+    if (sc) {
+      x0 = Math.min(x0, sc.x - sc.w / 2); x1 = Math.max(x1, sc.x + sc.w / 2);
+      y0 = Math.min(y0, -sc.y - sc.h / 2); y1 = Math.max(y1, -sc.y + sc.h / 2);
+    }
+    if (!es.length && !sc) { x0 = y0 = 0; x1 = y1 = 100; }
     const m = Math.max(x1 - x0, y1 - y0, 1) * 0.04;
     const w = x1 - x0 + 2 * m, h = y1 - y0 + 2 * m;
     // A unit a pixel where it fits (a long level scrolls), down to 4000 × 1200 at most.
     const k = Math.min(1, 4000 / w, 1200 / h);
     const svg = $("svg:svg", { viewBox: `${x0 - m} ${y0 - m} ${w} ${h}`, style: `width: max(100%, ${Math.round(w * k)}px)` });
+    if (sc) svg.append($("svg:rect", { class: "screen", x: sc.x - sc.w / 2, y: -sc.y - sc.h / 2, width: sc.w, height: sc.h, "vector-effect": "non-scaling-stroke" },
+      $("svg:title", {}, `The screen as the game starts (${sc.w}×${sc.h})`)));
     for (const e of es) {
       const cls = "shape" + (e.prefab ? " prefab" : "") + (e.where === state.selected ? " on" : "");
       const pick = () => select(e.where);
@@ -287,7 +296,7 @@
     if (!d.scene) { app.append($("div", { class: "none" }, d.said || "This answer isn't a scene.")); return; }
     const s = d.scene;
     const shown = state.drawn && state.drawn.scene === s.scene;
-    app.append($("header", {}, $("h1", {}, s.name || s.scene), $("span", { class: "meta" }, `${s.scene}${s.game ? " · " + s.game : ""} · ${s.entities.length} entities`),
+    app.append($("header", {}, $("h1", {}, s.name || s.scene), $("span", { class: "meta" }, `${s.scene}${s.game ? " · " + s.game : ""} · ${s.entities.length} ${s.entities.length === 1 ? "entity" : "entities"}`),
         host.can("callTool") ? $("span", { class: "asks" }, $("button", { "aria-pressed": String(shown), disabled: shown && state.drawn.src === "",
           onclick: () => shown ? (state.drawn = null, render()) : draw(s) }, "Rendered")) : null),
       $("div", { class: "status" }, state.notice || status(uri)),

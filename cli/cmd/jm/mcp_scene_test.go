@@ -137,3 +137,21 @@ func TestSceneRenderTakesOnlyAScene(t *testing.T) {
 		}
 	}
 }
+
+// The screen a scene starts on: the logical size (else the window's) about the
+// first camera, its zoom applied, else about the origin.
+func TestSceneScreenIsTheGamesView(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{"config":{"window":{"width":800,"height":600},"renderer":{"logicalWidth":320,"logicalHeight":180}}}`), 0o644)
+	if s, ok := screenOf(root, nil); !ok || s["w"] != 320 || s["h"] != 180 || s["x"] != 0 {
+		t.Errorf("logical: %v %v", s, ok)
+	}
+	cam := placedEntity{X: 50, Y: -10, Components: map[string]any{"CameraComponent": map[string]any{"zoom": 2.0}}}
+	if s, _ := screenOf(root, []placedEntity{{}, cam}); s["x"] != 50 || s["y"] != -10 || s["w"] != 160 || s["h"] != 90 {
+		t.Errorf("a camera's: %v", s)
+	}
+	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{}`), 0o644)
+	if _, ok := screenOf(root, nil); ok {
+		t.Error("no size, a screen")
+	}
+}

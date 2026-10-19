@@ -206,7 +206,8 @@ func indexGame(root string) []indexEntry {
 				names = jsonStrings(v, nil)
 			}
 			if e.Kind == "scene" {
-				e.Detail = fmt.Sprintf("%d entities", countEntities(v))
+				n := countEntities(v)
+				e.Detail = fmt.Sprintf("%d entit%s", n, map[bool]string{true: "y", false: "ies"}[n == 1])
 			}
 		default:
 			for _, m := range quoted.FindAllStringSubmatch(string(text), -1) {

@@ -128,7 +128,45 @@ func sceneView(a toolArgs) toolResult {
 	}
 	text := fmt.Sprintf("Scene %s of %s: %d entities (%s). The person sees it laid out and can change an entity; structuredContent has each one's place and components.",
 		filepath.ToSlash(rel), gameName(root), len(placed), strings.Join(names, ", "))
-	return toolResult{Text: text, Structured: map[string]any{"scene": filepath.ToSlash(rel), "game": gameName(root), "name": doc.Name, "entities": placed}}
+	out := map[string]any{"scene": filepath.ToSlash(rel), "game": gameName(root), "name": doc.Name, "entities": placed}
+	if s, ok := screenOf(root, placed); ok {
+		out["screen"] = s
+	}
+	return toolResult{Text: text, Structured: out}
+}
+
+// screenOf is what the game shows of a scene as it starts: its logical size
+// (config.renderer, else the window's) about the first camera, else the origin.
+func screenOf(root string, placed []placedEntity) (map[string]float64, bool) {
+	var m struct {
+		Config struct {
+			Renderer struct{ LogicalWidth, LogicalHeight float64 }
+			Window   struct{ Width, Height float64 }
+		}
+	}
+	data, err := os.ReadFile(filepath.Join(root, archive.ManifestEntryKey))
+	if err != nil || json.Unmarshal(data, &m) != nil {
+		return nil, false
+	}
+	w, h := m.Config.Renderer.LogicalWidth, m.Config.Renderer.LogicalHeight
+	if w <= 0 || h <= 0 {
+		w, h = m.Config.Window.Width, m.Config.Window.Height
+	}
+	if w <= 0 || h <= 0 {
+		return nil, false
+	}
+	s := map[string]float64{"x": 0, "y": 0, "w": w, "h": h}
+	for _, e := range placed {
+		if c, ok := e.Components["CameraComponent"].(map[string]any); ok {
+			zoom, _ := c["zoom"].(float64)
+			if zoom <= 0 {
+				zoom = 1
+			}
+			s["x"], s["y"], s["w"], s["h"] = e.X, e.Y, w/zoom, h/zoom
+			break
+		}
+	}
+	return s, true
 }
 
 // scenePath is the scene a call means: the file a host opened, else a scene

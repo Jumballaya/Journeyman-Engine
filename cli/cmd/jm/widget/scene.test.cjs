@@ -167,6 +167,17 @@ test('Rendered shows the scene as the engine draws it beside its layout, or why 
   assert.match(failed.app.text, /the build failed/);
 });
 
+test('the screen as the game starts frames the layout: a lone small entity stays small', async () => {
+  const { find, fromHost } = await scenePage();
+  const r = laid(10);
+  r.structuredContent.screen = { x: 0, y: 0, w: 1280, h: 720 };
+  fromHost('ui/notifications/tool-result', r);
+  await settle();
+  const screen = find((e) => e.attributes.class === 'screen')[0];
+  assert.deepEqual([screen.attributes.x, screen.attributes.y, screen.attributes.width, screen.attributes.height], [-640, -360, 1280, 720]);
+  assert.match(find((e) => e.tag === 'svg')[0].attributes.viewBox, /^-691\.2 -411\.2 1382\.4 822\.4$/);
+});
+
 test('each field is named for assistive tech: its label points at it, a vector\'s values by axis', async () => {
   const { find } = await scenePage({ answers: {
     'resources/read': { contents: [{ uri: file.resourceUri, text: raw, _meta: { 'openai/resource': { etag: 'v1', writable: true } } }] } } });
