@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -160,6 +161,17 @@ func Copy(dir string) (p Project, ok bool) {
 	return describe(entry{Path: dir}), true
 }
 
+// inRepo is where dir sits in its git repository ("games/pip"), "" at its top or outside one.
+func inRepo(dir string) string {
+	c := exec.Command("git", "rev-parse", "--show-prefix")
+	c.Dir = dir
+	out, err := c.Output()
+	if err != nil {
+		return ""
+	}
+	return filepath.FromSlash(strings.TrimSuffix(strings.TrimSpace(string(out)), "/"))
+}
+
 // CopyOf finds the game a folder is a copy of: <game>/.jm/sandboxes/<name>
 // (the game's folder copied), or <game>/.jm/variants/<name>[/<the game's
 // folder in its repository>] (a worktree). The game must be one.
@@ -173,7 +185,8 @@ func CopyOf(dir string) (game, kind, name string) {
 		if g == "" {
 			g = string(filepath.Separator)
 		}
-		if isGame(g) {
+		// A variant's game sits where the game sits in its repository (vcs.GameIn), not anywhere below.
+		if isGame(g) && (parts[i+1] == "sandboxes" || filepath.Clean(dir) == filepath.Join(g, ".jm", "variants", parts[i+2], inRepo(g))) {
 			return g, map[string]string{"variants": "variant", "sandboxes": "sandbox"}[parts[i+1]], parts[i+2]
 		}
 	}

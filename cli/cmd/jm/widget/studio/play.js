@@ -182,7 +182,8 @@ studioTabs.push((() => {
     // (Its way back is the Studio's, shown whatever this tab shows.)
     const host = ctx.host, pip = host.displayMode === "pip";
     const bar = controls(ctx, s);
-    if (!pip && host.can("displayMode") && (host.displayModes || []).includes("pip")) bar.append(el("span", { class: "spacer" }),
+    // A host that doesn't list its modes (ChatGPT's window.openai) is asked anyway: it says no if it can't.
+    if (!pip && host.can("displayMode") && (!host.displayModes || host.displayModes.includes("pip"))) bar.append(el("span", { class: "spacer" }),
       el("button", { "data-key": "pip", title: "Keep the game beside the chat while you talk", onclick: () => host.requestDisplayMode("pip").catch(() => {}) }, "Beside the chat"));
     const picture = live.src ? el("img", { src: live.src, alt: "The game now", style: { width: "100%", maxHeight: pip ? "none" : "72vh", objectFit: "contain", background: "#000", borderRadius: "8px", imageRendering: "pixelated", display: "block" } })
       : kit.empty("No picture yet.");

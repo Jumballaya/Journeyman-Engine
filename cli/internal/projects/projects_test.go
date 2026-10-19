@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -179,7 +180,7 @@ func TestFindGamesLooksThroughHome(t *testing.T) {
 func TestCopyOf(t *testing.T) {
 	root := t.TempDir()
 	game := filepath.Join(root, "repo", "games", "pip")
-	for _, d := range []string{game, filepath.Join(game, ".jm", "sandboxes", "s"), filepath.Join(game, ".jm", "variants", "v", "games", "pip"),
+	for _, d := range []string{game, filepath.Join(game, ".jm", "sandboxes", "s"), filepath.Join(game, ".jm", "variants", "v"), filepath.Join(game, ".jm", "variants", "v", "games", "pip"),
 		filepath.Join(root, "archive", ".jm", "variants", "Mine")} {
 		os.MkdirAll(d, 0o755)
 		os.WriteFile(filepath.Join(d, ".jm.json"), []byte(`{}`), 0o644)
@@ -187,7 +188,7 @@ func TestCopyOf(t *testing.T) {
 	for dir, want := range map[string][3]string{
 		filepath.Join(game, ".jm", "sandboxes", "s"):                {game, "sandbox", "s"},
 		filepath.Join(game, ".jm", "variants", "v"):                 {game, "variant", "v"},
-		filepath.Join(game, ".jm", "variants", "v", "games", "pip"): {game, "variant", "v"},
+		filepath.Join(game, ".jm", "variants", "v", "games", "pip"): {}, // no repository: the variant is its folder
 		filepath.Join(game, ".jm", "sandboxes", "s", "scenes"):      {},
 		filepath.Join(root, "archive", ".jm", "variants", "Mine"):   {},
 		game: {},
@@ -216,5 +217,26 @@ func TestCopyDescribedEvenGone(t *testing.T) {
 	}
 	if _, ok := Copy(game); ok {
 		t.Error("a game's own folder isn't a copy")
+	}
+}
+
+// In a repository, a variant's game is where the game sits in it: a variant of
+// games/a, opened at its games/a, is a's; its games/b is not.
+func TestCopyOfInARepository(t *testing.T) {
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "-C", repo, "init", "-q").CombinedOutput(); err != nil {
+		t.Skipf("git: %v %s", err, out)
+	}
+	a := filepath.Join(repo, "games", "a")
+	v := filepath.Join(a, ".jm", "variants", "v")
+	for _, d := range []string{a, filepath.Join(repo, "games", "b"), filepath.Join(v, "games", "a"), filepath.Join(v, "games", "b")} {
+		os.MkdirAll(d, 0o755)
+		os.WriteFile(filepath.Join(d, ".jm.json"), []byte(`{}`), 0o644)
+	}
+	if g, _, name := CopyOf(filepath.Join(v, "games", "a")); g != a || name != "v" {
+		t.Errorf("a's variant: %q %q", g, name)
+	}
+	if g, _, _ := CopyOf(filepath.Join(v, "games", "b")); g != "" {
+		t.Errorf("b in a's variant: %q", g)
 	}
 }
