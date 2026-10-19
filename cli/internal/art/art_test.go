@@ -81,7 +81,7 @@ func TestCheck(t *testing.T) {
 		"    directions: [down, up]\n    idle: [100, 100]\n---\n# Art\n")
 	write(t, root, "art/p.hex", "000000\nffffff\n")
 	write(t, root, "design/Characters/Kage.md", "---\ntype: character\nsprite: art/kage.aseprite\nart: done\n---\n# Kage\n")
-	write(t, root, "design/Characters/Mira.md", "---\ntype: character\n---\n# Mira\n")
+	write(t, root, "design/Characters/Mira.md", "---\ntype: character\nart_set: boss\n---\n# Mira\n") // a set the note lacks: still a character
 	write(t, root, "design/Lore/Fall.md", "---\ntype: lore\n---\n# Fall\n")
 	write(t, root, "art/kage.aseprite", "")
 	write(t, root, "art/kage.json", `{"frames": [{"frame": {"x": 0, "y": 0, "w": 2, "h": 1}, "sourceSize": {"w": 2, "h": 1}, "duration": 100},
@@ -170,6 +170,10 @@ func TestCheckHoldsToTheLocks(t *testing.T) {
 	write(t, root, "maps/t.tsj", `{"tilewidth": 3, "tileheight": 2, "image": "../art/kage.png"}`)
 	if r := Check(root); len(r.Findings) != 2 || !strings.Contains(r.Findings[1].Message, "off the 2 px grid") {
 		t.Errorf("a tileset off the grid: %+v", r.Findings)
+	}
+	write(t, root, "maps/t.tsj", `{"tilewidth": 4, "tileheight": 2, "tiles": [{"id": 0, "image": "../art/kage.png"}, {"id": 1, "image": "../art/kage.png", "width": 3, "height": 2}]}`)
+	if r := Check(root); len(r.Findings) != 2 || !strings.Contains(r.Findings[1].Message, "tile 1 is 3x2, off the 2 px grid") {
+		t.Errorf("a collection's tile off the grid: %+v", r.Findings)
 	}
 
 	write(t, root, "art/kage.json", `{"frames": [{"frame": {"x": 9, "y": 0, "w": 1, "h": 1}, "sourceSize": {"w": 1, "h": 1}, "duration": 100}], "meta": {"image": "kage.png"}}`)

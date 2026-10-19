@@ -89,9 +89,8 @@ func Check(root string) Report {
 			set = n.Type
 		}
 		sprite, _ := n.Props["sprite"].(string)
-		_, sized := b.Sizes[set]
-		_, animated := b.Sets[set]
-		if sprite = strings.TrimSpace(sprite); sprite == "" && !sized && !animated || n.Type == "art" {
+		locked := func(k string) bool { _, sized := b.Sizes[k]; _, animated := b.Sets[k]; return sized || animated }
+		if sprite = strings.TrimSpace(sprite); sprite == "" && !locked(set) && !locked(n.Type) || n.Type == "art" {
 			continue
 		}
 		a, found := c.asset(n, set, sprite, listed)
@@ -306,18 +305,28 @@ func (c *checker) tileset(rel string) []Finding {
 			TileHeight int    `json:"tileheight"`
 			Image      string `json:"image"`
 			Tiles      []struct {
-				Image string `json:"image"`
+				ID            int    `json:"id"`
+				Image         string `json:"image"`
+				Width, Height int    // a crop of its image; none: all of it
 			} `json:"tiles"`
 		}
 		if json.Unmarshal(data, &ts) != nil {
 			return // the build says so
 		}
-		if g := c.bible.Grid; g > 0 && (ts.TileWidth%g != 0 || ts.TileHeight%g != 0) {
-			say(rel, fmt.Sprintf("its tiles are %dx%d, off the %d px grid", ts.TileWidth, ts.TileHeight, g))
+		offGrid := func(w, h int) bool { g := c.bible.Grid; return g > 0 && (w%g != 0 || h%g != 0) }
+		if ts.Image != "" && offGrid(ts.TileWidth, ts.TileHeight) {
+			say(rel, fmt.Sprintf("its tiles are %dx%d, off the %d px grid", ts.TileWidth, ts.TileHeight, c.bible.Grid))
 		}
 		images := []string{ts.Image}
-		for _, t := range ts.Tiles {
+		for _, t := range ts.Tiles { // a collection: each tile its own picture, as big as it is
 			images = append(images, t.Image)
+			w, h := t.Width, t.Height
+			if t.Image != "" && (w == 0 || h == 0) {
+				w, h = c.size(filepath.ToSlash(filepath.Join(filepath.Dir(rel), t.Image)))
+			}
+			if (w > 0 || h > 0) && offGrid(w, h) {
+				say(rel, fmt.Sprintf("its tile %d is %dx%d, off the %d px grid", t.ID, w, h, c.bible.Grid))
+			}
 		}
 		for _, img := range images {
 			if img != "" {
@@ -327,6 +336,19 @@ func (c *checker) tileset(rel string) []Finding {
 			}
 		}
 	})
+}
+
+// size is a picture's width and height: 0, 0 when it can't be read (image says so).
+func (c *checker) size(rel string) (int, int) {
+	data, err := c.read(rel)
+	if err != nil {
+		return 0, 0
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return 0, 0
+	}
+	return cfg.Width, cfg.Height
 }
 
 // image checks a picture's colours, once: the palette's, opaque or clear.

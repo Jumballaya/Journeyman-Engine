@@ -80,7 +80,8 @@ A Character (or the new Creature kind) dossier gets two properties:
 - `sprite: assets/sprites/knight.aseprite`: where its art lives.
 - `art: done`: the person (or agent) says it's finished.
 
-`art_set` picks an animation set other than its type. A dossier is an
+`art_set` picks an animation set other than its type (one the note lacks
+leaves it an asset of its type). A dossier is an
 **asset** when it has a `sprite`, or its type is one `sizes`/`animations`
 names. Each asset has a status, worked out from files, never stored:
 
@@ -99,7 +100,8 @@ ships (its manifest's assets, as regular files inside the game) and each file
 once. It checks:
 
 - every atlas's pictures and every tileset's pictures: palette colours only;
-- tilesets: tile size on the grid;
+- tilesets: tile size on the grid (a collection's tiles each, by their crop
+  or picture);
 - each asset's sheet: frame size, tags and timings for its set, its frames
   inside its picture, and an atlas lists it (or the game can't show it);
 - the note itself: palette readable, outline in it, references present;
@@ -115,8 +117,8 @@ consistency with the references.
 
 - `jm build` prints the findings (category `art`) with the other diagnostics,
   so every agent sees them after every build without being told to look.
-- The MCP `health` tool (and Studio's Health tab) has an `art` check: the
-  findings plus "3 of 7 sprites done", with each sprite's status.
+- The MCP `health` tool has an `art` check: the findings plus "3 of 7 sprites
+  done", with each sprite's status. Studio's Health tab doesn't run it yet.
 
 ### 5. The agent's loop (next PR)
 
@@ -151,7 +153,7 @@ teaches the loop; the onboarding interview asks about the look and fills
 ## Open questions
 
 - Should `jm build --strict` (or CI) treat art warnings as errors?
-- Should Studio get an Art tab (the sprites board: planned → done, with
-  thumbnails), or is the Health tab enough?
+- Studio: run the art check in the Health tab, or give it an Art tab (the
+  sprites board, planned → done, with thumbnails)?
 - Palette formats: is `.gpl`/`.hex`/`.pal` enough, or read the palette out of
   an `.aseprite` file too?
