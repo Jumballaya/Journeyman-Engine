@@ -107,7 +107,7 @@ func TestCheck(t *testing.T) {
 	if mira.Title != "Mira" || mira.Status != "planned" || mira.Problems != 0 {
 		t.Errorf("Mira: %+v", mira)
 	}
-	if kage.Status != "exported" || kage.Sheet != "art/kage.json" || kage.Image != "art/kage.png" || kage.Frame != [4]int{0, 0, 2, 1} {
+	if kage.Status != "exported" || kage.Sheet != "art/kage.json" {
 		t.Errorf("Kage: %+v", kage)
 	}
 	var said []string
@@ -151,10 +151,10 @@ func savePNG(t *testing.T, path string, img image.Image) {
 // What breaks the locks shows wherever it's checked from: a sprite an atlas
 // lists isn't done with colours off the palette, nor with its picture gone;
 // a broken art note is an error, not no note; a palette leading out of the
-// game isn't read; tiles each keep the colours a frame.
+// game isn't read; tiles keep the grid.
 func TestCheckHoldsToTheLocks(t *testing.T) {
 	root := t.TempDir()
-	write(t, root, "design/Art.md", "---\ntype: art\npalette: art/p.hex\ngrid: 2\ncolors: 1\n---\n# Art\n")
+	write(t, root, "design/Art.md", "---\ntype: art\npalette: art/p.hex\ngrid: 2\n---\n# Art\n")
 	write(t, root, "art/p.hex", "000000\nffffff\n")
 	write(t, root, "design/Characters/Kage.md", "---\ntype: character\nsprite: art/kage.aseprite\nart: done\n---\n# Kage\n")
 	write(t, root, "art/kage.aseprite", "")
@@ -171,21 +171,9 @@ func TestCheckHoldsToTheLocks(t *testing.T) {
 		t.Errorf("its picture gone: %+v", r)
 	}
 
-	// Tiles: two of one colour each are fine; one of two isn't.
-	tiles := image.NewNRGBA(image.Rect(0, 0, 4, 2))
-	for x := 0; x < 4; x++ {
-		for y := 0; y < 2; y++ {
-			tiles.Set(x, y, map[bool]color.Color{true: color.Black, false: color.White}[x < 2])
-		}
-	}
-	savePNG(t, filepath.Join(root, "art", "kage.png"), tiles)
-	write(t, root, "maps/t.tsj", `{"tilewidth": 2, "tileheight": 2, "image": "../art/kage.png"}`)
-	if r := Check(root); len(r.Findings) != 0 {
-		t.Errorf("a colour a tile: %+v", r.Findings)
-	}
-	write(t, root, "maps/t.tsj", `{"tilewidth": 4, "tileheight": 2, "image": "../art/kage.png"}`)
-	if r := Check(root); len(r.Findings) != 1 || !strings.Contains(r.Findings[0].Message, "uses 2 colours") {
-		t.Errorf("two colours a tile: %+v", r.Findings)
+	write(t, root, "maps/t.tsj", `{"tilewidth": 3, "tileheight": 2, "image": "../art/kage.png"}`)
+	if r := Check(root); len(r.Findings) != 2 || !strings.Contains(r.Findings[1].Message, "off the 2 px grid") {
+		t.Errorf("a tileset off the grid: %+v", r.Findings)
 	}
 
 	outside := filepath.Join(t.TempDir(), "p.hex")
@@ -196,9 +184,6 @@ func TestCheckHoldsToTheLocks(t *testing.T) {
 			t.Errorf("a palette out of the game was read: %+v", r.Palette)
 		}
 	}
-
-	write(t, root, "maps/t.tsj", `{"tilewidth": 2, "tileheight": 2, "spacing": -2, "image": "../art/kage.png"}`)
-	Check(root) // ends
 
 	write(t, root, "design/Art.md", "---\ntype: art\npalette: [unclosed\n---\n# Art\n")
 	if r := Check(root); r.Bible == nil || len(r.Findings) == 0 || r.Findings[0].Level != "error" {

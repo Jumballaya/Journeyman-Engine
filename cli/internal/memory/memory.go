@@ -549,7 +549,6 @@ grid:
 view:
 light:
 outline:
-colors:
 references: []
 sizes:
   # a dossier type or animation set: its frame, e.g.
@@ -572,8 +571,8 @@ tags: [design, art]
 How the game looks, for whoever draws its sprites, tiles and maps. The
 properties above are the locks every picture keeps: the palette file
 (` + "`.gpl`, `.hex` or `.pal`" + ` in the game), the grid, the view and light, the
-outline colour (a palette colour's name), the most colours one frame uses,
-each kind's frame size, each animation set. A dossier with a ` + "`sprite`" + ` is
+outline colour (a palette colour's name), each kind's frame size, each
+animation set. A dossier with a ` + "`sprite`" + ` is
 drawn by them (` + "`art_set`" + ` picks a set other than its type; ` + "`art: done`" + `
 says it's finished); ` + "`references`" + ` are finished sprites new ones match.
 

@@ -30,7 +30,6 @@ type Bible struct {
 	View    string            `json:"view,omitempty" yaml:"view"`
 	Light   string            `json:"light,omitempty" yaml:"light"`
 	Outline string            `json:"outline,omitempty" yaml:"outline"` // a palette colour's name
-	Colors  int               `json:"colors,omitempty" yaml:"colors"`   // the most colours one sprite uses (0: any)
 	Sizes   map[string]string `json:"sizes,omitempty" yaml:"sizes"`     // a set or dossier type's frame: 32x32
 	// Finished sprites (.aseprite or .png) a new one matches: its proportions, shading, outline.
 	References []string       `json:"references,omitempty" yaml:"references"`

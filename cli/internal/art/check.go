@@ -33,8 +33,6 @@ type Asset struct {
 	Status   string `json:"status"`
 	Sprite   string `json:"sprite,omitempty"`
 	Sheet    string `json:"sheet,omitempty"`
-	Image    string `json:"image,omitempty"` // the sheet's picture, and its first frame on it
-	Frame    [4]int `json:"frame,omitempty"`
 	Problems int    `json:"problems"`
 }
 
@@ -50,7 +48,7 @@ type Finding struct {
 // Every atlas's images and tileset keep the palette and the grid.
 func Check(root string) Report {
 	r := Report{Assets: []Asset{}, Findings: []Finding{}, Palette: []Color{}}
-	c := checker{root: root, checked: map[string][]Finding{}, decoded: map[string]image.Image{}}
+	c := checker{root: root, checked: map[string][]Finding{}}
 	b, ok, err := Load(root)
 	if ok {
 		r.Bible = &b
@@ -108,9 +106,8 @@ func Check(root string) Report {
 type checker struct {
 	root    string
 	bible   Bible
-	colors  []string               // the palette's, #rrggbb; none: any colour
-	checked map[string][]Finding   // by what was checked: each once
-	decoded map[string]image.Image // pictures read, nil for one that can't be
+	colors  []string             // the palette's, #rrggbb; none: any colour
+	checked map[string][]Finding // by what was checked: each once
 }
 
 func (c *checker) path(rel string) string { return gamePath(c.root, rel) }
@@ -172,9 +169,7 @@ func (c *checker) asset(n memory.Note, set, sprite string, listed map[string]boo
 		if !listed[sheet] {
 			say(sheet, "no atlas lists it: the game can't show it")
 		}
-		var problems []Finding
-		a.Image, a.Frame, problems = c.sheet(sheet, set, n.Type)
-		if found = append(found, problems...); stated == "done" && len(found) == 0 {
+		if found = append(found, c.sheet(sheet, set, n.Type)...); stated == "done" && len(found) == 0 {
 			a.Status = "done"
 		}
 	}
@@ -209,10 +204,9 @@ func (c *checker) atlases() (map[string]bool, [][]Finding) {
 				src = filepath.ToSlash(filepath.Clean(src))
 				listed[src] = true
 				if strings.HasSuffix(src, ".json") {
-					_, _, sheet := c.sheet(src, "", "")
-					found = append(found, sheet)
+					found = append(found, c.sheet(src, "", ""))
 				} else {
-					found = append(found, c.image(src, nil))
+					found = append(found, c.image(src))
 				}
 			}
 		case strings.HasSuffix(rel, ".tsj"):
@@ -224,30 +218,25 @@ func (c *checker) atlases() (map[string]bool, [][]Finding) {
 }
 
 // sheet checks an Aseprite sheet: its picture's colours, and (for a set or
-// type the note has) its frames' size and its tags. Its picture and first
-// frame, for a thumbnail.
-func (c *checker) sheet(rel, set, kind string) (img string, first [4]int, found []Finding) {
+// type the note has) its frames' size and its tags.
+func (c *checker) sheet(rel, set, kind string) []Finding {
 	data, err := os.ReadFile(c.path(rel))
 	if err != nil {
-		return "", first, nil
+		return nil
 	}
 	s, err := atlas.ParseSheet(data)
 	if err != nil {
-		return "", first, c.once(rel, func(say func(string, string)) { say(rel, err.Error()) })
+		return c.once(rel, func(say func(string, string)) { say(rel, err.Error()) })
 	}
-	img = filepath.ToSlash(filepath.Join(filepath.Dir(rel), s.Image))
-	frames := s.Frames()
-	if len(frames) > 0 {
-		first = [4]int{frames[0].X, frames[0].Y, frames[0].W, frames[0].H}
-	}
-	found = c.image(img, frames)
+	found := c.image(filepath.ToSlash(filepath.Join(filepath.Dir(rel), s.Image)))
 	if set == "" && kind == "" {
-		return img, first, found
+		return found
 	}
-	return img, first, append(found, c.once(rel+"#"+set+"#"+kind, func(say func(string, string)) {
+	frames := s.Frames()
+	return append(found, c.once(rel+"#"+set+"#"+kind, func(say func(string, string)) {
 		if w, h := c.bible.Size(set, kind); w > 0 {
-			if i := slices.IndexFunc(frames, func(f atlas.SheetFrame) bool { return f.SourceW != w || f.SourceH != h }); i >= 0 {
-				say(rel, fmt.Sprintf("its frames are %dx%d; %s art is %dx%d", frames[i].SourceW, frames[i].SourceH, set, w, h))
+			if i := slices.IndexFunc(frames, func(f atlas.SheetFrame) bool { return f.W != w || f.H != h }); i >= 0 {
+				say(rel, fmt.Sprintf("its frames are %dx%d; %s art is %dx%d", frames[i].W, frames[i].H, set, w, h))
 			}
 		}
 		want, ok := c.bible.Sets[set]
@@ -286,8 +275,7 @@ func timing(tag string, frames []atlas.SheetFrame, want Timing) string {
 	return ""
 }
 
-// tileset checks a Tiled tileset: its tiles keep the grid; its pictures
-// the palette, and the colours a tile.
+// tileset checks a Tiled tileset: its tiles keep the grid, its pictures the palette.
 func (c *checker) tileset(rel string) []Finding {
 	return c.once(rel, func(say func(string, string)) {
 		data, err := os.ReadFile(c.path(rel))
@@ -297,8 +285,6 @@ func (c *checker) tileset(rel string) []Finding {
 		var ts struct {
 			TileWidth  int    `json:"tilewidth"`
 			TileHeight int    `json:"tileheight"`
-			Margin     int    `json:"margin"`
-			Spacing    int    `json:"spacing"`
 			Image      string `json:"image"`
 			Tiles      []struct {
 				Image string `json:"image"`
@@ -310,57 +296,36 @@ func (c *checker) tileset(rel string) []Finding {
 		if g := c.bible.Grid; g > 0 && (ts.TileWidth%g != 0 || ts.TileHeight%g != 0) {
 			say(rel, fmt.Sprintf("its tiles are %dx%d, off the %d px grid", ts.TileWidth, ts.TileHeight, g))
 		}
-		var found []Finding
-		if ts.Image != "" { // one sheet: a frame a tile
-			img := filepath.ToSlash(filepath.Join(filepath.Dir(rel), ts.Image))
-			found = c.image(img, c.cells(img, ts.TileWidth, ts.TileHeight, ts.Margin, ts.Spacing))
-		}
+		images := []string{ts.Image}
 		for _, t := range ts.Tiles {
-			if t.Image != "" {
-				found = append(found, c.image(filepath.ToSlash(filepath.Join(filepath.Dir(rel), t.Image)), nil)...)
-			}
+			images = append(images, t.Image)
 		}
-		for _, f := range found {
-			say(f.File, f.Message)
+		for _, img := range images {
+			if img != "" {
+				for _, f := range c.image(filepath.ToSlash(filepath.Join(filepath.Dir(rel), img))) {
+					say(f.File, f.Message)
+				}
+			}
 		}
 	})
 }
 
-// cells are a tileset sheet's tiles, as frames.
-func (c *checker) cells(rel string, w, h, margin, spacing int) []atlas.SheetFrame {
-	img := c.decode(rel)
-	if img == nil || w <= 0 || h <= 0 || c.bible.Colors <= 0 {
-		return nil
-	}
-	margin, spacing = max(margin, 0), max(spacing, 0)
-	var out []atlas.SheetFrame
-	b := img.Bounds()
-	for y := margin; y+h <= b.Dy(); y += h + spacing {
-		for x := margin; x+w <= b.Dx(); x += w + spacing {
-			out = append(out, atlas.SheetFrame{X: x, Y: y, W: w, H: h})
-		}
-	}
-	return out
-}
-
-// image checks a picture, once: the palette's colours, opaque or clear, and
-// no more colours a frame (the whole picture, without frames) than the note allows.
-func (c *checker) image(rel string, frames []atlas.SheetFrame) []Finding {
+// image checks a picture's colours, once: the palette's, opaque or clear.
+func (c *checker) image(rel string) []Finding {
 	rel = filepath.ToSlash(filepath.Clean(rel))
-	key := rel // and its frames: two sheets may cut one picture
-	if frames != nil {
-		key += fmt.Sprint(frames)
-	}
-	return c.once(key, func(say func(string, string)) {
-		if len(c.colors) == 0 && c.bible.Colors <= 0 {
-			if !exists(c.path(rel)) {
-				say(rel, "it isn't there")
-			}
+	return c.once(rel, func(say func(string, string)) {
+		f, err := os.Open(c.path(rel))
+		if err != nil {
+			say(rel, "it isn't there")
 			return
 		}
-		img := c.decode(rel)
-		if img == nil {
-			say(rel, "it isn't there, or isn't a PNG jm can read")
+		defer f.Close()
+		if len(c.colors) == 0 {
+			return
+		}
+		img, _, err := image.Decode(f)
+		if err != nil {
+			say(rel, "it isn't a PNG jm can read: "+err.Error())
 			return
 		}
 		off, soft := 0, 0
@@ -374,7 +339,7 @@ func (c *checker) image(rel string, frames []atlas.SheetFrame) []Finding {
 				case alpha == 0:
 				case alpha < 255:
 					soft++
-				case len(c.colors) > 0 && !slices.Contains(c.colors, hex):
+				case !slices.Contains(c.colors, hex):
 					if off++; off == 1 {
 						where, first = image.Pt(x-b.Min.X, y-b.Min.Y), hex
 					}
@@ -387,42 +352,7 @@ func (c *checker) image(rel string, frames []atlas.SheetFrame) []Finding {
 		if soft > 0 {
 			say(rel, fmt.Sprintf("%d half-clear pixels: a pixel is opaque or clear", soft))
 		}
-		if c.bible.Colors <= 0 {
-			return
-		}
-		if frames == nil {
-			frames = []atlas.SheetFrame{{W: b.Dx(), H: b.Dy()}}
-		}
-		for i, fr := range frames {
-			r := image.Rect(fr.X, fr.Y, fr.X+fr.W, fr.Y+fr.H).Add(b.Min).Intersect(b) // a frame off the picture: the build says so
-			used := map[string]bool{}
-			for y := r.Min.Y; y < r.Max.Y; y++ {
-				for x := r.Min.X; x < r.Max.X; x++ {
-					if hex, alpha := hexAt(img, x, y); alpha == 255 {
-						used[hex] = true
-					}
-				}
-			}
-			if len(used) > c.bible.Colors {
-				say(rel, fmt.Sprintf("frame %d uses %d colours; the art note allows %d", i+1, len(used), c.bible.Colors))
-				return
-			}
-		}
 	})
-}
-
-// decode is a game picture, nil when it can't be read.
-func (c *checker) decode(rel string) image.Image {
-	if img, ok := c.decoded[rel]; ok {
-		return img
-	}
-	var img image.Image
-	if f, err := os.Open(c.path(rel)); err == nil {
-		img, _, _ = image.Decode(f)
-		f.Close()
-	}
-	c.decoded[rel] = img
-	return img
 }
 
 func hexAt(img image.Image, x, y int) (string, int) {

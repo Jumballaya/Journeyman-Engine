@@ -194,14 +194,8 @@ func atoi(s string) int {
 	return n
 }
 
-// SheetFrame is a frame as checks see it: where it is on the sheet, its
-// untrimmed size and its milliseconds.
-type SheetFrame struct {
-	X, Y, W, H   int // on the sheet (trimmed)
-	SourceW      int
-	SourceH      int
-	Milliseconds int
-}
+// SheetFrame is a frame as checks see it: its untrimmed size and milliseconds.
+type SheetFrame struct{ W, H, Milliseconds int }
 
 // SheetTag is a tag's name and its frames, first to last.
 type SheetTag struct {
@@ -212,7 +206,7 @@ type SheetTag struct {
 func (s Sheet) Frames() []SheetFrame {
 	out := make([]SheetFrame, len(s.frames))
 	for i, f := range s.frames {
-		out[i] = SheetFrame{f.Frame.X, f.Frame.Y, f.Frame.W, f.Frame.H, f.SourceSize.W, f.SourceSize.H, f.Duration}
+		out[i] = SheetFrame{f.SourceSize.W, f.SourceSize.H, f.Duration}
 	}
 	return out
 }
