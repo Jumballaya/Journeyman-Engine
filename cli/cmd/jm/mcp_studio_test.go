@@ -27,7 +27,7 @@ func TestTheStudioIsTheGlobalAndThreadEntrypoint(t *testing.T) {
 		}
 	}
 	page, _ := studio.read(studio.appURI())
-	if got := jsonOf(page["_meta"].(map[string]any)["openai/ui"]); got != `{"availableDisplayModes":["fullscreen","inline"],"preferredDisplayMode":"fullscreen"}` {
+	if got := jsonOf(page["_meta"].(map[string]any)["openai/ui"]); got != `{"availableDisplayModes":["fullscreen","inline","pip"],"preferredDisplayMode":"fullscreen"}` {
 		t.Errorf("display modes: %s", got)
 	}
 	text := page["text"].(string)
