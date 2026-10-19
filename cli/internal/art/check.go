@@ -241,7 +241,7 @@ func (c *checker) sheet(rel, set, kind string) (img string, first [4]int, found 
 		first = [4]int{frames[0].X, frames[0].Y, frames[0].W, frames[0].H}
 	}
 	found = c.image(img, frames)
-	if set == "" && kind == "" || len(frames) == 0 {
+	if set == "" && kind == "" {
 		return img, first, found
 	}
 	return img, first, append(found, c.once(rel+"#"+set+"#"+kind, func(say func(string, string)) {
@@ -329,9 +329,10 @@ func (c *checker) tileset(rel string) []Finding {
 // cells are a tileset sheet's tiles, as frames.
 func (c *checker) cells(rel string, w, h, margin, spacing int) []atlas.SheetFrame {
 	img := c.decode(rel)
-	if img == nil || w <= 0 || h <= 0 {
+	if img == nil || w <= 0 || h <= 0 || c.bible.Colors <= 0 {
 		return nil
 	}
+	margin, spacing = max(margin, 0), max(spacing, 0)
 	var out []atlas.SheetFrame
 	b := img.Bounds()
 	for y := margin; y+h <= b.Dy(); y += h + spacing {
@@ -352,6 +353,9 @@ func (c *checker) image(rel string, frames []atlas.SheetFrame) []Finding {
 	}
 	return c.once(key, func(say func(string, string)) {
 		if len(c.colors) == 0 && c.bible.Colors <= 0 {
+			if !exists(c.path(rel)) {
+				say(rel, "it isn't there")
+			}
 			return
 		}
 		img := c.decode(rel)

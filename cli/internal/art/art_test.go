@@ -197,6 +197,9 @@ func TestCheckHoldsToTheLocks(t *testing.T) {
 		}
 	}
 
+	write(t, root, "maps/t.tsj", `{"tilewidth": 2, "tileheight": 2, "spacing": -2, "image": "../art/kage.png"}`)
+	Check(root) // ends
+
 	write(t, root, "design/Art.md", "---\ntype: art\npalette: [unclosed\n---\n# Art\n")
 	if r := Check(root); r.Bible == nil || len(r.Findings) == 0 || r.Findings[0].Level != "error" {
 		t.Errorf("a broken art note: %+v", r)
