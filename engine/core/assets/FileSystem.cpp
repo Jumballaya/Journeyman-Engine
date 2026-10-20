@@ -21,7 +21,8 @@ bool FileSystem::exists(const std::filesystem::path& filePath) const {
 }
 
 std::optional<std::vector<uint8_t>> FileSystem::tryRead(const std::filesystem::path& filePath) const {
-  if (_archive || !std::filesystem::is_regular_file(_folder / filePath)) return std::nullopt;
+  std::error_code ec;
+  if (_archive || !std::filesystem::is_regular_file(_folder / filePath, ec)) return std::nullopt;
   std::ifstream file(_folder / filePath, std::ios::binary);
   if (!file) return std::nullopt;
   std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};

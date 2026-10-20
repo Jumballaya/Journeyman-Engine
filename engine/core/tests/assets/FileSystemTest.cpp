@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "FileSystem.hpp"
@@ -39,4 +40,38 @@ TEST(FileSystem, ExistsReflectsFilesystemState) {
   fs.mountFolder(dir.path());
   EXPECT_TRUE(fs.exists("present.txt"));
   EXPECT_FALSE(fs.exists("missing.txt"));
+}
+
+TEST(FileSystem, TryReadReturnsBytesForReadableFiles) {
+  TempDir dir;
+  const std::vector<uint8_t> bytes = {0x00, 0xFF, 0x41};
+  dir.writeFile("bin.dat", bytes);
+  dir.writeFile("empty.dat", "");
+  FileSystem fs;
+  fs.mountFolder(dir.path());
+
+  const auto read = fs.tryRead("bin.dat");
+  ASSERT_TRUE(read);
+  EXPECT_EQ(*read, bytes);
+  const auto empty = fs.tryRead("empty.dat");
+  ASSERT_TRUE(empty);
+  EXPECT_TRUE(empty->empty());
+}
+
+TEST(FileSystem, TryReadReturnsNoBytesForMissingFilesAndDirectories) {
+  TempDir dir;
+  FileSystem fs;
+  fs.mountFolder(dir.path());
+
+  EXPECT_FALSE(fs.tryRead("missing.dat"));
+  EXPECT_FALSE(fs.tryRead("."));
+}
+
+TEST(FileSystem, TryReadReturnsNoBytesForInvalidPath) {
+  TempDir dir;
+  FileSystem fs;
+  fs.mountFolder(dir.path());
+
+  // A single component beyond filesystem limits makes the status lookup fail.
+  EXPECT_FALSE(fs.tryRead(std::string(8192, 'x')));
 }
