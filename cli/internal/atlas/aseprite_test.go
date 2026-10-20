@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -115,6 +116,17 @@ func TestBadSheetsSayWhy(t *testing.T) {
 	sheet, _ := ParseSheet([]byte(`{"frames": [{"frame": {"x": 7, "y": 0, "w": 4, "h": 2}}], "meta": {"image": "a.png"}}`))
 	if _, _, err := sheet.Cut("a", sheetImage(), nil); err == nil {
 		t.Error("a frame outside the sheet cut without an error")
+	}
+}
+
+func TestSheetsWithoutFramesAreRejected(t *testing.T) {
+	for _, frames := range []string{"null", "true", "0", `"frame"`, "[]", "{}"} {
+		t.Run(frames, func(t *testing.T) {
+			doc := `{"frames":` + frames + `,"meta":{"image":"hero.png"}}`
+			if _, err := ParseSheet([]byte(doc)); err == nil || !strings.Contains(err.Error(), "no frames") {
+				t.Fatalf("expected no frames error, got %v", err)
+			}
+		})
 	}
 }
 
