@@ -180,6 +180,87 @@ func TestMigrateAbortsBeforeWritesOnMalformedPrefab(t *testing.T) {
 	}
 }
 
+func TestMigrateRewritesScriptOverrides(t *testing.T) {
+	const oldScript = "assets/scripts/player.script.json"
+	const newScript = "assets/scripts/player.ts"
+	for _, tc := range []struct {
+		name, path, entries string
+		dryRun              bool
+	}{
+		{"scene", "scenes/level1.scene.json", "entities", false},
+		{"scene dry run", "scenes/level1.scene.json", "entities", true},
+		{"prefab", "assets/prefabs/wrapper.prefab.json", "children", false},
+		{"prefab dry run", "assets/prefabs/wrapper.prefab.json", "children", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			scaffold(t, dir)
+			addLegacyPrefab(t, dir, "assets/prefabs/*.prefab.json")
+			rootOverride := map[string]any{"script": oldScript, "params": map[string]any{"caption": oldScript}}
+			childOverride := map[string]any{"script": oldScript, "runWhenPaused": true}
+			content := map[string]any{"name": "Override migration", tc.entries: []any{map[string]any{
+				"name": "Hero", "prefab": legacyPrefabPath,
+				"overrides": map[string]any{
+					"ScriptComponent": rootOverride,
+					"children":        map[string]any{"Companion": map[string]any{"ScriptComponent": childOverride}},
+				},
+				"metadata": map[string]any{"script": oldScript},
+			}}}
+			data, err := json.Marshal(content)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mustWrite(t, filepath.Join(dir, tc.path), data)
+			before := map[string][]byte{}
+			for _, path := range []string{".jm.json", "scenes/level1.scene.json", oldScript, legacyPrefabPath, tc.path} {
+				original, err := os.ReadFile(filepath.Join(dir, path))
+				if err != nil {
+					t.Fatal(err)
+				}
+				before[path] = original
+			}
+			var out bytes.Buffer
+			if err := runMigrate(dir, &out, tc.dryRun, true); err != nil {
+				t.Fatal(err)
+			}
+			if tc.dryRun {
+				for path, original := range before {
+					after, err := os.ReadFile(filepath.Join(dir, path))
+					if err != nil || !bytes.Equal(after, original) {
+						t.Fatalf("dry run changed %s: %v", path, err)
+					}
+				}
+				_, section, found := strings.Cut(out.String(), "rewrite: "+tc.path+"\n")
+				if !found {
+					t.Fatalf("dry run omitted override-only file: %s", out.String())
+				}
+				section, _, _ = strings.Cut(section, "\nrewrite: ")
+				section, _, _ = strings.Cut(section, "\nmanifest ")
+				if got := strings.Count(section+"\n", "  + "+newScript+"\n"); got != 2 {
+					t.Fatalf("dry run reported %d override substitutions; want 2: %s", got, section)
+				}
+				return
+			}
+			// Only component references change in the expected fixture.
+			rootOverride["script"], childOverride["script"] = newScript, newScript
+			data, err = os.ReadFile(filepath.Join(dir, tc.path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got any
+			if err := json.Unmarshal(data, &got); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, content) {
+				t.Fatalf("script overrides or unrelated fields wrong: %s", data)
+			}
+			if _, err := os.Stat(filepath.Join(dir, oldScript)); !os.IsNotExist(err) {
+				t.Fatalf("legacy descriptor wasn't removed: %v", err)
+			}
+		})
+	}
+}
+
 func mustWrite(t *testing.T, path string, data []byte) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

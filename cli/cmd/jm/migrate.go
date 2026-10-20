@@ -242,16 +242,14 @@ func findOrphanScriptJsons(projectDir string) ([]string, error) {
 func rewriteScriptRefs(node any, scriptJsonToTs map[string]string, changes *[]string) {
 	switch v := node.(type) {
 	case map[string]any:
-		if comps, ok := v["components"].(map[string]any); ok {
-			if sc, ok := comps["ScriptComponent"].(map[string]any); ok {
-				if ref, ok := sc["script"].(string); ok && strings.HasSuffix(ref, ".script.json") {
-					key := filepath.ToSlash(filepath.Clean(ref))
-					if newRef, found := scriptJsonToTs[key]; found {
-						sc["script"] = newRef
-						*changes = append(*changes, "- "+ref, "+ "+newRef)
-					} else {
-						*changes = append(*changes, fmt.Sprintf("! dangling: %s (not in assets[])", ref))
-					}
+		if sc, ok := v["ScriptComponent"].(map[string]any); ok {
+			if ref, ok := sc["script"].(string); ok && strings.HasSuffix(ref, ".script.json") {
+				key := filepath.ToSlash(filepath.Clean(ref))
+				if newRef, found := scriptJsonToTs[key]; found {
+					sc["script"] = newRef
+					*changes = append(*changes, "- "+ref, "+ "+newRef)
+				} else {
+					*changes = append(*changes, fmt.Sprintf("! dangling: %s (not in assets[])", ref))
 				}
 			}
 		}
