@@ -32,7 +32,7 @@ func TestCompanionsGoIntoThePlugin(t *testing.T) {
 	if _, err := addToCodex("/x/jm"); err != nil {
 		t.Fatal(err)
 	}
-	onPath(t, "uv", "aseprite") // the app's path, or (no Aseprite.app here) this one's
+	onPath(t, "npx", "aseprite") // the app's path, or (no Aseprite.app here) this one's
 	for _, name := range []string{"tiled", "aseprite"} {
 		if did, err := setCompanions(map[string]bool{name: true}); err != nil || !strings.Contains(did, "restart") {
 			t.Fatalf("%s: %s %v", name, did, err)
@@ -172,7 +172,7 @@ func TestAsepriteIsTheOneTheVariableNames(t *testing.T) {
 	if _, err := addToCodex("/x/jm"); err != nil {
 		t.Fatal(err)
 	}
-	bin := onPath(t, "uv")
+	bin := onPath(t, "npx")
 	custom := filepath.Join(t.TempDir(), "my-aseprite")
 	os.WriteFile(custom, []byte("#!/bin/sh\n"), 0o755)
 	server := func() string {

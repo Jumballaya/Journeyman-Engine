@@ -72,10 +72,12 @@ func Onboarding(root string, you Facts) []Step {
 		{Name: "characters", Done: kinds["character"] > 0, Optional: true,
 			Ask:  "Who's in it: the player character, and the two or three others who matter most?",
 			Keep: "dossier_new (kind character) each, linked to their home and faction; world_link member_of"},
-		{Name: "art", Done: facts["art"] || facts["style"],
-			Ask: "How does it look: the sprite size (16x16? 32x32?), the palette, the picture's resolution? " +
-				"Art is drawn in Aseprite: its .aseprite files go in assets/art/.",
-			Keep: "remember (category art) a fact each: size, palette, resolution, where the .aseprite sources live"},
+		{Name: "art", Done: artLocked(notes),
+			Ask: "How does it look: the palette (a Lospec one, or its colours), the grid and sprite sizes (16x16? 32x32?), " +
+				"the view (side-on, top-down, three-quarter), where the light comes from, the outline; and which animations a " +
+				"character or creature has? Art is drawn in Aseprite, in assets/art/.",
+			Keep: "write them as design/Art.md's properties (palette: the palette file you save in assets/palettes/, grid, view, light, " +
+				"outline, sizes, animations) and its sections (ramps, shading, each place's look); jm build holds the art to them"},
 		{Name: "first level", Done: observed("Levels"),
 			Ask:  "What's the first level or area: its idea, what it teaches, how it should feel?",
 			Keep: "memory_note (note Levels, category level); for a world, link the level to its location dossier"},
@@ -112,4 +114,21 @@ func NextStep(steps []Step) (Step, bool) {
 		}
 	}
 	return Step{}, false
+}
+
+// artLocked: the game's art note names its palette and grid. As the art
+// check picks it: design/Art.md whatever its type, else the first of type art.
+func artLocked(notes []Note) bool {
+	var art *Note
+	for i, n := range notes {
+		if n.Path == Dir+"/Art.md" {
+			art = &notes[i]
+			break
+		}
+		if n.Type == "art" && art == nil {
+			art = &notes[i]
+		}
+	}
+	set := func(key string) bool { v := art.Props[key]; return v != nil && v != "" }
+	return art != nil && set("palette") && set("grid")
 }
