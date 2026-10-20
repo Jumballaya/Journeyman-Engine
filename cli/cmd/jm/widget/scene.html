@@ -173,7 +173,7 @@
     }
     // A tile map stands on its transform (its bottom-left corner), y up.
     const tiled = es.filter((e) => e.components && e.components.TransformComponent && e.components.TileMapComponent)
-      .map((e) => [e, maps[e.components.TileMapComponent.map]]).filter(([, m]) => m);
+      .map((e) => [e, maps[e.components.TileMapComponent.map]]).filter(([, m]) => m).sort(([a], [b]) => (a.z || 0) - (b.z || 0));
     for (const [e, m] of tiled) {
       x0 = Math.min(x0, e.x); x1 = Math.max(x1, e.x + m.w);
       y0 = Math.min(y0, -e.y - m.h); y1 = Math.max(y1, -e.y);
