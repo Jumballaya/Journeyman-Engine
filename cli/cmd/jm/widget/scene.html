@@ -33,6 +33,8 @@
   .view .screen { fill: none; stroke: var(--muted); stroke-dasharray: 6 4; pointer-events: none; }
   .view .shape.prefab { fill: var(--prefab); stroke: var(--prefab); }
   .view .shape.on { fill: var(--accent); fill-opacity: .6; stroke: var(--accent); }
+  .view .shape.drawn { fill: transparent; stroke-opacity: .45; } .view .shape.drawn.on { fill: var(--accent); fill-opacity: .25; stroke-opacity: 1; }
+  .view .sprite { image-rendering: pixelated; pointer-events: none; }
   .side { display: grid; gap: 10px; align-content: start; min-width: 0; }
   .list { max-height: 240px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
   .list button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 3px 6px; border-radius: 6px;
@@ -87,7 +89,9 @@
     const out = state.laid && state.laid.over === host.result ? state.laid.result : host.result;
     const s = out && out.structuredContent;
     const said = out && Array.isArray(out.content) ? out.content.filter((c) => c && c.type === "text").map((c) => c.text).join(" ") : "";
-    return { loading: !out, scene: s && Array.isArray(s.entities) ? s : null, said };
+    // How it looks: texture → its picture; a tile map's .tmj → { src, w, h }, drawn whole.
+    const meta = out && out._meta || {}, looks = { sprites: meta["jm/sprites"] || {}, maps: meta["jm/maps"] || {} };
+    return { loading: !out, scene: s && Array.isArray(s.entities) ? s : null, said, looks };
   };
 
   // The opened file, read through the host once per file: its JSON is what edits change.
@@ -149,7 +153,7 @@
     render();
   };
 
-  const view = (s) => {
+  const view = (s, { sprites, maps }) => {
     const es = s.entities;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     // Drawn y up, as the engine: a shape at (x, -y), turned the other way on screen.
@@ -157,6 +161,12 @@
       const c = Math.abs(Math.cos(e.rotation || 0)), s = Math.abs(Math.sin(e.rotation || 0));
       return [(c * e.w + s * e.h) / 2, (s * e.w + c * e.h) / 2];
     };
+    // A tile map stands on its transform (its bottom-left corner), y up.
+    const tiled = es.map((e) => [e, maps[e.components && e.components.TileMapComponent && e.components.TileMapComponent.map]]).filter(([, m]) => m);
+    for (const [e, m] of tiled) {
+      x0 = Math.min(x0, e.x); x1 = Math.max(x1, e.x + m.w);
+      y0 = Math.min(y0, -e.y - m.h); y1 = Math.max(y1, -e.y);
+    }
     for (const e of es) {
       const [hw, hh] = turned(e);
       x0 = Math.min(x0, e.x - hw); x1 = Math.max(x1, e.x + hw);
@@ -179,10 +189,38 @@
     // A point's 4 px: in a screen fitted to the view, about 640 px across.
     const r = sc ? 4 * (sc.w + 2 * m) / 640 : 4 / k;
     const svg = $("svg:svg", { viewBox: `${x0 - m} ${y0 - m} ${w} ${h}`, style: `width: ${width}` });
+    for (const [e, m] of tiled) svg.append($("svg:image", { class: "sprite", href: m.src, x: e.x, y: -e.y - m.h, width: m.w, height: m.h, preserveAspectRatio: "none" }));
+    // Each sprite as it looks (its picture tinted by its color, or a solid quad in it), lowest z first;
+    // its box goes over it to pick. Unscaled, the engine's quad is 2 × 2.
+    const looks = new Map(), tints = new Map(), defs = $("svg:defs");
+    for (const e of es) {
+      const sp = e.components && e.components.SpriteComponent;
+      if (!sp || (sp.texture && !sprites[sp.texture])) continue;
+      const c = [0, 1, 2, 3].map((i) => Array.isArray(sp.color) && typeof sp.color[i] === "number" ? sp.color[i] : 1);
+      looks.set(e, { src: sp.texture ? sprites[sp.texture] : "", c, w: e.w > 0 ? e.w : 2, h: e.h > 0 ? e.h : 2 });
+    }
+    const tint = ([r, g, b]) => {
+      const key = `${r} ${g} ${b}`;
+      if (key === "1 1 1") return undefined;
+      if (!tints.has(key)) {
+        tints.set(key, `tint${tints.size}`);
+        defs.append($("svg:filter", { id: tints.get(key), "color-interpolation-filters": "sRGB" },
+          $("svg:feColorMatrix", { type: "matrix", values: `${r} 0 0 0 0 0 ${g} 0 0 0 0 0 ${b} 0 0 0 0 0 1 0` })));
+      }
+      return `url(#${tints.get(key)})`;
+    };
+    svg.append(defs);
+    for (const [e, look] of [...looks].sort(([a], [b]) => (a.z || 0) - (b.z || 0))) {
+      const at = { x: e.x - look.w / 2, y: -e.y - look.h / 2, width: look.w, height: look.h, opacity: look.c[3],
+        transform: `rotate(${-(e.rotation || 0) * 180 / Math.PI} ${e.x} ${-e.y}) translate(${e.x} ${-e.y}) scale(${e.flipX ? -1 : 1} ${e.flipY ? -1 : 1}) translate(${-e.x} ${e.y})` };
+      svg.append(look.src ? $("svg:image", { ...at, class: "sprite", href: look.src, preserveAspectRatio: "none", filter: tint(look.c) })
+        : $("svg:rect", { ...at, class: "sprite", fill: `rgb(${look.c.slice(0, 3).map((v) => Math.round(v * 255)).join(" ")})` }));
+    }
+    // The screen over the pictures.
     if (sc) svg.append($("svg:rect", { class: "screen", x: sc.x - sc.w / 2, y: -sc.y - sc.h / 2, width: sc.w, height: sc.h, "vector-effect": "non-scaling-stroke" },
       $("svg:title", {}, `The screen as the game starts (${sc.w}×${sc.h})`)));
     for (const e of es) {
-      const cls = "shape" + (e.prefab ? " prefab" : "") + (e.where === state.selected ? " on" : "");
+      const cls = "shape" + (looks.has(e) ? " drawn" : "") + (e.prefab ? " prefab" : "") + (e.where === state.selected ? " on" : "");
       const pick = () => select(e.where);
       const shape = e.w > 0 && e.h > 0
         ? $("svg:rect", { class: cls, x: e.x - e.w / 2, y: -e.y - e.h / 2, width: e.w, height: e.h, "vector-effect": "non-scaling-stroke", onclick: pick,
@@ -307,7 +345,7 @@
         host.can("callTool") ? $("span", { class: "asks" }, $("button", { "aria-pressed": String(shown), disabled: shown && state.drawn.src === "",
           onclick: () => shown ? (state.drawn = null, render()) : draw(s) }, "Rendered")) : null),
       $("div", { class: "status" }, state.notice || status(uri)),
-      $("div", { class: "main" }, $("div", { class: "left" }, drawing(s), view(s)), $("div", { class: "side" }, list(s), inspector(s))));
+      $("div", { class: "main" }, $("div", { class: "left" }, drawing(s), view(s, d.looks)), $("div", { class: "side" }, list(s), inspector(s))));
     sharePick(s);
     try { host.notifyHeight(document.body.scrollHeight); } catch (e) {}
   };

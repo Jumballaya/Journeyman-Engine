@@ -101,7 +101,10 @@ type placedEntity struct {
 	Y          float64        `json:"y"`
 	W          float64        `json:"w"`
 	H          float64        `json:"h"`
-	Rotation   float64        `json:"rotation"` // radians, counter-clockwise (y up), its parents' added
+	Rotation   float64        `json:"rotation"`        // radians, counter-clockwise (y up), its parents' added
+	Z          float64        `json:"z,omitempty"`     // draw order: higher on top
+	FlipX      bool           `json:"flipX,omitempty"` // a negative scale mirrors it
+	FlipY      bool           `json:"flipY,omitempty"`
 	Components map[string]any `json:"components"`
 }
 
@@ -135,7 +138,8 @@ func sceneView(home string, a toolArgs) toolResult {
 	if s, ok := screenOf(root, placed); ok {
 		out["screen"] = s
 	}
-	return toolResult{Text: text, Structured: out}
+	sprites, maps := scenePictures(root, placed)
+	return toolResult{Text: text, Structured: out, Meta: map[string]any{"jm/sprites": sprites, "jm/maps": maps}}
 }
 
 // screenOf is what the game shows of a scene as it starts: its logical size
@@ -277,7 +281,7 @@ func gameRootOf(path string) string {
 }
 
 // placement is where a parent is: children are placed from it, turned with it.
-type placement struct{ x, y, rotation float64 }
+type placement struct{ x, y, z, rotation float64 }
 
 // place lays out entries as the engine's SceneLoader makes them, into out:
 // each one's prefab under its overrides, and its children (the prefab's, with
@@ -318,10 +322,11 @@ func place(root string, entries []map[string]any, childOverrides map[string]any,
 		rotation, _ := t["rotation"].(float64)
 		lx, ly := nth(pos, 0), nth(pos, 1)
 		c, sn := math.Cos(parent.rotation), math.Sin(parent.rotation)
-		here := placement{parent.x + c*lx - sn*ly, parent.y + sn*lx + c*ly, parent.rotation + rotation}
-		e.X, e.Y, e.Rotation = here.x, here.y, here.rotation
+		here := placement{parent.x + c*lx - sn*ly, parent.y + sn*lx + c*ly, parent.z + nth(pos, 2), parent.rotation + rotation}
+		e.X, e.Y, e.Z, e.Rotation = here.x, here.y, here.z, here.rotation
 		if len(scale) >= 2 { // scale is a half size
 			e.W, e.H = 2*math.Abs(scale[0]), 2*math.Abs(scale[1])
+			e.FlipX, e.FlipY = scale[0] < 0, scale[1] < 0
 		}
 		*out = append(*out, e)
 		if t == nil { // as the engine: a parent without a transform holds its children nowhere

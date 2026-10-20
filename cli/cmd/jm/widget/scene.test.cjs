@@ -239,3 +239,23 @@ test('the pages write JSON as jm fmt does', () => {
   const want = fs.readFileSync(path.join(__dirname, '../../../internal/jsonfmt/testdata/scene.out.json'), 'utf8');
   assert.equal(kit.jsonText(JSON.parse(want)) + '\n', want);
 });
+
+test('each sprite is drawn as it looks, lowest z first, its box over it to pick', async () => {
+  const { find, fromHost } = await scenePage({ input: null });
+  const sprite = (name, z, texture, extra = {}) => ({ where: `entities[${z}]`, name, x: 0, y: 0, z, w: 16, h: 16, ...extra,
+    components: { SpriteComponent: texture === null ? { color: [1, 0, 0, 0.5] } : { texture, color: [0.5, 1, 1, 1] } } });
+  fromHost('ui/notifications/tool-result', { content: [], _meta: { 'jm/sprites': { 'a.png': 'data:image/png;base64,AAA' } },
+    structuredContent: { scene: 'scenes/level.scene.json', entities: [sprite('Top', 2, 'a.png', { flipX: true }), sprite('Quad', 1, null), sprite('Missing', 0, 'gone.png')] } });
+  await settle();
+  const drawn = find((e) => e.attributes.class === 'sprite');
+  assert.deepEqual(drawn.map((e) => e.tag), ['rect', 'image']);  // the quad (z 1) under the picture (z 2)
+  assert.equal(drawn[0].attributes.fill, 'rgb(255 0 0)');
+  assert.equal(drawn[0].attributes.opacity, 0.5);
+  assert.equal(drawn[1].attributes.href, 'data:image/png;base64,AAA');
+  assert.match(drawn[1].attributes.transform, /scale\(-1 1\)/);
+  const filter = find((e) => e.tag === 'feColorMatrix')[0];
+  assert.equal(drawn[1].attributes.filter, 'url(#tint0)');  // its color tints its picture
+  assert.match(filter.attributes.values, /^0\.5 0 0 0 0 0 1 /);
+  const boxes = find((e) => (e.attributes.class || '').startsWith('shape'));
+  assert.deepEqual(boxes.map((e) => e.attributes.class.includes('drawn')), [true, true, false]);  // no picture: its box as before
+});

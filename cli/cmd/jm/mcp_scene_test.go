@@ -1,7 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/png"
 	"math"
 	"os"
 	"path/filepath"
@@ -193,5 +199,92 @@ func TestSceneScreenIsTheGamesView(t *testing.T) {
 	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{}`), 0o644)
 	if _, ok := screenOf(root, nil); ok {
 		t.Error("no size, a screen")
+	}
+}
+
+// The page draws each sprite as it looks: its image, or its atlas region as
+// the build cuts it; a texture that isn't there is left to its box.
+func TestSceneViewGivesTheSpritesPictures(t *testing.T) {
+	root := sceneGame(t)
+	square := func(file string, w, h int) {
+		img := image.NewNRGBA(image.Rect(0, 0, w, h))
+		var buf bytes.Buffer
+		png.Encode(&buf, img)
+		os.MkdirAll(filepath.Join(root, filepath.Dir(file)), 0o755)
+		os.WriteFile(filepath.Join(root, file), buf.Bytes(), 0o644)
+	}
+	square("assets/hero.png", 16, 16)
+	square("assets/fx/spark_0.png", 4, 6)
+	os.WriteFile(filepath.Join(root, "assets/fx.atlas.json"), []byte(`{"sources":["assets/fx/spark_0.png"]}`), 0o644)
+	os.WriteFile(filepath.Join(root, "scenes/art.scene.json"), []byte(`{"name":"Art","entities":[
+		{"name":"Hero","components":{"TransformComponent":{"position":[0,0,2],"scale":[-8,8]},"SpriteComponent":{"texture":"assets/hero.png"}}},
+		{"name":"Spark","components":{"TransformComponent":{"scale":[2,3]},"SpriteComponent":{"texture":"assets/fx.atlas.json#spark_0"}}},
+		{"name":"Gone","components":{"TransformComponent":{"scale":[2,2]},"SpriteComponent":{"texture":"assets/none.png"}}}]}`), 0o644)
+	t.Chdir(root)
+	result := sceneCall(t, `{"name":"scene_view","arguments":{"scene":"scenes/art.scene.json"}}`)
+	sprites, _ := result["_meta"].(map[string]any)["jm/sprites"].(map[string]any)
+	size := func(texture string) image.Point {
+		uri, _ := sprites[texture].(string)
+		data, _ := base64.StdEncoding.DecodeString(strings.TrimPrefix(uri, "data:image/png;base64,"))
+		img, err := png.Decode(bytes.NewReader(data))
+		if err != nil {
+			return image.Point{}
+		}
+		return img.Bounds().Size()
+	}
+	if size("assets/hero.png") != (image.Point{16, 16}) || size("assets/fx.atlas.json#spark_0") != (image.Point{4, 6}) || len(sprites) != 2 {
+		t.Errorf("sprites: %v", sprites)
+	}
+	hero := result["structuredContent"].(map[string]any)["entities"].([]any)[0].(map[string]any)
+	if hero["z"] != 2.0 || hero["flipX"] != true || hero["flipY"] != nil {
+		t.Errorf("hero: %v", hero)
+	}
+}
+
+// A tile map is drawn as the engine draws it: a sheet tileset (external, beside
+// the map) cut into its grid, gids placed row 0 on top, a flipped tile mirrored.
+func TestATileMapIsDrawnWhole(t *testing.T) {
+	root := t.TempDir()
+	sheet := image.NewNRGBA(image.Rect(0, 0, 4, 2)) // two 2×2 tiles: red, then green with a blue left column
+	for y := range 2 {
+		sheet.Set(0, y, color.NRGBA{255, 0, 0, 255})
+		sheet.Set(1, y, color.NRGBA{255, 0, 0, 255})
+		sheet.Set(2, y, color.NRGBA{0, 0, 255, 255})
+		sheet.Set(3, y, color.NRGBA{0, 255, 0, 255})
+	}
+	var buf bytes.Buffer
+	png.Encode(&buf, sheet)
+	os.MkdirAll(filepath.Join(root, "maps"), 0o755)
+	os.WriteFile(filepath.Join(root, "maps", "tiles.png"), buf.Bytes(), 0o644)
+	os.WriteFile(filepath.Join(root, "maps", "set.tsj"), []byte(`{"tilewidth":2,"tileheight":2,"image":"tiles.png","columns":2,"tilecount":2}`), 0o644)
+	// Row 0: red, green flipped; row 1: nothing, green.
+	os.WriteFile(filepath.Join(root, "maps", "a.tmj"), []byte(`{"width":2,"height":2,"tilewidth":2,"tileheight":2,
+		"tilesets":[{"firstgid":1,"source":"set.tsj"}],"layers":[{"type":"tilelayer","data":[1,2147483650,0,2]}]}`), 0o644)
+	img := tileMapPicture(root, "maps/a.tmj")
+	if img == nil || img.Bounds().Size() != (image.Point{4, 4}) {
+		t.Fatalf("picture: %v", img)
+	}
+	at := func(x, y int) color.NRGBA { return color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA) }
+	red, green, blue := color.NRGBA{255, 0, 0, 255}, color.NRGBA{0, 255, 0, 255}, color.NRGBA{0, 0, 255, 255}
+	if at(0, 0) != red || at(2, 0) != green || at(3, 0) != blue || at(0, 2).A != 0 || at(2, 2) != blue || at(3, 2) != green {
+		t.Errorf("pixels: %v %v %v %v %v %v", at(0, 0), at(2, 0), at(3, 0), at(0, 2), at(2, 2), at(3, 2))
+	}
+
+	// The same layer as base64 gids, the green tile turned across its diagonal: its blue column becomes its top row.
+	gids := make([]byte, 16)
+	for i, gid := range []uint32{1, 2 | 0x20000000, 0, 2} {
+		binary.LittleEndian.PutUint32(gids[4*i:], gid)
+	}
+	os.WriteFile(filepath.Join(root, "maps", "b.tmj"), []byte(`{"width":2,"height":2,"tilewidth":2,"tileheight":2,
+		"tilesets":[{"firstgid":1,"source":"set.tsj"}],"layers":[{"type":"tilelayer","encoding":"base64","data":"`+base64.StdEncoding.EncodeToString(gids)+`"}]}`), 0o644)
+	if img = tileMapPicture(root, "maps/b.tmj"); img == nil || at(0, 0) != red || at(2, 0) != blue || at(3, 0) != blue || at(2, 1) != green || at(3, 1) != green {
+		t.Errorf("base64, diagonal: %v", img)
+	}
+	// Sizes past what's sent (or past what an int holds) are left to the box, not allocated.
+	for _, size := range []string{`"width":4096,"height":4096`, `"width":4294967296,"height":4294967296`} {
+		os.WriteFile(filepath.Join(root, "maps", "c.tmj"), []byte(`{`+size+`,"tilewidth":2,"tileheight":2,"layers":[]}`), 0o644)
+		if tileMapPicture(root, "maps/c.tmj") != nil {
+			t.Errorf("%s: drawn", size)
+		}
 	}
 }
