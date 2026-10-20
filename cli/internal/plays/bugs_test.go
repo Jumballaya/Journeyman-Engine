@@ -3,6 +3,7 @@ package plays
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -152,5 +153,81 @@ func TestUnreadablePlayFoldersAreFoundAndPrunedByHand(t *testing.T) {
 	}
 	if removed, _ := Prune(root, 5, false); removed != 1 || exists(broken) {
 		t.Errorf("pruning by hand removed %d", removed)
+	}
+}
+
+func TestExplicitUnreadablePlayReportsItsFileError(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data []byte
+	}{
+		{"missing metadata", nil},
+		{"malformed metadata", []byte("{broken")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			const id = "2026-10-20_000000"
+			dir := filepath.Join(Root(root), id)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if tc.data != nil {
+				if err := os.WriteFile(filepath.Join(dir, "session.json"), tc.data, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, withReadable := range []bool{false, true} {
+				if withReadable {
+					writeSession(t, root, "2026-10-21_000000", `"ended":"quit"`)
+				}
+				_, err := Find(root, id)
+				if err == nil {
+					t.Fatal("unreadable play loaded without an error")
+				}
+				for _, part := range []string{id, "session.json"} {
+					if !strings.Contains(err.Error(), part) {
+						t.Errorf("with readable play = %v: error lacks %q: %v", withReadable, part, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestFindKeepsLatestAliasesWhenTheirFoldersExist(t *testing.T) {
+	root := t.TempDir()
+	const id = "2026-10-20_000000"
+	writeSession(t, root, id, `"ended":"quit"`)
+	for _, name := range []string{"latest", "latest-0", "latest-bad"} {
+		dir := filepath.Join(Root(root), name)
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "session.json"), []byte("{broken"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, ref := range []string{"", "latest", "latest-0"} {
+		if p, err := Find(root, ref); err != nil || p.ID != id {
+			t.Errorf("%q: got %v, %v; want %s", ref, p, err, id)
+		}
+	}
+	if _, err := Find(root, "latest-bad"); err == nil || !strings.Contains(err.Error(), "latest-N") {
+		t.Errorf("invalid alias should report its syntax: %v", err)
+	}
+}
+
+func TestFindDoesNotTreatContainerFoldersAsPlays(t *testing.T) {
+	root := t.TempDir()
+	writeSession(t, root, "2026-10-20_000000", `"ended":"quit"`)
+	for _, dir := range []string{Root(root), filepath.Dir(Root(root))} {
+		if err := os.WriteFile(filepath.Join(dir, "session.json"), []byte(`{"format":1,"frames":1}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, ref := range []string{".", "..", "../plays", filepath.Join("..", "plays")} {
+		if p, err := Find(root, ref); err == nil || p != nil {
+			t.Errorf("container reference %q resolved as play: %v, %v", ref, p, err)
+		}
 	}
 }

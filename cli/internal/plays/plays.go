@@ -336,6 +336,13 @@ func Load(dir string) (*Play, error) {
 // Find resolves a play by reference: an id (or a unique prefix of one),
 // "latest" (or "" ), or "latest-N" for the one N before it.
 func Find(projectRoot, ref string) (*Play, error) {
+	// An exact id can explain a damaged play even when List can't show any.
+	if filepath.IsLocal(ref) && ref != "." && filepath.Base(ref) == ref &&
+		ref != "latest" && !strings.HasPrefix(ref, "latest-") {
+		if dir := filepath.Join(Root(projectRoot), ref); exists(dir) {
+			return Load(dir)
+		}
+	}
 	all, err := List(projectRoot)
 	if err != nil {
 		return nil, err
@@ -355,12 +362,6 @@ func Find(projectRoot, ref string) (*Play, error) {
 			return nil, fmt.Errorf("only %d plays recorded", len(all))
 		}
 		return all[back], nil
-	}
-	// A whole id: that play, or why its folder isn't one (List skipped it).
-	if dir := filepath.Join(Root(projectRoot), ref); filepath.Base(ref) == ref {
-		if _, err := os.Stat(dir); err == nil {
-			return Load(dir)
-		}
 	}
 	var matches []*Play
 	for _, p := range all {
