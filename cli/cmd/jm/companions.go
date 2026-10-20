@@ -31,13 +31,14 @@ type companion struct {
 }
 
 var companions = []companion{
-	{name: "aseprite", title: "Aseprite", use: "draw and animate sprites; exports become atlases with clips",
+	{name: "aseprite", title: "Aseprite", use: "draw, validate and critique sprites to the game's art note; exports become atlases with clips",
 		app: []string{"/Applications/Aseprite.app/Contents/MacOS/aseprite", "~/Library/Application Support/Steam/steamapps/common/Aseprite/Aseprite.app/Contents/MacOS/aseprite",
 			`C:\Program Files\Aseprite\Aseprite.exe`, `C:\Program Files (x86)\Steam\steamapps\common\Aseprite\Aseprite.exe`},
-		command: "aseprite", pathEnv: "ASEPRITE_PATH", runner: "uv",
-		server: func(found string) *plugin.Server { // github.com/diivi/aseprite-mcp, pinned
-			s := &plugin.Server{Command: "uv", Args: []string{"run", "--no-project", "--python", "3.13", "--with",
-				"git+https://github.com/diivi/aseprite-mcp@90d1696a7e41edff89bbd0823ae6a5f86c114bcc", "--", "python", "-m", "aseprite_mcp"}}
+		command: "aseprite", pathEnv: "ASEPRITE_PATH", runner: "npx",
+		// github.com/with-pebbly/aseprite-ai-artist, pinned: it draws in the open Aseprite (its extension
+		// installed: npx @pebbly/aseprite-ai-artist install-extension), validates, and reviews.
+		server: func(found string) *plugin.Server {
+			s := &plugin.Server{Command: "npx", Args: []string{"-y", "@pebbly/aseprite-ai-artist@0.8.2", "serve"}}
 			if found != "" { // none: the server looks for it itself
 				s.Env = map[string]string{"ASEPRITE_PATH": found}
 			}
@@ -156,7 +157,11 @@ func checkCompanion(name string, on bool) (companion, error) {
 	}
 	if on && c.runner != "" {
 		if _, err := exec.LookPath(c.runner); err != nil {
-			return c, fmt.Errorf("%s's MCP server runs with %s, which isn't installed (docs.astral.sh/uv): install it, then turn %s on", c.title, c.runner, name)
+			from := map[string]string{"npx": "Node.js 22.6 or later, nodejs.org"}[c.runner]
+			if from == "" {
+				from = "docs.astral.sh/uv"
+			}
+			return c, fmt.Errorf("%s's MCP server runs with %s, which isn't installed (%s): install it, then turn %s on", c.title, c.runner, from, name)
 		}
 	}
 	return c, nil
@@ -231,7 +236,7 @@ needed, and jm installs none. Turning one on adds to Journeyman's agent
 plugin (jm setup codex or chatgpt installs it) a skill that teaches the work
 across it and Journeyman, and its MCP server where it has one:
 
-  aseprite      draw and animate sprites (MCP: diivi/aseprite-mcp, run with uv)
+  aseprite      draw, validate and critique sprites (MCP: aseprite-ai-artist, run with npx)
   tiled         paint tile maps (a skill: the game reads Tiled's files)
   obsidian      the game's design/ notes as a vault (a skill: notes are files)
   basic-memory  remembers design and findings across chats (MCP: basic-memory)

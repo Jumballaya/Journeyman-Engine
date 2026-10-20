@@ -94,3 +94,23 @@ func TestEntrypointsCarryJMsMark(t *testing.T) {
 		}
 	}
 }
+
+// ChatGPT keeps a page's URI until it restarts: after jm updates, the old
+// stamp still gets the page (this jm's), not "Couldn't display".
+func TestAWidgetIsServedAtAnOlderStamp(t *testing.T) {
+	for _, uri := range []string{"ui://widget/journeyman-studio-0badf00d-app.html", "ui://widget/journeyman-studio-0badf00d.html", studio.appURI()} {
+		got, ok := readWidget(uri)
+		if !ok || got["uri"] != uri || got["text"] != studio.page() {
+			t.Errorf("%s: served %v", uri, ok)
+			continue
+		}
+		if legacy := strings.HasSuffix(uri, "d.html") || uri == studio.legacyURI(); (got["mimeType"] == "text/html+skybridge") != legacy {
+			t.Errorf("%s: kind %v", uri, got["mimeType"])
+		}
+	}
+	for _, uri := range []string{"ui://widget/journeyman-studio-0badf00d-x.html", "ui://widget/journeyman-studio-notahash-app.html", "ui://widget/journeyman-studio.html", "ui://widget/journeyman-studios-0badf00d.html"} {
+		if _, ok := readWidget(uri); ok {
+			t.Errorf("%s: served", uri)
+		}
+	}
+}

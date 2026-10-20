@@ -1,25 +1,81 @@
 ---
 name: aseprite
-description: Draw and animate sprites in Aseprite for a Journeyman game, then bring them in as an atlas with animation clips. Use when the person wants a new sprite, an animation, or to change art they made in Aseprite.
+description: Draw and animate sprites in Aseprite for a Journeyman game, held to the game's art note (its art direction), validated and critiqued, then brought in as an atlas with animation clips. Use when the person wants a new sprite, an animation, a tileset, or to change or review art made in Aseprite.
 ---
 
 # Sprites with Aseprite
 
-The person draws in Aseprite; the game reads Aseprite's sprite-sheet export.
+The game's look is decided once, in its **art note**: `design/Art.md`, or
+(without one) the design note of type `art`. Its properties are the locks
+every picture keeps, its sections the rest. Every sprite, whoever draws it,
+starts from it, so a hundred sprites look like one game.
 
-1. **Draw or change it.** With the `aseprite` tools (the companion's MCP
-   server) make the sprite in the game's `art/` folder (`art/kage.aseprite`):
-   one layer set, frames per animation, a tag per animation (`idle`, `run`,
-   `attack`). Check your work with its preview tools before going on. Or ask
-   the person to draw it; open it for them in Aseprite.
-2. **Export a sheet with its data.** Aseprite's sprite-sheet export, with JSON
-   data and tags on, to `art/kage.png` + `art/kage.json` (the tools' sheet
-   export, or `aseprite -b art/kage.aseprite --sheet art/kage.png --data
-   art/kage.json --list-tags --format json-array`).
-3. **Into the atlas.** List `art/kage.json` in the game's `*.atlas.json`
-   `sources`. `build` packs it: each frame is a region (`kage_0`, …) and each
-   tag a clip, with its frames' own durations.
-4. **Play it.** `"SpriteAnimationComponent": {"atlasPath": "assets/atlases/game.atlas.json", "sheet": "kage", "current": "idle"}`;
-   scripts switch `current`. `drive_frame` to see it moving.
+## Before drawing: the brief is the art note
+
+Find the art note once: `health` (checks `art`) names it (`art.bible.path`;
+none: the game has no art note yet). Read it (`memory` with its note) and
+the dossier you're drawing. The art note answers what a sprite brief asks;
+don't ask the person again:
+
+| Property | What it fixes |
+|---|---|
+| `palette` | the palette file (`.gpl`, `.hex`, `.pal`): load it into the sprite; draw only with it |
+| `grid` | tiles and props are multiples of it |
+| `view`, `light` | the drawing's angle and where the light comes from |
+| `outline` | the outline colour, by its name in the palette |
+| `colors` | the most colours one frame uses |
+| `sizes` | each dossier type's (or set's) frame: `character: 32x32` |
+| `animations` | each set's directions and actions: tags `<action>_<direction>` (an undirected action by its name), each frame's milliseconds |
+| `references` | finished sprites new ones match |
+
+The dossier's type picks its size and set (`art_set` overrides). If the art
+note has no palette or grid yet, or there's no art note, settle them with the
+person first (the `art_direction` playbook) and write them in: into the art
+note there is, or a new `design/Art.md` only when there's none.
+
+## Draw
+
+With the Aseprite companion's tools (its MCP server), following its own
+workflows (brief, draw, animate):
+
+1. A new sprite at the frame size, the palette loaded from the art note's file, as
+   `assets/art/<kind>/<name>.aseprite`.
+2. Import a reference (one of the art note's `references`, the same set if one is)
+   on a locked layer, to match its proportions, shading and outline.
+3. Draw it; then the set's actions, a frame per entry, a tag per action and
+   direction, each frame timed as the set says. Look at it after each step
+   (preview, filmstrip for animations).
+
+## Check, then critique
+
+- **Validate** with the tools (`validate`: palette, strays, outlines,
+  anti-aliasing, animation) and fix every error.
+- **Critique** it: the `pixel-critic` agent where the agent has it, otherwise
+  the tools' review workflow (`skill://review`). A score out of 10 against
+  the art note and the references; under 7, fix the highest-value finding and
+  critique again.
+- **Note the critique** on the dossier: `memory_note` (category `critique`):
+  the score, and what's left. A rule the critic keeps citing becomes the art
+  note's (`memory_note` on it, category `rule`), so the next sprite starts with it.
+
+## Into the game
+
+1. **Export a sheet with its data** beside the source: `assets/art/<kind>/<name>.png`
+   + `.json` (the tools' sheet export, JSON data, tags on; or
+   `aseprite -b <name>.aseprite --sheet <name>.png --data <name>.json --list-tags --format json-array`).
+2. **Into the atlas**: list the `.json` in the game's `*.atlas.json`
+   `sources`. `build` packs it: each frame is a region (`kage_0`, …), each
+   tag a clip with its frames' own durations.
+3. **The dossier**: `sprite: assets/art/<kind>/<name>.aseprite`, and
+   `art: done` once the critique passes.
+4. **Build.** `build` (and `health`, checks `art`) holds the export to the art note:
+   colours off the palette, half-clear pixels, frames of the wrong size,
+   missing or mistimed tags, sheets no atlas lists, tiles off the grid. Its
+   art warnings must be gone.
+5. **Play it**: `"SpriteAnimationComponent": {"atlasPath": "assets/atlases/game.atlas.json", "sheet": "kage", "current": "idle_down"}`;
+   scripts switch `current`. Look at it in the game (`drive_frame`).
+
+Tilesets the same way: tiles on the grid, the palette, exported as Tiled
+`.tsj` (the tools' tileset export) into `assets/maps/`.
 
 Keep the `.aseprite` files: they're the source, the PNG and JSON are made from them.

@@ -1,7 +1,9 @@
 package memory
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -28,7 +30,10 @@ func TestOnboardingFollowsTheNotes(t *testing.T) {
 	if _, err := Skip(root, "pitch"); err == nil {
 		t.Error("skipped the pitch")
 	}
-	GameFacts(root).Remember("art", "16x16 sprites in assets/art/*.aseprite.", "")
+	// Locked: palette and grid set. Its type dropped, it's still the art note (the art check holds the art to it).
+	art, _ := os.ReadFile(filepath.Join(root, Dir, "Art.md"))
+	os.WriteFile(filepath.Join(root, Dir, "Art.md"), []byte(strings.NewReplacer("palette:\n", "palette: assets/palettes/war.gpl\n",
+		"grid:\n", "grid: 16\n", "type: art\n", "").Replace(string(art))), 0o644)
 	Observe(root, "Levels", "level", "The border crossing.")
 	if next, _ := NextStep(Onboarding(root, you)); next.Name != "you" {
 		t.Errorf("last: %+v", next)
@@ -64,14 +69,14 @@ func TestOnboardingTellsFeelFromPitchAndKeepsSkips(t *testing.T) {
 func TestARememberedAnswerTakesItsStepsCategory(t *testing.T) {
 	root := t.TempDir()
 	plain, _, _ := GameFacts(root).Remember("", "Use 16x16 sprites.", "")
-	art, _, err := GameFacts(root).Remember("art", "Use 16x16 sprites.", "")
-	if err != nil || art.ID != plain.ID || art.Category != "art" || len(GameFacts(root).All()) != 1 || !Onboarding(root, Facts{})[6].Done {
+	art, _, err := GameFacts(root).Remember("scope", "Use 16x16 sprites.", "")
+	if err != nil || art.ID != plain.ID || art.Category != "scope" || len(GameFacts(root).All()) != 1 || !Onboarding(root, Facts{})[3].Done {
 		t.Errorf("%+v %v %+v", art, err, GameFacts(root).All())
 	}
-	if again, _, _ := GameFacts(root).Remember("", "Use 16x16 sprites.", ""); again.Category != "art" {
+	if again, _, _ := GameFacts(root).Remember("", "Use 16x16 sprites.", ""); again.Category != "scope" {
 		t.Errorf("a plain remember undid its category: %+v", again)
 	}
-	if other, _, _ := GameFacts(root).Remember("scope", "Use 16x16 sprites.", ""); other.Category != "art" || other.ID != plain.ID || !Onboarding(root, Facts{})[6].Done {
+	if other, _, _ := GameFacts(root).Remember("art", "Use 16x16 sprites.", ""); other.Category != "scope" || other.ID != plain.ID || !Onboarding(root, Facts{})[3].Done {
 		t.Errorf("another category took it: %+v", other)
 	}
 }

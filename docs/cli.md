@@ -30,7 +30,7 @@ plugin (jm setup codex or chatgpt installs it) a skill that teaches the work
 across it and Journeyman, and its MCP server where it has one:
 
 ```text
-  aseprite      draw and animate sprites (MCP: diivi/aseprite-mcp, run with uv)
+  aseprite      draw, validate and critique sprites (MCP: aseprite-ai-artist, run with npx)
   tiled         paint tile maps (a skill: the game reads Tiled's files)
   obsidian      the game's design/ notes as a vault (a skill: notes are files)
   basic-memory  remembers design and findings across chats (MCP: basic-memory)

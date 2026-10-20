@@ -114,10 +114,23 @@ the same are MCP prompts): `expand_world` around a note (the second
 capital, the families on both sides of a border), `new_dossiers` of a kind,
 `level_from_place` (a location's dossier to a level brief and its scene),
 `story_outline` (acts and quests from the factions and characters),
-`canon_check` of a note against the facts and the world, and `art_pass`
-(a dossier's sprite drawn in Aseprite: its `.aseprite` source in
-`assets/art/`, the sheet in the atlas, and the dossier's sprite property
-naming the source).
+`canon_check` of a note against the facts and the world, and for art
+`art_direction` (the look settled from a brief: palette, grid, sizes,
+animation sets, each place's visual language), `art_pass` (a dossier's
+sprite drawn in Aseprite to it, validated, critiqued, exported into the
+atlas) and `art_review` (the drawn art critiqued against it, worst first).
+
+**Art keeps the art note**: `design/Art.md`, else the design note of type
+art (`health`, checks `art`, names it). Its properties are the brief every sprite
+shares: the palette file, grid, view, light, outline, each kind's frame
+size, each animation set's `<action>_<direction>` tags and timings, and
+finished `references` to match; read it before drawing and don't ask the
+person what it already says. `build` warns of art that breaks it (colours
+off the palette, wrong frame sizes, missing or mistimed tags, sheets no atlas
+lists, tiles off the grid), and `health` (checks `art`) lists each dossier's
+sprite as planned, drawn, exported or done. Before calling a sprite done,
+validate it and critique it (the Aseprite companion's tools and its
+`pixel-critic` or review workflow), and note the critique on its dossier.
 
 The game's history is git (`jm init` makes the first commit). After a change
 that builds and plays right, `vcs_commit` it (`jm vcs commit "Make jumps
