@@ -71,3 +71,97 @@ func TestGameRefusesAPlayerThatAlreadyHoldsAGame(t *testing.T) {
 		}
 	}
 }
+
+func TestMachOGameRejectsMalformedLoadCommands(t *testing.T) {
+	for _, tc := range []struct {
+		name, wantError string
+		mutate          func([]byte) []byte
+	}{
+		{"oversized command table", "truncated Mach-O load commands", func(bin []byte) []byte {
+			binary.LittleEndian.PutUint32(bin[20:], ^uint32(0))
+			return bin
+		}},
+		{"command extends beyond table", "malformed Mach-O load command", func(bin []byte) []byte {
+			binary.LittleEndian.PutUint32(bin[20:], 72+8)
+			return bin
+		}},
+		{"unaccounted command bytes", "Mach-O load command sizes don't match sizeofcmds", func(bin []byte) []byte {
+			binary.LittleEndian.PutUint32(bin[20:], 72+16+8)
+			return bin
+		}},
+		{"too many commands", "truncated Mach-O load commands", func(bin []byte) []byte {
+			binary.LittleEndian.PutUint32(bin[16:], 3)
+			return bin
+		}},
+		{"truncated signature command", "truncated Mach-O code signature command", func(bin []byte) []byte {
+			binary.LittleEndian.PutUint32(bin[20:], 72+8)
+			binary.LittleEndian.PutUint32(bin[machoHeaderSize+72+4:], 8)
+			return bin[:machoHeaderSize+72+8]
+		}},
+		{"unsigned linkedit outside file", "Mach-O __LINKEDIT outside file data", func(bin []byte) []byte {
+			binary.LittleEndian.PutUint32(bin[16:], 1)
+			binary.LittleEndian.PutUint32(bin[20:], 72)
+			binary.LittleEndian.PutUint64(bin[machoHeaderSize+40:], ^uint64(0))
+			return bin
+		}},
+		{"linkedit overlaps commands", "Mach-O __LINKEDIT outside file data", func(bin []byte) []byte {
+			binary.LittleEndian.PutUint64(bin[machoHeaderSize+40:], machoHeaderSize)
+			return bin
+		}},
+		{"signature before linkedit", "Mach-O code signature outside __LINKEDIT", func(bin []byte) []byte {
+			binary.LittleEndian.PutUint32(bin[machoHeaderSize+72+8:], 0x4000-1)
+			return bin
+		}},
+		{"signature past file end", "Mach-O code signature outside __LINKEDIT", func(bin []byte) []byte {
+			binary.LittleEndian.PutUint32(bin[machoHeaderSize+72+8:], ^uint32(0))
+			return bin
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			game, err := Game(tc.mutate(fakeMachO()), []byte("archive"))
+			if err == nil || err.Error() != tc.wantError || game != nil {
+				t.Fatalf("expected %q and no game, got %d bytes, %v", tc.wantError, len(game), err)
+			}
+		})
+	}
+}
+
+func TestMachOGameKeepsLinkeditWhenSignatureIsAbsentOrFirst(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func([]byte) []byte
+	}{
+		{"unsigned", func(bin []byte) []byte {
+			binary.LittleEndian.PutUint32(bin[16:], 1)
+			binary.LittleEndian.PutUint32(bin[20:], 72)
+			clear(bin[machoHeaderSize+72 : machoHeaderSize+72+16])
+			return bin
+		}},
+		{"signature first", func(bin []byte) []byte {
+			segment := bytes.Clone(bin[machoHeaderSize : machoHeaderSize+72])
+			copy(bin[machoHeaderSize:], bin[machoHeaderSize+72:machoHeaderSize+72+16])
+			copy(bin[machoHeaderSize+16:], segment)
+			return bin
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			player := tc.mutate(fakeMachO())
+			arc := append(binary.LittleEndian.AppendUint32(nil, archive.Magic), make([]byte, 60)...)
+			game, err := Game(player, arc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if binary.LittleEndian.Uint32(game[16:]) != 1 || binary.LittleEndian.Uint32(game[20:]) != 72 || binary.LittleEndian.Uint32(game[machoHeaderSize:]) != lcSegment64 {
+				t.Fatal("export lost the __LINKEDIT command")
+			}
+			seg := game[machoHeaderSize:]
+			if end := binary.LittleEndian.Uint64(seg[40:]) + binary.LittleEndian.Uint64(seg[48:]); end != uint64(len(game)) {
+				t.Fatalf("__LINKEDIT ends at %d, file at %d", end, len(game))
+			}
+			found, err := Find(game)
+			if err != nil || !bytes.Equal(found, arc) {
+				t.Fatalf("Find = %d bytes, %v", len(found), err)
+			}
+		})
+	}
+}
