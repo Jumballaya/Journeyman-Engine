@@ -35,6 +35,41 @@ func TestOldUnmarkedPlaysArePrunedMarkedOnesKept(t *testing.T) {
 	}
 }
 
+func TestPruneCountsAbandonedPlayFolders(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		keepMarked  bool
+		wantRemoved int
+	}{{"automatic", true, 1}, {"manual", false, 2}} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			completed := writeSession(t, root, "2000-01-01_000000", `"ended":"quit"`)
+			abandoned, recent := filepath.Join(Root(root), "abandoned"), filepath.Join(Root(root), "recent")
+			for _, dir := range []string{abandoned, recent} {
+				if err := os.Mkdir(dir, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			old := time.Now().Add(-2 * time.Hour)
+			if err := os.Chtimes(abandoned, old, old); err != nil {
+				t.Fatal(err)
+			}
+			if removed, err := Prune(root, 1, tc.keepMarked); err != nil || removed != tc.wantRemoved {
+				t.Fatalf("removed %d, %v; want %d", removed, err, tc.wantRemoved)
+			}
+			if _, err := os.Stat(abandoned); !os.IsNotExist(err) {
+				t.Errorf("abandoned folder remains: %v", err)
+			}
+			if _, err := os.Stat(completed); err != nil {
+				t.Errorf("completed play wasn't retained: %v", err)
+			}
+			if got := exists(recent); got != tc.keepMarked {
+				t.Errorf("recent folder exists = %v; want %v", got, tc.keepMarked)
+			}
+		})
+	}
+}
+
 // An editor play has no jm.json: its build is the one it was made with while
 // that's older than the play, so the first look pins it.
 func TestAnEditorPlaysBuildIsPinnedWhileUnchanged(t *testing.T) {
