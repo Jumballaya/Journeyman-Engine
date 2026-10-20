@@ -104,7 +104,7 @@ func TestWriteArchiveStoresEachEntrysCRC32(t *testing.T) {
 	if err := json.Unmarshal(data[resolverOffset:], &resolver); err != nil {
 		t.Fatal(err)
 	}
-	if got := resolver["digits.txt"].CRC32; got != 0xCBF43926 {
-		t.Fatalf("crc32 = %#x, want 0xcbf43926", got)
+	if got := resolver["digits.txt"].CRC32; got == nil || *got != 0xCBF43926 {
+		t.Fatalf("crc32 = %v, want pointer to 0xcbf43926", got)
 	}
 }
