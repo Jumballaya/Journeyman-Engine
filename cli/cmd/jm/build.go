@@ -888,7 +888,11 @@ func buildIsStale(root string) bool {
 	}
 	if man, err := manifest.LoadManifest(sources[0]); err == nil {
 		for _, dir := range man.ScriptLibraries {
-			sources = append(sources, librarySource(root, dir))
+			src := librarySource(root, dir)
+			if real, err := filepath.EvalSymlinks(src); err == nil {
+				src = real // a linked library: its target is the source (WalkDir doesn't follow the link)
+			}
+			sources = append(sources, src)
 		}
 	}
 	stale := false

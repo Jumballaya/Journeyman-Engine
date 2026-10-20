@@ -284,6 +284,22 @@ func TestABuildIsStaleWhenMissingOrOlderThanItsSources(t *testing.T) {
 	if !buildIsStale(game) {
 		t.Error("an edited library script doesn't make the build stale")
 	}
+	shared := filepath.Join(t.TempDir(), "shared")
+	os.MkdirAll(shared, 0o755)
+	os.WriteFile(filepath.Join(shared, "util.ts"), nil, 0o644)
+	os.Chtimes(filepath.Join(shared, "util.ts"), old, old)
+	os.Remove(filepath.Join(common, "util.ts"))
+	os.Remove(common)
+	if os.Symlink(shared, common) == nil {
+		os.WriteFile(filepath.Join(game, "build", ".jm.json"), []byte(`{}`), 0o644)
+		if buildIsStale(game) {
+			t.Error("a build newer than its linked library is stale")
+		}
+		os.Chtimes(filepath.Join(shared, "util.ts"), later, later)
+		if !buildIsStale(game) {
+			t.Error("an edit in a linked library's folder doesn't make the build stale")
+		}
+	}
 }
 
 // The interview prompt is listed and gets its text; the memory tools write design/.
