@@ -185,7 +185,7 @@ test('Rendered shows the scene as the engine draws it beside its layout, or why 
 test('the screen as the game starts frames the layout: a lone small entity stays small', async () => {
   const { find, fromHost } = await scenePage();
   const r = laid(10);
-  r.structuredContent.screen = { x: 0, y: 0, w: 1280, h: 720 };
+  r.structuredContent.screen = { x: 0, y: 0, w: 1280, h: 720, camera: 1 };
   fromHost('ui/notifications/tool-result', r);
   await settle();
   const screen = find((e) => e.attributes.class === 'screen')[0];
@@ -198,13 +198,30 @@ test('the screen as the game starts frames the layout: a lone small entity stays
 test('a level 50 screens long opens on its screen, and its points stay big enough to pick', async () => {
   const { find, fromHost } = await scenePage();
   const r = laid(64000);
-  r.structuredContent.screen = { x: 0, y: 0, w: 1280, h: 720 };
+  r.structuredContent.screen = { x: 0, y: 0, w: 1280, h: 720, camera: 1 };
   fromHost('ui/notifications/tool-result', r);
   await settle();
   const svg = find((e) => e.tag === 'svg')[0];
   assert.match(svg.attributes.viewBox, /^-691\.2 -411\.2 /);  // the margin is the screen's, not 4% of the level
   assert.equal(svg.attributes.style, 'width: 4683%');  // (640 + 64000 + 2 × 51.2) / 1382.4
   assert.equal(find((e) => e.tag === 'circle')[0].attributes.r, 4 * 1382.4 / 640);  // 4 px in a 640 px view
+});
+
+test('without a camera entity (a script may move it), the whole layout fits the view; a long level still scrolls', async () => {
+  const { find, fromHost } = await scenePage();
+  const r = laid(1500);
+  r.structuredContent.screen = { x: 0, y: 0, w: 1280, h: 720 };
+  fromHost('ui/notifications/tool-result', r);
+  await settle();
+  const svg = find((e) => e.tag === 'svg')[0];
+  assert.equal(svg.attributes.style, 'width: 100%');
+  assert.equal(find((e) => e.tag === 'circle')[0].attributes.r, 4 * Number(svg.attributes.viewBox.split(' ')[2]) / 640);  // 4 px in a 640 px view
+  assert.match(find((e) => e.attributes.class === 'screen')[0].children[0].text, /before a script moves the camera/);
+  const long = laid(64000);
+  long.structuredContent.screen = { x: 0, y: 0, w: 1280, h: 720 };
+  fromHost('ui/notifications/tool-result', long);
+  await settle();
+  assert.equal(find((e) => e.tag === 'svg')[0].attributes.style, 'width: 4683%');  // screens across, as with a camera
 });
 
 test('each field is named for assistive tech: its label points at it, a vector\'s values by axis', async () => {

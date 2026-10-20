@@ -179,9 +179,10 @@ func screenOf(root string, placed []placedEntity) (map[string]float64, bool) {
 			}
 		}
 	}
-	if shown == nil {
+	if shown == nil { // the engine's default camera, until a script moves it
 		return s, true
 	}
+	s["camera"] = 1 // a camera entity says where it looks
 	zoom, _ := shown["zoom"].(float64)
 	if zoom <= 0 {
 		zoom = 1

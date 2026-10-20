@@ -399,7 +399,8 @@ func compareImage(root, kind, name string) string {
 }
 
 // thumbOf is a variant's or sandbox's picture: its newest play's, else its
-// last compare's, else a golden frame (maybe the game's, copied with it).
+// last compare's, else a golden frame (maybe the game's, copied with it),
+// else the game's own (a fresh one is the game).
 func thumbOf(root, kind, name, dir string) string {
 	if thumb := projects.PlayThumb(dir); thumb != "" {
 		return thumb
@@ -407,7 +408,10 @@ func thumbOf(root, kind, name, dir string) string {
 	if path := compareImage(root, kind, name); exists(path) {
 		return path
 	}
-	return projects.GoldenThumb(dir)
+	if thumb := projects.GoldenThumb(dir); thumb != "" {
+		return thumb
+	}
+	return projects.Thumb(root)
 }
 
 // frameOf runs a game headless (built first if it needs it) to a frame, with
