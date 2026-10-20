@@ -75,12 +75,15 @@ func TestStartEditorNoticesAnEditorThatQuitsAtOnce(t *testing.T) {
 	skipOnWindows(t)
 	t.Setenv("CODEX_SANDBOX", "")
 	saved := startup
-	startup = 300 * time.Millisecond
 	defer func() { startup = saved }()
+	// A crash returns as soon as it quits: a long wait keeps a slow start (a
+	// loaded machine) from counting as running.
+	startup = 30 * time.Second
 	if err := startEditor(fakeProgram(t, t.TempDir(), "editor", "exit 3"), ""); err == nil || !strings.Contains(err.Error(), "quit as it started (exit status 3)") {
 		t.Errorf("a crashed editor: %v", err)
 	}
-	if err := startEditor(fakeProgram(t, t.TempDir(), "editor", "sleep 1"), ""); err != nil {
+	startup = 300 * time.Millisecond
+	if err := startEditor(fakeProgram(t, t.TempDir(), "editor", "sleep 5"), ""); err != nil {
 		t.Errorf("a running editor: %v", err)
 	}
 }

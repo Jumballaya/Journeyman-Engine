@@ -193,7 +193,7 @@ jobs:
             [ -f "$demo/tests/multiplayer.json" ] && continue  # real-time net clock: not replayable
             scripts/check-drive-replay.sh "$demo/build"
           done 3< "$RUNNER_TEMP/demos.txt"
-      # A recorded play (keys, clicks, uneven frame times, a marker) replays
+      # A recorded play (keys, clicks, a marker) replays
       # the same, and jm plays gives the marker's state and image.
       - name: Each demo's recorded play is what jm plays shows
         run: |
