@@ -25,7 +25,7 @@ var migrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Rewrite a Journeyman project to source-only layout (.ts replaces .script.json)",
 	Long: `Walks the manifest's assets[] for legacy .script.json entries, rewrites them to the
-underlying .ts paths, rewrites scene script references, deletes the .script.json
+underlying .ts paths, rewrites scene and prefab script references, deletes the .script.json
 files, and ensures build/ + *.jm are gitignored.
 
 Idempotent: a second run prints "nothing to migrate" and exits 0.`,
@@ -101,34 +101,49 @@ func runMigrate(projectDir string, out io.Writer, dryRun, force bool) error {
 	sort.Strings(newAssets)
 	manifestChanged := !slices.Equal(man.Assets, newAssets)
 
-	type sceneRewrite struct {
+	contentPaths := slices.Clone(man.Scenes)
+	assets, err := manifest.ExpandAssets(os.DirFS(projectDir), otherAssets)
+	if err != nil {
+		return fmt.Errorf("expand assets: %v", err)
+	}
+	for _, asset := range assets {
+		if strings.HasSuffix(asset, ".prefab.json") && !slices.Contains(contentPaths, asset) {
+			contentPaths = append(contentPaths, asset)
+		}
+	}
+	type contentRewrite struct {
 		path    string
 		updated []byte
 		changes []string
 	}
-	var sceneRewrites []sceneRewrite
-	for _, scene := range man.Scenes {
-		original, err := os.ReadFile(filepath.Join(projectDir, scene))
+	var contentRewrites []contentRewrite
+	for _, path := range contentPaths {
+		original, err := os.ReadFile(filepath.Join(projectDir, path))
 		if err != nil {
-			return fmt.Errorf("read scene %s: %v", scene, err)
+			return fmt.Errorf("read scene/prefab %s: %v", path, err)
 		}
-		var sceneJson map[string]any
-		if err := json.Unmarshal(original, &sceneJson); err != nil {
-			return fmt.Errorf("malformed scene JSON in %s: %v", scene, err)
+		var contentJSON map[string]any
+		decoder := json.NewDecoder(bytes.NewReader(original))
+		decoder.UseNumber()
+		if err := decoder.Decode(&contentJSON); err != nil {
+			return fmt.Errorf("malformed scene/prefab JSON in %s: %v", path, err)
+		}
+		if _, err := decoder.Token(); err != io.EOF {
+			return fmt.Errorf("malformed scene/prefab JSON in %s: unexpected data after JSON value", path)
 		}
 		var changes []string
-		rewriteScriptRefs(sceneJson, scriptJsonToTs, &changes)
+		rewriteScriptRefs(contentJSON, scriptJsonToTs, &changes)
 		if len(changes) > 0 {
-			updated, _ := json.MarshalIndent(sceneJson, "", "  ")
-			sceneRewrites = append(sceneRewrites, sceneRewrite{path: scene, updated: updated, changes: changes})
+			updated, _ := json.MarshalIndent(contentJSON, "", "  ")
+			contentRewrites = append(contentRewrites, contentRewrite{path: path, updated: updated, changes: changes})
 		}
 	}
 
 	if dryRun {
 		fmt.Fprintln(out, "DRY RUN — no files modified")
 		fmt.Fprintln(out)
-		for _, r := range sceneRewrites {
-			fmt.Fprintf(out, "scene: %s\n", r.path)
+		for _, r := range contentRewrites {
+			fmt.Fprintf(out, "rewrite: %s\n", r.path)
 			for _, c := range r.changes {
 				fmt.Fprintf(out, "  %s\n", c)
 			}
@@ -148,15 +163,15 @@ func runMigrate(projectDir string, out io.Writer, dryRun, force bool) error {
 			fmt.Fprintf(out, "delete: %s\n", sj)
 		}
 		fmt.Fprintln(out)
-		fmt.Fprintf(out, "Would rewrite %d scene(s), update manifest, delete %d .script.json file(s).\n",
-			len(sceneRewrites), len(legacyAssets))
+		fmt.Fprintf(out, "Would rewrite %d scene/prefab file(s), update manifest, delete %d .script.json file(s).\n",
+			len(contentRewrites), len(legacyAssets))
 		return nil
 	}
 
-	// Writes go scenes → manifest → delete .script.jsons → gitignore.
-	for _, r := range sceneRewrites {
+	// Rewrite references before deleting descriptors so the project keeps working.
+	for _, r := range contentRewrites {
 		if err := atomicfile.WriteFile(filepath.Join(projectDir, r.path), r.updated, 0644); err != nil {
-			return fmt.Errorf("write scene %s: %v", r.path, err)
+			return fmt.Errorf("write scene/prefab %s: %v", r.path, err)
 		}
 	}
 	if manifestChanged {
@@ -176,7 +191,7 @@ func runMigrate(projectDir string, out io.Writer, dryRun, force bool) error {
 	}
 
 	fmt.Fprintf(out, "Migrated:\n")
-	fmt.Fprintf(out, "  %d scene(s) rewritten\n", len(sceneRewrites))
+	fmt.Fprintf(out, "  %d scene/prefab file(s) rewritten\n", len(contentRewrites))
 	fmt.Fprintf(out, "  %d .script.json file(s) deleted\n", len(legacyAssets))
 	if gitignoreUpdated {
 		fmt.Fprintln(out, "  .gitignore updated: yes")
@@ -222,9 +237,8 @@ func findOrphanScriptJsons(projectDir string) ([]string, error) {
 	return found, err
 }
 
-// rewriteScriptRefs descends entities[].components.ScriptComponent.script and
-// rewrites .script.json references in-place per the map. Diff lines are
-// appended to `changes` for dry-run reporting.
+// rewriteScriptRefs rewrites ScriptComponent.script fields recursively.
+// Records planned changes for dry-run reporting.
 func rewriteScriptRefs(node any, scriptJsonToTs map[string]string, changes *[]string) {
 	switch v := node.(type) {
 	case map[string]any:

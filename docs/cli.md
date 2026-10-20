@@ -700,7 +700,7 @@ Flags:
 Rewrite a Journeyman project to source-only layout (.ts replaces .script.json).
 
 Walks the manifest's assets[] for legacy .script.json entries, rewrites them to the
-underlying .ts paths, rewrites scene script references, deletes the .script.json
+underlying .ts paths, rewrites scene and prefab script references, deletes the .script.json
 files, and ensures build/ + *.jm are gitignored.
 
 Idempotent: a second run prints "nothing to migrate" and exits 0.

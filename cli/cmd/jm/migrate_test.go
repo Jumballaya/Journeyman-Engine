@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -62,6 +63,121 @@ func scaffold(t *testing.T, dir string) {
 	}
 	sceneData, _ := json.MarshalIndent(scene, "", "  ")
 	mustWrite(t, filepath.Join(dir, "scenes/level1.scene.json"), sceneData)
+}
+
+const legacyPrefab = `{"name":"Hero","persistentId":9007199254740993,"components":{"ScriptComponent":{"script":"assets/scripts/player.script.json","params":{"hp":5}}},"children":[{"name":"Companion","components":{"ScriptComponent":{"script":"assets/scripts/player.script.json"}}}]}`
+const legacyPrefabPath = "assets/prefabs/hero.prefab.json"
+
+func addLegacyPrefab(t *testing.T, dir, asset string) {
+	t.Helper()
+	man, err := manifest.LoadManifest(filepath.Join(dir, ".jm.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	man.Assets = append(man.Assets, asset)
+	data, err := json.Marshal(man)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(dir, ".jm.json"), data)
+	mustWrite(t, filepath.Join(dir, legacyPrefabPath), []byte(legacyPrefab))
+}
+
+func TestMigrateRewritesPrefabScriptReferences(t *testing.T) {
+	for _, tc := range []struct {
+		name, asset string
+		dryRun      bool
+	}{
+		{"apply", legacyPrefabPath, false},
+		{"dry run", legacyPrefabPath, true},
+		{"glob", "assets/prefabs/*.prefab.json", false},
+		{"glob dry run", "assets/prefabs/*.prefab.json", true},
+		{"recursive glob", "assets/**", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			scaffold(t, dir)
+			addLegacyPrefab(t, dir, tc.asset)
+			path := legacyPrefabPath
+			before := map[string][]byte{}
+			for _, file := range []string{".jm.json", "scenes/level1.scene.json", "assets/scripts/player.script.json", path} {
+				data, err := os.ReadFile(filepath.Join(dir, file))
+				if err != nil {
+					t.Fatal(err)
+				}
+				before[file] = data
+			}
+			var out bytes.Buffer
+			if err := runMigrate(dir, &out, tc.dryRun, true); err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(filepath.Join(dir, path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.dryRun {
+				for file, original := range before {
+					after, err := os.ReadFile(filepath.Join(dir, file))
+					if err != nil || !bytes.Equal(after, original) {
+						t.Fatalf("dry run changed %s: %v", file, err)
+					}
+				}
+				if !strings.Contains(out.String(), path) {
+					t.Fatalf("dry run omitted prefab: %s", out.String())
+				}
+				return
+			}
+			var got, want any
+			if err := json.Unmarshal(data, &got); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal([]byte(strings.ReplaceAll(legacyPrefab, "player.script.json", "player.ts")), &want); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("prefab script references or other fields wrong: %s", data)
+			}
+			if !bytes.Contains(data, []byte("9007199254740993")) {
+				t.Fatalf("prefab ID lost precision: %s", data)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "assets/scripts/player.script.json")); !os.IsNotExist(err) {
+				t.Fatalf("legacy descriptor wasn't removed: %v", err)
+			}
+		})
+	}
+}
+
+func TestMigrateAbortsBeforeWritesOnMalformedPrefab(t *testing.T) {
+	for name, invalid := range map[string]string{
+		"syntax":           "{not valid",
+		"trailing value":   legacyPrefab + " {}",
+		"trailing garbage": legacyPrefab + " junk",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			scaffold(t, dir)
+			addLegacyPrefab(t, dir, legacyPrefabPath)
+			path := legacyPrefabPath
+			mustWrite(t, filepath.Join(dir, path), []byte(invalid))
+			before := map[string][]byte{}
+			for _, file := range []string{".jm.json", "scenes/level1.scene.json", "assets/scripts/player.script.json"} {
+				data, err := os.ReadFile(filepath.Join(dir, file))
+				if err != nil {
+					t.Fatal(err)
+				}
+				before[file] = data
+			}
+			if err := runMigrate(dir, &bytes.Buffer{}, false, true); err == nil || !strings.Contains(err.Error(), path) {
+				t.Fatalf("expected error naming malformed prefab, got %v", err)
+			}
+			for file, data := range before {
+				after, err := os.ReadFile(filepath.Join(dir, file))
+				if err != nil || !bytes.Equal(after, data) {
+					t.Errorf("malformed prefab changed %s: %v", file, err)
+				}
+			}
+		})
+	}
 }
 
 func mustWrite(t *testing.T, path string, data []byte) {
