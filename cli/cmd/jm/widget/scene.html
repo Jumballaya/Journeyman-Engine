@@ -201,7 +201,7 @@
     const k = Math.min(1, 4000 / w, 1200 / h);
     const width = fit ? `${Math.max(100, Math.round(w / (fit.w + 2 * m) * 100))}%` : sc ? "100%" : `max(100%, ${Math.round(w * k)}px)`;
     // A point's 4 px: in a screen fitted to the view, about 640 px across.
-    const r = fit ? 4 * (fit.w + 2 * m) / 640 : 4 / k;
+    const r = fit ? 4 * (fit.w + 2 * m) / 640 : sc ? 4 * w / 640 : 4 / k;  // fitted whole: the layout's width is the view's
     const svg = $("svg:svg", { viewBox: `${x0 - m} ${y0 - m} ${w} ${h}`, style: `width: ${width}` });
     for (const [e, m] of tiled) svg.append($("svg:image", { class: "sprite", href: m.src, x: e.x, y: -e.y - m.h, width: m.w, height: m.h, preserveAspectRatio: "none" }));
     // Each sprite as it looks (its picture tinted by its color, or a solid quad in it), lowest z first;

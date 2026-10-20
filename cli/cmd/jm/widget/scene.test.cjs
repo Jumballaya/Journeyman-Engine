@@ -213,7 +213,9 @@ test('without a camera entity (a script may move it), the whole layout fits the 
   r.structuredContent.screen = { x: 0, y: 0, w: 1280, h: 720 };
   fromHost('ui/notifications/tool-result', r);
   await settle();
-  assert.equal(find((e) => e.tag === 'svg')[0].attributes.style, 'width: 100%');
+  const svg = find((e) => e.tag === 'svg')[0];
+  assert.equal(svg.attributes.style, 'width: 100%');
+  assert.equal(find((e) => e.tag === 'circle')[0].attributes.r, 4 * Number(svg.attributes.viewBox.split(' ')[2]) / 640);  // 4 px in a 640 px view
   assert.match(find((e) => e.attributes.class === 'screen')[0].children[0].text, /before a script moves the camera/);
   const long = laid(64000);
   long.structuredContent.screen = { x: 0, y: 0, w: 1280, h: 720 };
