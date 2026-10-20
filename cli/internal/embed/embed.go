@@ -67,20 +67,31 @@ func machoGame(player, archive []byte) ([]byte, error) {
 		return nil, errors.New("truncated Mach-O header")
 	}
 	bin := append([]byte(nil), player...)
-	ncmds := int(binary.LittleEndian.Uint32(bin[16:]))
-	sizeofcmds := int(binary.LittleEndian.Uint32(bin[20:]))
+	ncmds := binary.LittleEndian.Uint32(bin[16:])
+	sizeofcmds := binary.LittleEndian.Uint32(bin[20:])
+	if uint64(sizeofcmds) > uint64(len(bin)-machoHeaderSize) {
+		return nil, errors.New("truncated Mach-O load commands")
+	}
+	end := machoHeaderSize + int(sizeofcmds)
+	off := machoHeaderSize
 	var cmds []loadCommand
-	for i, off := 0, machoHeaderSize; i < ncmds; i++ {
-		if off+8 > len(bin) {
+	for i := uint32(0); i < ncmds; i++ {
+		if end-off < 8 {
 			return nil, errors.New("truncated Mach-O load commands")
 		}
 		cmd := binary.LittleEndian.Uint32(bin[off:])
-		size := int(binary.LittleEndian.Uint32(bin[off+4:]))
-		if size < 8 || off+size > len(bin) {
+		size := binary.LittleEndian.Uint32(bin[off+4:])
+		if size < 8 || uint64(size) > uint64(end-off) {
 			return nil, errors.New("malformed Mach-O load command")
 		}
-		cmds = append(cmds, loadCommand{off, size, cmd})
-		off += size
+		if cmd == lcCodeSignature && size < 16 {
+			return nil, errors.New("truncated Mach-O code signature command")
+		}
+		cmds = append(cmds, loadCommand{off, int(size), cmd})
+		off += int(size)
+	}
+	if off != end {
+		return nil, errors.New("Mach-O load command sizes don't match sizeofcmds")
 	}
 
 	linkedit := -1
@@ -93,22 +104,24 @@ func machoGame(player, archive []byte) ([]byte, error) {
 		return nil, errors.New("Mach-O has no __LINKEDIT segment")
 	}
 	linkeditOff := binary.LittleEndian.Uint64(bin[linkedit+40:])
+	if linkeditOff < uint64(end) || linkeditOff > uint64(len(bin)) {
+		return nil, errors.New("Mach-O __LINKEDIT outside file data")
+	}
 
 	// Drop the old signature: it is __LINKEDIT's tail, and codesign re-adds one.
 	for _, c := range cmds {
 		if c.cmd != lcCodeSignature {
 			continue
 		}
-		dataoff := int(binary.LittleEndian.Uint32(bin[c.offset+8:]))
-		if dataoff > len(bin) || uint64(dataoff) < linkeditOff {
+		dataoff := binary.LittleEndian.Uint32(bin[c.offset+8:])
+		if uint64(dataoff) > uint64(len(bin)) || uint64(dataoff) < linkeditOff {
 			return nil, errors.New("Mach-O code signature outside __LINKEDIT")
 		}
 		bin = bin[:dataoff]
-		end := machoHeaderSize + sizeofcmds
 		copy(bin[c.offset:end], bin[c.offset+c.size:end])
 		clear(bin[end-c.size : end])
-		binary.LittleEndian.PutUint32(bin[16:], uint32(ncmds-1))
-		binary.LittleEndian.PutUint32(bin[20:], uint32(sizeofcmds-c.size))
+		binary.LittleEndian.PutUint32(bin[16:], ncmds-1)
+		binary.LittleEndian.PutUint32(bin[20:], sizeofcmds-uint32(c.size))
 		if linkedit > c.offset {
 			linkedit -= c.size
 		}
