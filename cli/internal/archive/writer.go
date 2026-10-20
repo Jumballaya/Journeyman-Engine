@@ -45,8 +45,9 @@ type resolverEntry struct {
 	Size     uint64                 `json:"size"`
 	Type     string                 `json:"type"`
 	Metadata map[string]interface{} `json:"metadata"`
-	// CRC-32 (IEEE) of the entry's bytes; nil for older archives without checksums.
-	CRC32 *uint32 `json:"crc32,omitempty"`
+	// CRC-32 (IEEE) of the entry's bytes: the engine refuses an archive whose
+	// bytes don't match (a damaged download). Archives from before have none.
+	CRC32 uint32 `json:"crc32"`
 }
 
 // WriteArchive serializes entries to out in the JMA1 format, payloads in the
@@ -67,8 +68,7 @@ func WriteArchive(out io.Writer, entries []AssetEntry) error {
 		if meta == nil {
 			meta = map[string]interface{}{}
 		}
-		checksum := crc32.ChecksumIEEE(e.Payload)
-		resolver[e.SourcePath] = resolverEntry{uint64(len(payload)), uint64(len(e.Payload)), e.Type, meta, &checksum}
+		resolver[e.SourcePath] = resolverEntry{uint64(len(payload)), uint64(len(e.Payload)), e.Type, meta, crc32.ChecksumIEEE(e.Payload)}
 		payload = append(payload, e.Payload...)
 	}
 

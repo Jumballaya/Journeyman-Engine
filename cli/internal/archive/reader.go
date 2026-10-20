@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"hash/crc32"
 	"io"
 	"sort"
 )
@@ -18,8 +17,10 @@ type Archive struct {
 	entries       map[string]resolverEntry
 }
 
-// ReadArchive parses size bytes from in, rejecting structural defects and
-// payloads that mismatch a stored checksum. size is the total archive length.
+// ReadArchive validates and parses an archive from in. size must be the total
+// archive byte length (typically obtained via os.File.Stat). Returns an error
+// for any structural defect (bad magic, unsupported version, header
+// inconsistency, malformed resolver JSON, entry bounds exceeding payload).
 func ReadArchive(in io.ReaderAt, size int64) (*Archive, error) {
 	if size < HeaderSize {
 		return nil, fmt.Errorf("archive: file shorter than header (%d bytes)", size)
@@ -57,12 +58,6 @@ func ReadArchive(in io.ReaderAt, size int64) (*Archive, error) {
 		if e.Offset > payloadSize || e.Size > payloadSize-e.Offset {
 			return nil, fmt.Errorf("archive: entry %q out of bounds (offset=%d size=%d payload_size=%d)",
 				k, e.Offset, e.Size, payloadSize)
-		}
-		if e.CRC32 != nil {
-			start := payloadOffset + e.Offset
-			if crc32.ChecksumIEEE(buf[start:start+e.Size]) != *e.CRC32 {
-				return nil, fmt.Errorf("archive: entry %q is damaged (its bytes don't match their checksum)", k)
-			}
 		}
 	}
 	return &Archive{bytes: buf, payloadOffset: payloadOffset, entries: entries}, nil
