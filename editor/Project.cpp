@@ -125,6 +125,7 @@ std::optional<Project> Project::open(const fs::path& folder, std::string& error)
     error = ".jm.json should hold an object ({\"name\": ...}).";
     return std::nullopt;
   }
+  project._manifestRead = project._manifest;
   project.rescan();
   return project;
 }
@@ -135,8 +136,20 @@ std::string Project::name() const {
 }
 
 bool Project::saveManifest(std::string& error) {
-  wholeNumbersAsIntegers(_manifest);
-  return writeText(".jm.json", formatJson(_manifest), error);
+  const platform::FileLock lock(abs(".jm.json"));  // as jm holds it while it writes
+  Json merged = Json::parse(readText(".jm.json"), nullptr, false);
+  if (!merged.is_object()) merged = _manifestRead;  // unreadable now: the editor's is all there is
+  for (const auto& [key, value] : _manifest.items()) {
+    if (!_manifestRead.contains(key) || _manifestRead[key] != value) merged[key] = value;
+  }
+  for (const auto& [key, value] : _manifestRead.items()) {
+    if (!_manifest.contains(key)) merged.erase(key);
+  }
+  wholeNumbersAsIntegers(merged);
+  if (!writeText(".jm.json", formatJson(merged), error)) return false;
+  _manifest = merged;
+  _manifestRead = std::move(merged);
+  return true;
 }
 
 fs::path gamesFolder() {
