@@ -131,7 +131,7 @@ func sceneView(home string, a toolArgs) toolResult {
 	}
 	text := fmt.Sprintf("Scene %s of %s: %d entities (%s). The person sees it laid out and can change an entity; structuredContent has each one's place and components.",
 		filepath.ToSlash(rel), gameName(root), len(placed), strings.Join(names, ", "))
-	out := map[string]any{"scene": filepath.ToSlash(rel), "game": gameName(root), "name": doc.Name, "entities": placed}
+	out := map[string]any{"scene": filepath.ToSlash(rel), "game": gameName(root), "root": root, "name": doc.Name, "entities": placed}
 	if s, ok := screenOf(root, placed); ok {
 		out["screen"] = s
 	}
