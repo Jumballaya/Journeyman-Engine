@@ -242,7 +242,7 @@ test('the pages write JSON as jm fmt does', () => {
 
 test('each sprite is drawn as it looks, lowest z first, its box over it to pick', async () => {
   const { find, fromHost } = await scenePage({ input: null });
-  const sprite = (name, z, texture, extra = {}) => ({ where: `entities[${z}]`, name, x: 0, y: 0, z, w: 16, h: 16, ...extra,
+  const sprite = (name, z, texture, extra = {}) => ({ where: `entities[${z}]`, name, x: 0, y: 0, z, w: 16, h: 16, look: texture || undefined, ...extra,
     components: { TransformComponent: { scale: [8, 8] }, SpriteComponent: texture === null ? { color: [1, 0, 0, 0.5] } : { texture, color: [0.5, 1, 1, 1] } } });
   const bare = { where: 'entities[3]', name: 'Bare', x: 50, y: 0, w: 0, h: 0, components: { TransformComponent: {}, SpriteComponent: {} } };
   const loose = { where: 'entities[4]', name: 'Loose', x: 0, y: 0, w: 0, h: 0, components: { SpriteComponent: {} } };

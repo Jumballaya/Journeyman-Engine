@@ -219,7 +219,9 @@ func TestSceneViewGivesTheSpritesPictures(t *testing.T) {
 	os.WriteFile(filepath.Join(root, "scenes/art.scene.json"), []byte(`{"name":"Art","entities":[
 		{"name":"Hero","components":{"TransformComponent":{"position":[0,0,2],"scale":[-8,8]},"SpriteComponent":{"texture":"assets/hero.png"}}},
 		{"name":"Spark","components":{"TransformComponent":{"scale":[2,3]},"SpriteComponent":{"texture":"assets/fx.atlas.json#spark_0"}}},
-		{"name":"Gone","components":{"TransformComponent":{"scale":[2,2]},"SpriteComponent":{"texture":"assets/none.png"}}}]}`), 0o644)
+		{"name":"Gone","components":{"TransformComponent":{"scale":[2,2]},"SpriteComponent":{"texture":"assets/none.png"}}},
+		{"name":"Bat","components":{"TransformComponent":{"scale":[2,2]},"SpriteComponent":{},
+			"SpriteAnimationComponent":{"atlasPath":"assets/fx.atlas.json","current":"fly","animations":{"fly":{"regions":["spark_0","nope"]}}}}}]}`), 0o644)
 	t.Chdir(root)
 	result := sceneCall(t, `{"name":"scene_view","arguments":{"scene":"scenes/art.scene.json"}}`)
 	sprites, _ := result["_meta"].(map[string]any)["jm/sprites"].(map[string]any)
@@ -235,7 +237,11 @@ func TestSceneViewGivesTheSpritesPictures(t *testing.T) {
 	if size("assets/hero.png") != (image.Point{16, 16}) || size("assets/fx.atlas.json#spark_0") != (image.Point{4, 6}) || len(sprites) != 2 {
 		t.Errorf("sprites: %v", sprites)
 	}
-	hero := result["structuredContent"].(map[string]any)["entities"].([]any)[0].(map[string]any)
+	entities := result["structuredContent"].(map[string]any)["entities"].([]any)
+	if bat := entities[3].(map[string]any); bat["look"] != "assets/fx.atlas.json#spark_0" { // its animation's first frame
+		t.Errorf("bat: %v", bat)
+	}
+	hero := entities[0].(map[string]any)
 	if hero["z"] != 2.0 || hero["flipX"] != true || hero["flipY"] != nil {
 		t.Errorf("hero: %v", hero)
 	}
@@ -286,6 +292,15 @@ func TestATileMapIsDrawnWhole(t *testing.T) {
 		{"type":"tilelayer","data":[1],"properties":[{"name":"z","type":"float","value":-1}]}]}`), 0o644)
 	if img = tileMapPicture(root, "maps/z.tmj"); img == nil || at(1, 0) != green {
 		t.Errorf("layer z: %v", img)
+	}
+	// An animated tile shows its first frame; a hidden group's layers still take their z steps.
+	os.WriteFile(filepath.Join(root, "maps", "anim.tsj"), []byte(`{"tilewidth":2,"tileheight":2,"image":"tiles.png","columns":2,"tilecount":2,
+		"tiles":[{"id":0,"animation":[{"tileid":1,"duration":100}]}]}`), 0o644)
+	os.WriteFile(filepath.Join(root, "maps", "h.tmj"), []byte(`{"width":1,"height":1,"tilewidth":2,"tileheight":2,
+		"tilesets":[{"firstgid":1,"source":"anim.tsj"}],"layers":[{"type":"group","visible":false,"layers":[{"type":"tilelayer","data":[2]}]},
+		{"type":"tilelayer","data":[1]},{"type":"tilelayer","data":[0],"properties":[{"name":"z","value":0.005}]}]}`), 0o644)
+	if img = tileMapPicture(root, "maps/h.tmj"); img == nil || at(1, 0) != green {
+		t.Errorf("animated tile: %v", img)
 	}
 	// Sizes past what's sent (or past what an int holds) are left to the box, not allocated.
 	for _, size := range []string{`"width":4096,"height":4096`, `"width":4294967296,"height":4294967296`} {

@@ -105,6 +105,7 @@ type placedEntity struct {
 	Z          float64        `json:"z,omitempty"`     // draw order: higher on top
 	FlipX      bool           `json:"flipX,omitempty"` // a negative scale mirrors it
 	FlipY      bool           `json:"flipY,omitempty"`
+	Look       string         `json:"look,omitempty"` // the texture its sprite shows as the scene starts
 	Components map[string]any `json:"components"`
 }
 
@@ -328,6 +329,7 @@ func place(root string, entries []map[string]any, childOverrides map[string]any,
 			e.W, e.H = 2*math.Abs(scale[0]), 2*math.Abs(scale[1])
 			e.FlipX, e.FlipY = scale[0] < 0, scale[1] < 0
 		}
+		e.Look = spriteLook(e.Components)
 		*out = append(*out, e)
 		if t == nil { // as the engine: a parent without a transform holds its children nowhere
 			here = placement{}

@@ -79,12 +79,15 @@ type tiledTileset struct {
 	Margin    int    `json:"margin"`
 	Spacing   int    `json:"spacing"`
 	Tiles     []struct {
-		ID     int    `json:"id"`
-		Image  string `json:"image"`
-		X      int    `json:"x"`
-		Y      int    `json:"y"`
-		Width  int    `json:"width"`
-		Height int    `json:"height"`
+		ID        int    `json:"id"`
+		Image     string `json:"image"`
+		X         int    `json:"x"`
+		Y         int    `json:"y"`
+		Width     int    `json:"width"`
+		Height    int    `json:"height"`
+		Animation []struct {
+			TileID int `json:"tileid"`
+		} `json:"animation"`
 	} `json:"tiles"`
 }
 
@@ -135,23 +138,21 @@ func tileMapPicture(root, file string) image.Image {
 	}
 	var layers []tileLayer
 	depth := 0.0
-	var collect func(l tiledLayer, opacity float64, offset image.Point)
-	collect = func(l tiledLayer, opacity float64, offset image.Point) {
+	var collect func(l tiledLayer, shown bool, opacity float64, offset image.Point)
+	collect = func(l tiledLayer, shown bool, opacity float64, offset image.Point) {
 		z := depth // tile, object and image layers each take a step up, shown or not
 		if l.Type == "tilelayer" || l.Type == "objectgroup" || l.Type == "imagelayer" {
 			depth += 0.01
 		}
-		if l.Visible != nil && !*l.Visible {
-			return
-		}
+		shown = shown && (l.Visible == nil || *l.Visible)
 		if l.Opacity != nil {
 			opacity *= *l.Opacity
 		}
 		offset = offset.Add(image.Pt(int(math.Round(l.OffsetX)), int(math.Round(l.OffsetY))))
 		for _, child := range l.Layers {
-			collect(child, opacity, offset)
+			collect(child, shown, opacity, offset)
 		}
-		if l.Type != "tilelayer" {
+		if l.Type != "tilelayer" || !shown {
 			return
 		}
 		for _, p := range l.Properties {
@@ -164,7 +165,7 @@ func tileMapPicture(root, file string) image.Image {
 		layers = append(layers, tileLayer{cells, opacity, offset, z})
 	}
 	for _, l := range m.Layers {
-		collect(l, 1, image.Point{})
+		collect(l, true, 1, image.Point{})
 	}
 	sort.SliceStable(layers, func(i, j int) bool { return layers[i].z < layers[j].z })
 
@@ -220,6 +221,16 @@ func (t tiledTileset) cut(root, dir string) map[int]image.Image {
 			img = subImage(img, image.Rect(spec.X, spec.Y, spec.X+spec.Width, spec.Y+spec.Height))
 		}
 		tiles[spec.ID] = img
+	}
+	// An animated tile shows its first frame as the map starts.
+	first := map[int]image.Image{}
+	for _, spec := range t.Tiles {
+		if len(spec.Animation) > 0 {
+			first[spec.ID] = tiles[spec.Animation[0].TileID]
+		}
+	}
+	for id, img := range first {
+		tiles[id] = img
 	}
 	return tiles
 }

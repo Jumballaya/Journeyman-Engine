@@ -47,8 +47,7 @@ func scenePictures(root string, placed []placedEntity) (sprites map[string]strin
 				}
 			}
 		}
-		sprite, _ := e.Components["SpriteComponent"].(map[string]any)
-		texture, _ := sprite["texture"].(string)
+		texture := e.Look
 		if _, done := sprites[texture]; texture == "" || done {
 			continue
 		}
@@ -72,6 +71,26 @@ func scenePictures(root string, placed []placedEntity) (sprites map[string]strin
 		}
 	}
 	return sprites, maps
+}
+
+// spriteLook is the texture a sprite shows as its scene starts: its animation's
+// first region when one plays (atlasPath + animations), else its texture.
+func spriteLook(components map[string]any) string {
+	sprite, _ := components["SpriteComponent"].(map[string]any)
+	texture, _ := sprite["texture"].(string)
+	anim, _ := components["SpriteAnimationComponent"].(map[string]any)
+	file, _ := anim["atlasPath"].(string)
+	current, _ := anim["current"].(string)
+	clips, _ := anim["animations"].(map[string]any)
+	clip, _ := clips[current].(map[string]any)
+	regions, _ := clip["regions"].([]any)
+	if sprite == nil || file == "" || len(regions) == 0 {
+		return texture
+	}
+	if first, _ := regions[0].(string); first != "" {
+		return file + "#" + first
+	}
+	return texture
 }
 
 // atlasRegion is one region of an atlas as the build cuts it: the source

@@ -166,10 +166,10 @@
     const looks = new Map();
     for (const e of es) {
       const sp = e.components && e.components.SpriteComponent, t = e.components && e.components.TransformComponent;
-      if (!sp || !t || (sp.texture && !sprites[sp.texture])) continue;
+      if (!sp || !t || (e.look && !sprites[e.look])) continue;  // look: what jm says it shows
       const c = [0, 1, 2, 3].map((i) => Array.isArray(sp.color) && typeof sp.color[i] === "number" ? sp.color[i] : 1);
       const unscaled = !Array.isArray(t.scale);
-      looks.set(e, { src: sp.texture ? sprites[sp.texture] : "", c, w: unscaled ? 2 : e.w, h: unscaled ? 2 : e.h });
+      looks.set(e, { src: e.look ? sprites[e.look] : "", c, w: unscaled ? 2 : e.w, h: unscaled ? 2 : e.h });
     }
     // A tile map stands on its transform (its bottom-left corner), y up.
     const tiled = es.filter((e) => e.components && e.components.TransformComponent && e.components.TileMapComponent)
