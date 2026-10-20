@@ -202,7 +202,7 @@ type tilesetImages struct {
 // images of their own (a collection, or a sheet's tile drawn otherwise).
 func (t tiledTileset) cut(root, dir string) map[int]image.Image {
 	tiles := map[int]image.Image{}
-	if sheet := readGameImage(root, path.Join(dir, t.Image)); t.Image != "" && sheet != nil && t.TileWidth > 0 && t.TileHeight > 0 &&
+	if sheet := gameImage(root, path.Join(dir, t.Image)); t.Image != "" && sheet != nil && t.TileWidth > 0 && t.TileHeight > 0 &&
 		max(t.TileWidth, t.TileHeight, t.Margin, t.Spacing) <= pictureSideMax && min(t.Margin, t.Spacing) >= 0 {
 		// Only the cells the sheet has: its columns and rows bound the count.
 		fits := func(side, tile int) int { return max(0, (side-2*t.Margin+t.Spacing)/(tile+t.Spacing)) }
@@ -213,7 +213,7 @@ func (t tiledTileset) cut(root, dir string) map[int]image.Image {
 		}
 	}
 	for _, spec := range t.Tiles {
-		img := readGameImage(root, path.Join(dir, spec.Image))
+		img := gameImage(root, path.Join(dir, spec.Image))
 		if spec.Image == "" || img == nil {
 			continue
 		}

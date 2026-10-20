@@ -34,7 +34,6 @@ func scenePictures(root string, placed []placedEntity) (sprites map[string]strin
 		used += len(src)
 		return src
 	}
-	atlases := map[string]atlas.AtlasConfig{} // atlas file → its sources
 	for _, e := range placed {
 		if used >= pictureBudget {
 			break
@@ -52,18 +51,7 @@ func scenePictures(root string, placed []placedEntity) (sprites map[string]strin
 			continue
 		}
 		sprites[texture] = "" // tried: one it can't draw isn't tried again
-		var img image.Image
-		if file, region, ok := strings.Cut(texture, "#"); ok {
-			config, read := atlases[file]
-			if !read {
-				readGameJSON(root, file, &config)
-				atlases[file] = config
-			}
-			img = atlasRegion(root, config, region)
-		} else {
-			img = readGameImage(root, texture)
-		}
-		sprites[texture] = uri(img)
+		sprites[texture] = uri(gameImage(root, texture))
 	}
 	for texture, src := range sprites {
 		if src == "" {
@@ -91,6 +79,20 @@ func spriteLook(components map[string]any) string {
 		return file + "#" + first
 	}
 	return texture
+}
+
+// gameImage is an image the engine reads by reference: a file of the game, or
+// an atlas's region ("assets/sprites.atlas.json#hero_0") as the build cuts it.
+func gameImage(root, ref string) image.Image {
+	file, region, ok := strings.Cut(ref, "#")
+	if !ok {
+		return readGameImage(root, ref)
+	}
+	var config atlas.AtlasConfig
+	if !readGameJSON(root, file, &config) {
+		return nil
+	}
+	return atlasRegion(root, config, region)
 }
 
 // atlasRegion is one region of an atlas as the build cuts it: the source

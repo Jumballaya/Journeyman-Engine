@@ -302,6 +302,14 @@ func TestATileMapIsDrawnWhole(t *testing.T) {
 	if img = tileMapPicture(root, "maps/h.tmj"); img == nil || at(1, 0) != green {
 		t.Errorf("animated tile: %v", img)
 	}
+	// A tile's image may be an atlas region, as the engine reads it.
+	os.WriteFile(filepath.Join(root, "maps", "art.atlas.json"), []byte(`{"sources":["maps/tiles.png"]}`), 0o644)
+	os.WriteFile(filepath.Join(root, "maps", "atlas.tmj"), []byte(`{"width":1,"height":1,"tilewidth":4,"tileheight":2,
+		"tilesets":[{"firstgid":1,"tilewidth":4,"tileheight":2,"tilecount":1,"tiles":[{"id":0,"image":"art.atlas.json#tiles"}]}],
+		"layers":[{"type":"tilelayer","data":[1]}]}`), 0o644)
+	if img = tileMapPicture(root, "maps/atlas.tmj"); img == nil || at(0, 0) != red || at(3, 0) != green {
+		t.Errorf("atlas tile: %v", img)
+	}
 	// Sizes past what's sent (or past what an int holds) are left to the box, not allocated.
 	for _, size := range []string{`"width":4096,"height":4096`, `"width":4294967296,"height":4294967296`} {
 		os.WriteFile(filepath.Join(root, "maps", "c.tmj"), []byte(`{`+size+`,"tilewidth":2,"tileheight":2,"layers":[]}`), 0o644)
