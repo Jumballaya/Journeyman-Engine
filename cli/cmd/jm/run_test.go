@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -12,6 +13,32 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 )
+
+func TestArchiveManifestRejectsDamagedEntries(t *testing.T) {
+	for _, tc := range []struct{ entry, original, damaged string }{
+		{archive.ManifestEntryKey, "Original", "Tampered"},
+		{"asset.txt", "original", "tampered"},
+	} {
+		t.Run(tc.entry, func(t *testing.T) {
+			var buf bytes.Buffer
+			entries := []archive.AssetEntry{
+				{SourcePath: archive.ManifestEntryKey, Type: "manifest", Payload: []byte(`{"name":"Original","entryScene":"s","scenes":["s"]}`)},
+				{SourcePath: "asset.txt", Type: "data", Payload: []byte("original")},
+			}
+			if err := archive.WriteArchive(&buf, entries); err != nil {
+				t.Fatal(err)
+			}
+			data := bytes.Replace(buf.Bytes(), []byte(tc.original), []byte(tc.damaged), 1)
+			path := filepath.Join(t.TempDir(), "damaged.jm")
+			if err := os.WriteFile(path, data, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := readArchiveManifest(path); err == nil || !strings.Contains(err.Error(), "damaged") || !strings.Contains(err.Error(), tc.entry) {
+				t.Fatalf("expected damage error naming %s, got %v", tc.entry, err)
+			}
+		})
+	}
+}
 
 func TestRunGameArchiveExtractsManifestAndResolvesEngine(t *testing.T) {
 	if runtime.GOOS == "windows" {
