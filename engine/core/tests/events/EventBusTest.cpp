@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <vector>
 
 #include "EventBus.hpp"
 #include "EventType.hpp"
@@ -36,6 +37,21 @@ TEST(EventBus, SubscribeEmitDispatchDeliversEvent) {
   bus.dispatch();
 
   EXPECT_EQ(received, 42);
+}
+
+TEST(EventBus, MutableHandlerKeepsStateBetweenEventsAndDispatches) {
+  EventBus bus;
+  std::vector<int> counts;
+  bus.subscribe<PingEvent>(kPing, [count = 0, &counts](const PingEvent&) mutable { counts.push_back(++count); });
+
+  bus.emit(kPing, PingEvent{1});
+  bus.emit(kPing, PingEvent{2});
+  bus.dispatch();
+  EXPECT_EQ(counts, (std::vector<int>{1, 2}));
+
+  bus.emit(kPing, PingEvent{3});
+  bus.dispatch();
+  EXPECT_EQ(counts, (std::vector<int>{1, 2, 3}));
 }
 
 // Every subscriber for a given event type receives a dispatched event.
@@ -126,9 +142,7 @@ TEST(EventBus, UnsubscribeInsideHandlerAppliesNextDispatch) {
     ++aCalls;
     bus.unsubscribe(bHandle);
   });
-  bHandle = bus.subscribe<PingEvent>(kPing, [&](const PingEvent&) {
-    ++bCalls;
-  });
+  bHandle = bus.subscribe<PingEvent>(kPing, [&](const PingEvent&) { ++bCalls; });
 
   bus.emit(kPing, PingEvent{1});
   bus.dispatch();
