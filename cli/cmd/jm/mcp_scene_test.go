@@ -214,11 +214,15 @@ func TestSceneViewGivesTheSpritesPictures(t *testing.T) {
 		os.WriteFile(filepath.Join(root, file), buf.Bytes(), 0o644)
 	}
 	square("assets/hero.png", 16, 16)
-	square("assets/fx/spark_0.png", 4, 6)
-	os.WriteFile(filepath.Join(root, "assets/fx.atlas.json"), []byte(`{"sources":["assets/fx/spark_0.png"]}`), 0o644)
+	square("assets/fx/spark.png", 4, 4)
+	os.WriteFile(filepath.Join(root, "assets/fx/spark.json"), []byte(`{"frames":[{"frame":{"x":0,"y":0,"w":2,"h":4},"sourceSize":{"w":2,"h":4},"duration":100}],"meta":{"image":"spark.png"}}`), 0o644)
+	square("assets/fx/spark_00.png", 3, 3)
+	// spark_0 is the sheet's frame; spark_00 a PNG of its own, though "00" reads as 0.
+	os.WriteFile(filepath.Join(root, "assets/fx.atlas.json"), []byte(`{"sources":["assets/fx/spark.json","assets/fx/spark_00.png"]}`), 0o644)
 	os.WriteFile(filepath.Join(root, "scenes/art.scene.json"), []byte(`{"name":"Art","entities":[
 		{"name":"Hero","components":{"TransformComponent":{"position":[0,0,2],"scale":[-8,8]},"SpriteComponent":{"texture":"assets/hero.png"}}},
 		{"name":"Spark","components":{"TransformComponent":{"scale":[2,3]},"SpriteComponent":{"texture":"assets/fx.atlas.json#spark_0"}}},
+		{"name":"Spark00","components":{"TransformComponent":{"scale":[2,3]},"SpriteComponent":{"texture":"assets/fx.atlas.json#spark_00"}}},
 		{"name":"Gone","components":{"TransformComponent":{"scale":[2,2]},"SpriteComponent":{"texture":"assets/none.png"}}},
 		{"name":"Bat","components":{"TransformComponent":{"scale":[2,2]},"SpriteComponent":{},
 			"SpriteAnimationComponent":{"atlasPath":"assets/fx.atlas.json","current":"fly","animations":{"fly":{"regions":["spark_0","nope"]}}}}}]}`), 0o644)
@@ -234,11 +238,11 @@ func TestSceneViewGivesTheSpritesPictures(t *testing.T) {
 		}
 		return img.Bounds().Size()
 	}
-	if size("assets/hero.png") != (image.Point{16, 16}) || size("assets/fx.atlas.json#spark_0") != (image.Point{4, 6}) || len(sprites) != 2 {
+	if size("assets/hero.png") != (image.Point{16, 16}) || size("assets/fx.atlas.json#spark_0") != (image.Point{2, 4}) || size("assets/fx.atlas.json#spark_00") != (image.Point{3, 3}) || len(sprites) != 3 {
 		t.Errorf("sprites: %v", sprites)
 	}
 	entities := result["structuredContent"].(map[string]any)["entities"].([]any)
-	if bat := entities[3].(map[string]any); bat["look"] != "assets/fx.atlas.json#spark_0" { // its animation's first frame
+	if bat := entities[4].(map[string]any); bat["look"] != "assets/fx.atlas.json#spark_0" { // its animation's first frame
 		t.Errorf("bat: %v", bat)
 	}
 	hero := entities[0].(map[string]any)
