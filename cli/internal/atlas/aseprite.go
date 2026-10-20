@@ -68,6 +68,9 @@ func ParseSheet(data []byte) (Sheet, error) {
 	if err != nil {
 		return Sheet{}, err
 	}
+	if len(frames) == 0 {
+		return Sheet{}, fmt.Errorf("aseprite: no frames: export a sheet with at least one frame")
+	}
 	for i, f := range frames {
 		if f.Rotated {
 			return Sheet{}, fmt.Errorf("aseprite: frame %d is rotated: export without rotation", i)

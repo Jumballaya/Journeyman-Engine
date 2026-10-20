@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
@@ -60,7 +61,7 @@ func TestBakeTilesetPacksImageCollections(t *testing.T) {
 	var built struct {
 		Name  string `json:"name"`
 		Tiles []struct {
-			ID                  int    `json:"id"`
+			ID                  int `json:"id"`
 			Image, Type         string
 			X, Y, Width, Height int
 		} `json:"tiles"`
@@ -179,6 +180,30 @@ func TestBakeAtlasCutsAsepriteSheets(t *testing.T) {
 	walk := built.Clips["hero"]["walk"]
 	if len(walk.Frames) != 2 || walk.Frames[1] != (atlas.ClipFrame{Region: "hero_1", Duration: 0.08}) || !walk.Loop {
 		t.Fatalf("clips: %+v", built.Clips)
+	}
+}
+
+func TestBakeAtlasRejectsSheetsWithoutFrames(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writePNG(t, "art/hero.png", 8, 8, color.White)
+	writePNG(t, "art/coin.png", 4, 4, color.White)
+	mustMkdir(t, "assets")
+	mustMkdir(t, filepath.Join(outDir, "assets"))
+	for path, data := range map[string]string{
+		"art/hero.json":       `{"frames":null,"meta":{"image":"hero.png"}}`,
+		"assets/c.atlas.json": `{"sources":["art/coin.png","art/hero.json"]}`,
+	} {
+		if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := bakeAtlas("assets/c.atlas.json"); err == nil || !strings.Contains(err.Error(), "art/hero.json") || !strings.Contains(err.Error(), "no frames") {
+		t.Fatalf("expected no frames error naming the sheet, got %v", err)
+	}
+	for _, path := range []string{"assets/c.atlas.json", "assets/c.atlas.png"} {
+		if _, err := os.Stat(filepath.Join(outDir, path)); !os.IsNotExist(err) {
+			t.Errorf("invalid sheet wrote %s: %v", path, err)
+		}
 	}
 }
 

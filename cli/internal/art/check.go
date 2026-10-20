@@ -237,9 +237,7 @@ func (c *checker) sheet(rel, set, kind string) []Finding {
 	}
 	img := filepath.ToSlash(filepath.Join(filepath.Dir(rel), s.Image))
 	found := slices.Concat(c.image(img), c.once(rel, func(say func(string, string)) {
-		if len(s.Frames()) == 0 {
-			say(rel, "it has no frames")
-		} else if picture, err := c.read(img); err == nil {
+		if picture, err := c.read(img); err == nil {
 			if size, _, err := image.DecodeConfig(bytes.NewReader(picture)); err == nil {
 				if i := s.Outside(size.Width, size.Height); i >= 0 {
 					say(rel, fmt.Sprintf("its frame %d is outside its %dx%d picture", i+1, size.Width, size.Height))
