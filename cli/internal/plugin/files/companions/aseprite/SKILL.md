@@ -1,19 +1,21 @@
 ---
 name: aseprite
-description: Draw and animate sprites in Aseprite for a Journeyman game, held to the game's art direction (design/Art.md), validated and critiqued, then brought in as an atlas with animation clips. Use when the person wants a new sprite, an animation, a tileset, or to change or review art made in Aseprite.
+description: Draw and animate sprites in Aseprite for a Journeyman game, held to the game's art note (its art direction), validated and critiqued, then brought in as an atlas with animation clips. Use when the person wants a new sprite, an animation, a tileset, or to change or review art made in Aseprite.
 ---
 
 # Sprites with Aseprite
 
-The game's look is decided once, in `design/Art.md` (a design note of type
-`art`): its properties are the locks every picture keeps, its sections the
-rest. Every sprite, whoever draws it, starts from it, so a hundred sprites
-look like one game.
+The game's look is decided once, in its **art note**: `design/Art.md`, or
+(without one) the design note of type `art`. Its properties are the locks
+every picture keeps, its sections the rest. Every sprite, whoever draws it,
+starts from it, so a hundred sprites look like one game.
 
-## Before drawing: the brief is Art.md
+## Before drawing: the brief is the art note
 
-Read `design/Art.md` (`memory` with note `Art`) and the dossier you're
-drawing. Art.md answers what a sprite brief asks; don't ask the person again:
+Find the art note once: `health` (checks `art`) names it (`art.bible.path`;
+none: the game has no art note yet). Read it (`memory` with its note) and
+the dossier you're drawing. The art note answers what a sprite brief asks;
+don't ask the person again:
 
 | Property | What it fixes |
 |---|---|
@@ -26,18 +28,19 @@ drawing. Art.md answers what a sprite brief asks; don't ask the person again:
 | `animations` | each set's directions and actions: tags `<action>_<direction>` (an undirected action by its name), each frame's milliseconds |
 | `references` | finished sprites new ones match |
 
-The dossier's type picks its size and set (`art_set` overrides). If Art.md
-has no palette or grid yet, settle them with the person first (the
-`art_direction` playbook) and write them in.
+The dossier's type picks its size and set (`art_set` overrides). If the art
+note has no palette or grid yet, or there's no art note, settle them with the
+person first (the `art_direction` playbook) and write them in: into the art
+note there is, or a new `design/Art.md` only when there's none.
 
 ## Draw
 
 With the Aseprite companion's tools (its MCP server), following its own
 workflows (brief, draw, animate):
 
-1. A new sprite at the frame size, the palette loaded from Art.md's file, as
+1. A new sprite at the frame size, the palette loaded from the art note's file, as
    `assets/art/<kind>/<name>.aseprite`.
-2. Import a reference (one of Art.md's `references`, the same set if one is)
+2. Import a reference (one of the art note's `references`, the same set if one is)
    on a locked layer, to match its proportions, shading and outline.
 3. Draw it; then the set's actions, a frame per entry, a tag per action and
    direction, each frame timed as the set says. Look at it after each step
@@ -49,11 +52,11 @@ workflows (brief, draw, animate):
   anti-aliasing, animation) and fix every error.
 - **Critique** it: the `pixel-critic` agent where the agent has it, otherwise
   the tools' review workflow (`skill://review`). A score out of 10 against
-  Art.md and the references; under 7, fix the highest-value finding and
+  the art note and the references; under 7, fix the highest-value finding and
   critique again.
 - **Note the critique** on the dossier: `memory_note` (category `critique`):
-  the score, and what's left. A rule the critic keeps citing becomes Art.md's
-  (category `rule`), so the next sprite starts with it.
+  the score, and what's left. A rule the critic keeps citing becomes the art
+  note's (`memory_note` on it, category `rule`), so the next sprite starts with it.
 
 ## Into the game
 
@@ -65,7 +68,7 @@ workflows (brief, draw, animate):
    tag a clip with its frames' own durations.
 3. **The dossier**: `sprite: assets/art/<kind>/<name>.aseprite`, and
    `art: done` once the critique passes.
-4. **Build.** `build` (and `health`, checks `art`) holds the export to Art.md:
+4. **Build.** `build` (and `health`, checks `art`) holds the export to the art note:
    colours off the palette, half-clear pixels, frames of the wrong size,
    missing or mistimed tags, sheets no atlas lists, tiles off the grid. Its
    art warnings must be gone.

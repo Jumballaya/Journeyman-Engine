@@ -120,7 +120,8 @@ animation sets, each place's visual language), `art_pass` (a dossier's
 sprite drawn in Aseprite to it, validated, critiqued, exported into the
 atlas) and `art_review` (the drawn art critiqued against it, worst first).
 
-**Art keeps design/Art.md.** Its properties are the brief every sprite
+**Art keeps the art note**: `design/Art.md`, else the design note of type
+art (`health`, checks `art`, names it). Its properties are the brief every sprite
 shares: the palette file, grid, view, light, outline, each kind's frame
 size, each animation set's `<action>_<direction>` tags and timings, and
 finished `references` to match; read it before drawing and don't ask the

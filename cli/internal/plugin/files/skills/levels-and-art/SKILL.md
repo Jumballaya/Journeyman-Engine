@@ -17,10 +17,11 @@ description: Make and change levels, sprites and tile maps in a Journeyman game 
   names a region as `assets/atlases/game.atlas.json#ship`. Aseprite tags
   become animation clips for `SpriteAnimationComponent`. Details:
   `jm docs content`, *Atlases & sprite animation*.
-- **The look is design/Art.md**: palette, grid, sizes, animation sets and
-  references every sprite keeps; `build` warns of art that breaks them. Draw
-  with the Aseprite companion (its skill: brief from Art.md, validate,
-  critique, export) or the art_pass playbook.
+- **The look is the art note** (`design/Art.md`, else the note of type
+  art; `health`'s art check names it): palette, grid, sizes, animation
+  sets and references every sprite keeps; `build` warns of art that breaks
+  them. Draw with the Aseprite companion (its skill: brief from the art note,
+  validate, critique, export) or the art_pass playbook.
 - **Maps are Tiled files** (`*.tmj`, `*.tsj`): a `TileMapComponent` draws
   one; tile classes and properties (`solid`, tags) are what scripts and
   bodies read; object layers of class `ground` or `platform` are ground.

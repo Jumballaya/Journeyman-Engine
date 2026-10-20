@@ -69,31 +69,32 @@ var playbooks = []playbook{
 			"Report what changed; nothing found is a fine answer."},
 	{"art_direction", "Set the look", "From a brief or setting doc: the art note's locks, the palette, each place's look, the dossiers to draw.",
 		[]playArg{{"source", "what to start from: a file of the game, a note, or what I describe", false}},
-		"Set the game's art direction from {source}. Read it, and design/Art.md (memory with note Art). Propose, as decisions to confirm in one " +
+		"Set the game's art direction from {source}. Read it, and the game's art note: health (checks art) names it (art.bible.path), " +
+			"design/Art.md or the note of type art; keep its locks unless I change them. Propose, as decisions to confirm in one " +
 			"message: a palette (a Lospec one by name, or its colours as named ramps: earth-1..6, gold-1..6), the grid, view, light, outline " +
 			"colour, the most colours a frame uses, each kind's frame size (characters, creatures, portraits, items, tiles) and each animation set " +
 			"(directions; each action's frames and milliseconds, key poses held longest). After I agree: save the palette as assets/palettes/<name>.gpl " +
-			"(GIMP format, a name per colour), write Art.md's properties and its sections (ramps and what each is for, shading, anti-aliasing and " +
+			"(GIMP format, a name per colour), write the art note's properties (no art note: a new design/Art.md) and its sections (ramps and what each is for, shading, anti-aliasing and " +
 			"dithering rules, each place's and faction's visual language), and dossier_new each character, creature, item and place to draw, " +
 			"with art: planned (and art_set where it isn't its type's set). End with the list to draw, in the order they'd be played."},
 	{"art_pass", "Draw it", "Draw a dossier's sprite to the art note's locks: brief, draw, validate, critique, export, in the game.",
 		[]playArg{{"note", "the dossier: a character, creature, item or place", true}},
-		"Make the art for [[{note}]]. Read it and design/Art.md (memory with note): Art.md's properties answer the sprite brief (palette, grid, " +
-			"view, light, outline, its frame size, its animation set's tags and timings), so don't ask them again; none set? Run the art_direction " +
+		"Make the art for [[{note}]]. Read it and the game's art note (health, checks art, names it: art.bible.path): its properties answer the sprite brief (palette, grid, " +
+			"view, light, outline, its frame size, its animation set's tags and timings), so don't ask them again; no art note, or no palette or grid? Run the art_direction " +
 			"playbook first. Write a short brief (silhouette, its colours by palette name, what it shares with the references) and confirm it with me. " +
-			"In Aseprite (companions lists the Aseprite companion): a new sprite at its size with the palette loaded from Art.md's palette file; " +
-			"import a finished sprite from Art.md's references as a reference layer to match proportions, shading and outline. Draw it as " +
+			"In Aseprite (companions lists the Aseprite companion): a new sprite at its size with the palette loaded from the art note's palette file; " +
+			"import a finished sprite from the art note's references as a reference layer to match proportions, shading and outline. Draw it as " +
 			"assets/art/<name>.aseprite, frames and a tag per action and direction (<action>_<direction>) timed as the set says. Look at each step; " +
 			"run the tools' validate and fix its errors. Then critique it: the pixel-critic agent where you have it, else the review workflow " +
-			"(skill://review): a score out of 10 against the references and Art.md's rules; fix until 7 or more. Export the sheet with JSON data " +
+			"(skill://review): a score out of 10 against the references and the art note's rules; fix until 7 or more. Export the sheet with JSON data " +
 			"(tags on) beside it, list the .json in the game's atlas, set the dossier's sprite (the .aseprite file) and art: done, and note the " +
 			"critique on it (memory_note, category critique: the score and what's left). Build: its art warnings must be gone. Look at it in the " +
-			"game (scene_view or drive_frame). A lesson for every sprite (a rule the critic kept citing) goes in Art.md (memory_note, category rule)."},
+			"game (scene_view or drive_frame). A lesson for every sprite (a rule the critic kept citing) goes in the art note (memory_note, category rule)."},
 	{"art_review", "Review the art", "Hold the drawn art to the art note: what's off, what's inconsistent, what to redraw first.",
 		[]playArg{{"note", "a dossier to review (default: all the art)", false}},
-		"Review the game's art ({note}). health (checks art) lists each sprite, how far along it is, and what breaks Art.md's locks. For " +
+		"Review the game's art ({note}). health (checks art) names the art note (art.bible.path), lists each sprite, how far along it is, and what breaks its locks. For " +
 			"each exported sprite (or [[{note}]]), open it in Aseprite, validate it, and critique it with the pixel-critic agent or skill://review " +
-			"against Art.md and its references: palette use, value range, outline, light direction, proportions beside the others of its set. " +
+			"against the art note and its references: palette use, value range, outline, light direction, proportions beside the others of its set. " +
 			"Note each critique on its dossier (memory_note, category critique). End with a table: sprite, score, the one fix that matters most; " +
 			"worst first. Fix nothing until I pick."},
 }
