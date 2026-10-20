@@ -264,3 +264,18 @@ test('each sprite is drawn as it looks, lowest z first, its box over it to pick'
   const boxes = find((e) => (e.attributes.class || '').startsWith('shape'));
   assert.deepEqual(boxes.map((e) => e.attributes.class.includes('drawn')), [true, true, false, true, false]);  // no picture: its box as before
 });
+
+test('a tile map is drawn whole, standing on its transform, under the sprites; without a transform, not at all', async () => {
+  const { find, fromHost } = await scenePage({ input: null });
+  const map = (name, components) => ({ where: name, name, x: 10, y: 20, w: 0, h: 0, components });
+  fromHost('ui/notifications/tool-result', { content: [], _meta: { 'jm/maps': { 'a.tmj': { src: 'data:image/png;base64,MAP', w: 64, h: 32 } } },
+    structuredContent: { scene: 'scenes/level.scene.json', entities: [
+      { where: 'entities[0]', name: 'Hero', x: 0, y: 0, w: 4, h: 4, components: { TransformComponent: { scale: [2, 2] }, SpriteComponent: {} } },
+      map('Map', { TransformComponent: { position: [10, 20, 0] }, TileMapComponent: { map: 'a.tmj' } }),
+      map('Loose', { TileMapComponent: { map: 'a.tmj' } })] } });
+  await settle();
+  const drawn = find((e) => e.attributes.class === 'sprite');
+  assert.equal(drawn.length, 2);
+  assert.deepEqual(['href', 'x', 'y', 'width', 'height'].map((k) => drawn[0].attributes[k]), ['data:image/png;base64,MAP', 10, -52, 64, 32]);
+  assert.equal(drawn[1].tag, 'rect');  // the sprite, over the map
+});

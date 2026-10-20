@@ -137,6 +137,10 @@ func tileMapPicture(root, file string) image.Image {
 	depth := 0.0
 	var collect func(l tiledLayer, opacity float64, offset image.Point)
 	collect = func(l tiledLayer, opacity float64, offset image.Point) {
+		z := depth // tile, object and image layers each take a step up, shown or not
+		if l.Type == "tilelayer" || l.Type == "objectgroup" || l.Type == "imagelayer" {
+			depth += 0.01
+		}
 		if l.Visible != nil && !*l.Visible {
 			return
 		}
@@ -150,16 +154,14 @@ func tileMapPicture(root, file string) image.Image {
 		if l.Type != "tilelayer" {
 			return
 		}
-		z := depth
-		depth += 0.01
 		for _, p := range l.Properties {
 			if n, ok := p.Value.(float64); ok && p.Name == "z" {
 				z = n
 			}
 		}
-		if cells := l.gids(); len(cells) == m.Width*m.Height {
-			layers = append(layers, tileLayer{cells, opacity, offset, z})
-		}
+		cells := l.gids()
+		cells = append(cells[:min(len(cells), m.Width*m.Height)], make([]uint32, max(0, m.Width*m.Height-len(cells)))...) // as the engine: short data padded
+		layers = append(layers, tileLayer{cells, opacity, offset, z})
 	}
 	for _, l := range m.Layers {
 		collect(l, 1, image.Point{})
@@ -178,10 +180,10 @@ func tileMapPicture(root, file string) image.Image {
 				}
 				// A tile stands on its cell's bottom-left, as in Tiled; turned, it turns about its middle.
 				size := img.Bounds().Size()
-				middle := image.Pt(col*m.TileWidth+size.X/2, (row+1)*m.TileHeight-size.Y/2).Add(l.offset).Add(shift)
+				at := image.Pt(col*m.TileWidth, (row+1)*m.TileHeight-size.Y).Add(l.offset).Add(shift)
 				img = flipped(img, gid&tileFlipD != 0, gid&tileFlipH != 0, gid&tileFlipV != 0)
 				b := img.Bounds()
-				at := middle.Sub(image.Pt(b.Dx()/2, b.Dy()/2))
+				at = at.Add(image.Pt((size.X-b.Dx())/2, (size.Y-b.Dy())/2))
 				draw.DrawMask(canvas, image.Rectangle{at, at.Add(b.Size())}, img, b.Min, mask, image.Point{}, draw.Over)
 			}
 		}
@@ -199,7 +201,8 @@ type tilesetImages struct {
 // images of their own (a collection, or a sheet's tile drawn otherwise).
 func (t tiledTileset) cut(root, dir string) map[int]image.Image {
 	tiles := map[int]image.Image{}
-	if sheet := readGameImage(root, path.Join(dir, t.Image)); t.Image != "" && sheet != nil && t.TileWidth > 0 && t.TileHeight > 0 && t.Margin >= 0 && t.Spacing >= 0 {
+	if sheet := readGameImage(root, path.Join(dir, t.Image)); t.Image != "" && sheet != nil && t.TileWidth > 0 && t.TileHeight > 0 &&
+		max(t.TileWidth, t.TileHeight, t.Margin, t.Spacing) <= pictureSideMax && min(t.Margin, t.Spacing) >= 0 {
 		// Only the cells the sheet has: its columns and rows bound the count.
 		fits := func(side, tile int) int { return max(0, (side-2*t.Margin+t.Spacing)/(tile+t.Spacing)) }
 		columns := min(max(1, t.Columns), fits(sheet.Bounds().Dx(), t.TileWidth))

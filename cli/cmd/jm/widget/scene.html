@@ -172,7 +172,8 @@
       looks.set(e, { src: sp.texture ? sprites[sp.texture] : "", c, w: unscaled ? 2 : e.w, h: unscaled ? 2 : e.h });
     }
     // A tile map stands on its transform (its bottom-left corner), y up.
-    const tiled = es.map((e) => [e, maps[e.components && e.components.TileMapComponent && e.components.TileMapComponent.map]]).filter(([, m]) => m);
+    const tiled = es.filter((e) => e.components && e.components.TransformComponent && e.components.TileMapComponent)
+      .map((e) => [e, maps[e.components.TileMapComponent.map]]).filter(([, m]) => m);
     for (const [e, m] of tiled) {
       x0 = Math.min(x0, e.x); x1 = Math.max(x1, e.x + m.w);
       y0 = Math.min(y0, -e.y - m.h); y1 = Math.max(y1, -e.y);
