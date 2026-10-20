@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/blevesearch/bleve/v2"
 	"github.com/blevesearch/bleve/v2/search/query"
@@ -135,13 +137,9 @@ func TestSearchRanksByBM25InMemory(t *testing.T) {
 		return append(out, strconv.Itoa(len(cwd)))
 	}
 	before := files()
-	idx, _, err := indexOf(root)
-	if err != nil {
-		t.Fatal(err)
-	}
 	req := bleve.NewSearchRequest(queryOf("ember"))
 	req.Explain = true
-	res, err := idx.Search(req)
+	res, _, err := searchNotes(root, req)
 	if err != nil || len(res.Hits) != 2 {
 		t.Fatalf("%v %v", res, err)
 	}
@@ -179,6 +177,86 @@ func TestAnEscapedFirstCharacterIsAWord(t *testing.T) {
 	for _, q := range []string{`\\ "jump"`, `\: "jump"`} {
 		if hits := Search(root, q); len(hits) != 0 {
 			t.Errorf("%s matched jumps: %+v", q, hits)
+		}
+	}
+}
+
+// Alias avoids hiding bleve.Index's Index method with an embedded field.
+type searchIndex = bleve.Index
+
+type pausedSearchIndex struct {
+	searchIndex
+	once            sync.Once
+	started, resume chan struct{}
+	closed          chan struct{}
+}
+
+func (p *pausedSearchIndex) Search(req *bleve.SearchRequest) (*bleve.SearchResult, error) {
+	p.once.Do(func() {
+		close(p.started)
+		<-p.resume
+	})
+	return p.searchIndex.Search(req)
+}
+
+func (p *pausedSearchIndex) Close() error {
+	err := p.searchIndex.Close()
+	close(p.closed)
+	return err
+}
+
+func TestSearchSurvivesAnIndexRebuildWhileQuerying(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, Dir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, Dir, "Chronicle.md")
+	if err := os.WriteFile(path, []byte("# Chronicle\n\nember old.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if hits := Search(root, "ember"); len(hits) != 1 {
+		t.Fatalf("initial search: %+v", hits)
+	}
+	key, err := filepath.Abs(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexes.Lock()
+	cached := indexes.of[key]
+	paused := &pausedSearchIndex{searchIndex: cached.idx, started: make(chan struct{}), resume: make(chan struct{}), closed: make(chan struct{})}
+	cached.idx = paused
+	indexes.of[key] = cached
+	indexes.Unlock()
+	unblock := sync.OnceFunc(func() { close(paused.resume) })
+	defer unblock()
+	first, second := make(chan []Hit, 1), make(chan []Hit, 1)
+	go func() { first <- Search(root, "ember") }()
+	select {
+	case <-paused.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first query didn't start")
+	}
+	if err := os.WriteFile(path, []byte("# Chronicle\n\nember new.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	go func() { second <- Search(root, "ember") }()
+	// A protected rebuild waits here until the in-flight query is released.
+	select {
+	case <-paused.closed:
+	case <-time.After(time.Second):
+	}
+	unblock()
+	for _, tc := range []struct {
+		name, text string
+		result     <-chan []Hit
+	}{{"in-flight query", "ember old.", first}, {"rebuilt index", "ember new.", second}} {
+		select {
+		case hits := <-tc.result:
+			if len(hits) != 1 || hits[0].Title != "Chronicle" || hits[0].Text != tc.text {
+				t.Errorf("%s: %+v; want Chronicle with %q", tc.name, hits, tc.text)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s didn't finish", tc.name)
 		}
 	}
 }

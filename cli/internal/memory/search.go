@@ -42,16 +42,12 @@ func Search(root, text string) []Hit {
 	if strings.TrimSpace(text) == "" {
 		return out
 	}
-	idx, notes, err := indexOf(root)
-	if err != nil {
-		return out
-	}
 	req := bleve.NewSearchRequestOptions(queryOf(text), 50, 0, false)
 	req.IncludeLocations = true
-	res, err := idx.Search(req)
+	res, notes, err := searchNotes(root, req)
 	if err != nil {
 		req.Query = bleve.NewMatchQuery(text) // not a query: plain words
-		if res, err = idx.Search(req); err != nil {
+		if res, notes, err = searchNotes(root, req); err != nil {
 			return out
 		}
 	}
@@ -193,7 +189,9 @@ type indexed struct {
 	notes map[string]Note
 }
 
-func indexOf(root string) (bleve.Index, map[string]Note, error) {
+// searchNotes returns query results and their matching note snapshot.
+// The cache stays locked through index lookup, rebuild and query execution.
+func searchNotes(root string, req *bleve.SearchRequest) (*bleve.SearchResult, map[string]Note, error) {
 	all := Notes(root)
 	h := sha256.New()
 	for _, n := range all {
@@ -201,9 +199,19 @@ func indexOf(root string) (bleve.Index, map[string]Note, error) {
 	}
 	var sum [32]byte
 	copy(sum[:], h.Sum(nil))
-	key, _ := filepath.Abs(root)
 	indexes.Lock()
 	defer indexes.Unlock()
+	idx, notes, err := indexOfHeld(root, all, sum)
+	if err != nil {
+		return nil, nil, err
+	}
+	res, err := idx.Search(req)
+	return res, notes, err
+}
+
+// indexOfHeld returns the index for all; caller holds indexes.
+func indexOfHeld(root string, all []Note, sum [32]byte) (bleve.Index, map[string]Note, error) {
+	key, _ := filepath.Abs(root)
 	if have, ok := indexes.of[key]; ok && have.sum == sum {
 		return have.idx, have.notes, nil
 	}
