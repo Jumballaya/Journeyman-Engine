@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstring>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <type_traits>
 #include <unordered_map>
@@ -29,8 +30,8 @@ class EventBus {
   EventHandle subscribe(EventType type, F&& fn) {
     std::lock_guard lk(_subMutex);
     const EventHandle handle = ++_lastHandle;
-    _byType[type].push_back(
-        Sub{handle, [fn = std::forward<F>(fn)](const void* p) mutable { fn(*static_cast<const T*>(p)); }});
+    _byType[type].push_back(std::make_shared<Sub>(
+        Sub{handle, [fn = std::forward<F>(fn)](const void* p) mutable { fn(*static_cast<const T*>(p)); }}));
     return handle;
   }
 
@@ -62,7 +63,7 @@ class EventBus {
   LockFreeQueue<Queued> _queue;
 
   std::mutex _subMutex;
-  std::unordered_map<EventType, std::vector<Sub>> _byType;
+  std::unordered_map<EventType, std::vector<std::shared_ptr<Sub>>> _byType;
   EventHandle _lastHandle = 0;
 
   std::atomic<uint64_t> _dropped{0};
