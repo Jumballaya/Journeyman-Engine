@@ -90,25 +90,43 @@ func fileEntrypoint(extensions ...string) map[string]any {
 func (w widget) resources() []map[string]any {
 	var out []map[string]any
 	for _, uri := range []string{w.appURI(), w.legacyURI()} {
-		mime, meta := w.kind(uri)
+		mime, meta := w.kind(uri == w.legacyURI())
 		out = append(out, map[string]any{"uri": uri, "name": strings.Replace(strings.TrimSuffix(uri[len("ui://widget/"):], ".html"), "-"+w.stamp(), "", 1),
 			"title": w.title, "description": w.description, "mimeType": mime, "_meta": meta})
 	}
 	return out
 }
 
-// read is w's page for uri; false: uri isn't one of w's.
+// read is w's page for uri, at this stamp or another; false: uri isn't one of
+// w's. A host that kept an older jm's URI (ChatGPT, until it restarts) gets
+// this jm's page rather than nothing.
 func (w widget) read(uri string) (map[string]any, bool) {
-	if uri != w.appURI() && uri != w.legacyURI() {
+	legacy, ok := w.owns(uri)
+	if !ok {
 		return nil, false
 	}
-	mime, meta := w.kind(uri)
+	mime, meta := w.kind(legacy)
 	return map[string]any{"uri": uri, "mimeType": mime, "_meta": meta, "text": w.page()}, true
 }
 
-// kind is the MIME type and resource _meta of w served at uri.
-func (w widget) kind(uri string) (string, map[string]any) {
-	if uri == w.legacyURI() {
+// owns says whether uri is w's at any stamp, and whether it's the legacy kind.
+func (w widget) owns(uri string) (legacy, ok bool) {
+	rest, found := strings.CutPrefix(uri, "ui://widget/"+w.name+"-")
+	if !found || len(rest) < 8 || strings.Trim(rest[:8], "0123456789abcdef") != "" {
+		return false, false
+	}
+	switch rest[8:] {
+	case ".html":
+		return true, true
+	case "-app.html":
+		return false, true
+	}
+	return false, false
+}
+
+// kind is the MIME type and resource _meta of w served as the legacy kind or not.
+func (w widget) kind(legacy bool) (string, map[string]any) {
+	if legacy {
 		return "text/html+skybridge", map[string]any{
 			"openai/widgetDescription":   w.description,
 			"openai/widgetPrefersBorder": true,

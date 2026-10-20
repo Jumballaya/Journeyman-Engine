@@ -38,6 +38,23 @@ test('"unused" finds what nothing uses; a link picks a file', async () => {
   assert.ok(rows.includes('tree:assets/old.png') && !rows.includes('tree:assets/hero.png'));
 });
 
+test('Health\'s art card lists each sprite, how far along, one to the chat', async () => {
+  const health = (args) => ({ structuredContent: { checks: [args.checks[0] !== 'art' ? { name: args.checks[0], ok: true, summary: 'ok', problems: [] }
+    : { name: 'art', ok: false, summary: '1 thing(s) off design/Art.md; 1 of 2 sprites done', problems: [{ level: 'warning', message: 'no walk_up tag', file: 'assets/knight.json' }],
+        art: { assets: [{ title: 'Knight', note: 'design/Characters/Knight.md', set: 'character', status: 'exported', sprite: 'assets/knight.aseprite', problems: 1 },
+                        { title: 'Mira', note: 'design/Characters/Mira.md', set: 'boss', status: 'done', problems: 0 }] } }] } });
+  const s = await studio(games, { answers: { health }, widgetState: { route: '/health' } });
+  await settle(2);
+  s.button('Check all').fire('click');
+  await settle(18);
+  assert.match(s.app.text, /exported\s*Knight\s*· assets\/knight.aseprite · 1 off/);
+  assert.match(s.app.text, /done\s*Mira\s*· design\/Characters\/Mira.md/);
+  s.find((e) => e.attributes.title === 'Ask your agent about it')[0].fire('click');
+  await settle();
+  assert.equal(s.sent.filter((m) => m.method === 'ui/message').at(-1).params.content[0].text,
+    'The sprite Knight (design/Characters/Knight.md) is exported, 1 thing(s) off the art note: ');
+});
+
 test('Health runs each check and lists its problems, each one to the chat', async () => {
   const asked = [];
   const health = (args) => {
@@ -49,8 +66,8 @@ test('Health runs each check and lists its problems, each one to the chat', asyn
   const s = await studio(games, { answers: { health }, widgetState: { route: '/health' } });
   await settle(2);
   s.button('Check all').fire('click');
-  await settle(15);
-  assert.deepEqual(asked, ['doctor', 'build', 'tests', 'goldens', 'world']);
+  await settle(18);
+  assert.deepEqual(asked, ['doctor', 'build', 'tests', 'goldens', 'world', 'art']);
   assert.match(s.app.text, /Build failing 1 error/);
   s.find((e) => e.attributes.title === 'Ask your agent about it')[0].fire('click');
   await settle();
