@@ -299,6 +299,14 @@ func TestABuildIsStaleWhenMissingOrOlderThanItsSources(t *testing.T) {
 		if !buildIsStale(game) {
 			t.Error("an edit in a linked library's folder doesn't make the build stale")
 		}
+		os.Chtimes(filepath.Join(shared, "util.ts"), old, old)
+		os.Remove(common)
+		os.Symlink(t.TempDir(), common) // repointed, at older files
+		os.WriteFile(filepath.Join(game, "build", ".jm.json"), []byte(`{}`), 0o644)
+		os.Chtimes(filepath.Join(game, "build", ".jm.json"), old, old)
+		if !buildIsStale(game) {
+			t.Error("a library link pointed elsewhere after the build doesn't make it stale")
+		}
 	}
 }
 
