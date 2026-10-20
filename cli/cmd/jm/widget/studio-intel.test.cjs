@@ -49,8 +49,8 @@ test('Health runs each check and lists its problems, each one to the chat', asyn
   const s = await studio(games, { answers: { health }, widgetState: { route: '/health' } });
   await settle(2);
   s.button('Check all').fire('click');
-  await settle(12);
-  assert.deepEqual(asked, ['doctor', 'build', 'tests', 'goldens']);
+  await settle(15);
+  assert.deepEqual(asked, ['doctor', 'build', 'tests', 'goldens', 'world']);
   assert.match(s.app.text, /Build failing 1 error/);
   s.find((e) => e.attributes.title === 'Ask your agent about it')[0].fire('click');
   await settle();

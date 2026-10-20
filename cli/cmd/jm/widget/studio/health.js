@@ -1,9 +1,9 @@
-// Health: the game's checks (health: doctor, build, tests, goldens) on a
+// Health: the game's checks (health: doctor, build, tests, goldens, world) on a
 // board, run on request; each problem says where it is and goes to the chat.
 studioTabs.push((() => {
   "use strict";
-  const names = ["doctor", "build", "tests", "goldens"];
-  const titles = { doctor: "Setup", build: "Build", tests: "Tests", goldens: "Goldens" };
+  const names = ["doctor", "build", "tests", "goldens", "world"];
+  const titles = { doctor: "Setup", build: "Build", tests: "Tests", goldens: "Goldens", world: "World" };
   // checks: the last outcome of each, by game path then name; running: names under way.
   const state = { checks: {}, running: new Set(), ctx: null };
 
@@ -51,7 +51,7 @@ studioTabs.push((() => {
         { health: Object.fromEntries(done.map((n) => [n, { ok: checks[n].ok, summary: checks[n].summary, problems: checks[n].problems.slice(0, 10) }])) });
     }
     return el("div", {},
-      el("div", { class: "head" }, el("h1", {}, "Health"), el("span", { class: "meta" }, "setup, build, tests and goldens: build and goldens take a while"),
+      el("div", { class: "head" }, el("h1", {}, "Health"), el("span", { class: "meta" }, "setup, build, tests, goldens and the design notes: build and goldens take a while"),
         el("span", { class: "spacer" }), el("button", { class: "primary", disabled: state.running.size > 0, onclick: () => run(ctx, names) }, "Check all")),
       el("div", { class: "grid", style: { gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" } }, names.map((n) => card(ctx, n, checks[n]))));
   };

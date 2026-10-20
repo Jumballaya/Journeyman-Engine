@@ -756,6 +756,31 @@ TEST(AssetManager, UndoingReloadsPutsBackTheVersionTheSceneRanWith) {
   EXPECT_EQ(built.back(), "four");
 }
 
+// A repacked atlas: its regions restart the scene, its picture reloads in place. A
+// restart that fails puts both back, so old regions never land on new pixels.
+TEST(AssetManager, UndoingReloadsPutsBackAnInPlaceReloadBesideThem) {
+  TempDir dir;
+  for (const char* f : {"a.atlas.json", "a.png", "b.png"}) writeText(dir.path() / f, "one");
+  AssetManager assets(dir.path());
+  assets.addAssetConverter({".png"}, [](const RawAsset&, const AssetHandle&) {}, AssetManager::Reload::InPlace);
+  assets.addAssetConverter({".atlas.json"}, [](const RawAsset&, const AssetHandle&) {}, AssetManager::Reload::RestartScene);
+  const AssetHandle atlas = assets.loadAsset("a.atlas.json"), picture = assets.loadAsset("a.png");
+  const AssetHandle other = assets.loadAsset("b.png");
+  auto text = [&](AssetHandle h) { return std::string(assets.getRawAsset(h).data.begin(), assets.getRawAsset(h).data.end()); };
+  writeText(dir.path() / "b.png", "two");  // alone: kept, nothing restarts
+  touchLater(dir.path() / "b.png");
+  assets.reloadChanged();
+  for (const char* f : {"a.atlas.json", "a.png"}) {
+    writeText(dir.path() / f, "two");
+    touchLater(dir.path() / f);
+  }
+  EXPECT_TRUE(assets.reloadChanged().restartScene);
+  assets.undoReloads();
+  EXPECT_EQ(text(atlas), "one");
+  EXPECT_EQ(text(picture), "one");
+  EXPECT_EQ(text(other), "two");
+}
+
 TEST(AssetManager, WhatAnUndoPutBackIsReadAgainWithTheNextChange) {
   TempDir dir;
   for (const char* f : {"a.prefab.json", "level.scene.json"}) writeText(dir.path() / f, "one");
