@@ -27,30 +27,32 @@ var sceneFileArg = map[string]any{"type": "object", "description": "the scene fi
 	"name": map[string]any{"type": "string"}, "resourceUri": map[string]any{"type": "string"}}}
 
 func (s *mcpServer) sceneTools() []mcpTool {
+	home := gamesHome()
 	return []mcpTool{{Name: "scene_view", Title: "Scene",
 		Description: "Shows the person a scene: its entities laid out where they are (prefabs applied), to pick one and change it. " +
 			"Gives you each entity's place, size and components.",
 		Annotations: readOnly(), InputSchema: object(map[string]any{
-			"scene": strArg("a scene file of the open game, e.g. scenes/main.scene.json"),
+			"game":  gameOfTool,
+			"scene": strArg("a scene file of the game, e.g. scenes/main.scene.json"),
 			"file":  sceneFileArg,
 		}),
 		Meta: sceneWidget.toolMeta("Opening the scene…", "The scene", fileEntrypoint(".scene.json")),
-		run:  sceneView},
+		run:  func(a toolArgs) toolResult { return sceneView(home, a) }},
 		{Name: "scene_render", Title: "Render a scene",
 			Description: "A scene of the open game as the engine draws it, a moment after it starts (built first if the build is stale): " +
 				"to see a change without the person playing. Scripts run; nothing is recorded.",
 			Annotations: readOnly(), Meta: callableMeta("Rendering the scene…", "The scene"),
-			InputSchema: object(map[string]any{"scene": strArg("a scene file of the open game, e.g. scenes/main.scene.json"),
+			InputSchema: object(map[string]any{"game": gameOfTool, "scene": strArg("a scene file of the game, e.g. scenes/main.scene.json"),
 				"frame": intArg("the frame to draw (default 2: the scene as it starts)"), "file": sceneFileArg}),
-			run: sceneRender}}
+			run: func(a toolArgs) toolResult { return sceneRender(home, a) }}}
 }
 
 // sceneRender draws a scene in the engine (headless) and gives it as an image,
 // and to a widget as a data URI (jm/image).
 // A scene a host opened (file) is drawn in its own game, open or not.
-func sceneRender(a toolArgs) toolResult {
+func sceneRender(home string, a toolArgs) toolResult {
 	var root, scene, engine string
-	path, err := scenePath(a)
+	path, err := scenePath(home, a)
 	if err == nil {
 		root = gameRootOf(path)
 		scene, err = filepath.Rel(root, path)
@@ -103,8 +105,8 @@ type placedEntity struct {
 	Components map[string]any `json:"components"`
 }
 
-func sceneView(a toolArgs) toolResult {
-	path, err := scenePath(a)
+func sceneView(home string, a toolArgs) toolResult {
+	path, err := scenePath(home, a)
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
@@ -129,7 +131,7 @@ func sceneView(a toolArgs) toolResult {
 	}
 	text := fmt.Sprintf("Scene %s of %s: %d entities (%s). The person sees it laid out and can change an entity; structuredContent has each one's place and components.",
 		filepath.ToSlash(rel), gameName(root), len(placed), strings.Join(names, ", "))
-	out := map[string]any{"scene": filepath.ToSlash(rel), "game": gameName(root), "name": doc.Name, "entities": placed}
+	out := map[string]any{"scene": filepath.ToSlash(rel), "game": gameName(root), "root": root, "name": doc.Name, "entities": placed}
 	if s, ok := screenOf(root, placed); ok {
 		out["screen"] = s
 	}
@@ -234,18 +236,26 @@ func keptInside(center, lo, hi, half float64) float64 {
 }
 
 // scenePath is the scene a call means: the file a host opened, else a scene
-// of the open game.
-func scenePath(a toolArgs) (string, error) {
+// of the game named (game), else of the open game.
+func scenePath(home string, a toolArgs) (string, error) {
 	path := a.resource()
 	if path == "" {
 		if a.str("scene") == "" {
 			return "", fmt.Errorf("which scene? give scene, e.g. scenes/main.scene.json")
 		}
-		rel, err := projectFile(a.str("scene"))
+		root, err := projectRoot()
+		if game := a.str("game"); game != "" {
+			root, err = findGame(home, game)
+		}
 		if err != nil {
 			return "", err
 		}
-		path, _ = filepath.Abs(rel)
+		if path, _, err = gamePath(root, a.str("scene")); err != nil {
+			return "", err
+		}
+		if !exists(path) {
+			return "", fmt.Errorf("%s: no such scene in the game", a.str("scene"))
+		}
 	}
 	if !strings.HasSuffix(path, ".scene.json") {
 		return "", fmt.Errorf("%s isn't a scene (.scene.json)", filepath.Base(path))

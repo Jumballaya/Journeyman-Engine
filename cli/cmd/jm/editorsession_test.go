@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -76,5 +77,56 @@ func TestTheEditorBridgeReadsTheSessionAndWritesItsInbox(t *testing.T) {
 	}
 	if r := sceneCall(t, `{"name":"editor_show","arguments":{"scene":"../elsewhere.scene.json"}}`); r["isError"] != true {
 		t.Errorf("a scene outside the game: %v", r)
+	}
+}
+
+// Studio says which game its tab shows: another chat having opened another
+// game since doesn't send its editor, index, health or scene calls there.
+func TestTheEditorAndSceneToolsUseTheGameNamed(t *testing.T) {
+	root := sceneGame(t)
+	session := filepath.Join(root, ".jm", "editor-session-7.json")
+	os.MkdirAll(filepath.Dir(session), 0o755)
+	os.WriteFile(session, []byte(fmt.Sprintf(`{"open": [], "unsaved": [], "scene": "scenes/level.scene.json", "selection": [], "notes": [], "updated": %d}`, time.Now().Unix())), 0o644)
+	other := t.TempDir()
+	os.WriteFile(filepath.Join(other, ".jm.json"), []byte(`{"name":"Other"}`), 0o644)
+	t.Chdir(other) // the server's open game
+	game, _ := json.Marshal(root)
+	state := sceneCall(t, `{"name":"editor_state","arguments":{"game":`+string(game)+`}}`)
+	if editors := state["structuredContent"].(map[string]any)["editors"].([]any); len(editors) != 1 {
+		t.Errorf("editor_state: %v", state)
+	}
+	if r := sceneCall(t, `{"name":"editor_show","arguments":{"game":`+string(game)+`,"scene":"scenes/level.scene.json"}}`); r["isError"] == true {
+		t.Errorf("editor_show: %v", r)
+	}
+	if inbox, _ := os.ReadFile(filepath.Join(root, ".jm", "editor-session-7.in")); !strings.Contains(string(inbox), "scenes/level.scene.json") {
+		t.Errorf("inbox: %q", inbox)
+	}
+	if r := sceneCall(t, `{"name":"scene_view","arguments":{"game":`+string(game)+`,"scene":"scenes/level.scene.json"}}`); r["isError"] == true {
+		t.Errorf("scene_view: %v", r)
+	}
+	if r := sceneCall(t, `{"name":"editor_show","arguments":{"game":`+string(game)+`,"scene":"scenes/none.scene.json"}}`); r["isError"] != true {
+		t.Errorf("editor_show showed a missing scene: %v", r)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	os.Symlink(root, link)
+	for _, g := range []string{root, link} {
+		name, _ := json.Marshal(g)
+		index := sceneCall(t, `{"name":"game_index","arguments":{"game":`+string(name)+`}}`)
+		if entries, _ := index["structuredContent"].(map[string]any)["entries"].([]any); len(entries) == 0 {
+			t.Errorf("game_index of %s: %v", g, index)
+		}
+		if r := sceneCall(t, `{"name":"game_index","arguments":{"game":`+string(name)+`,"path":"scenes/level.scene.json"}}`); r["isError"] == true {
+			t.Errorf("game_index path of %s: %v", g, r)
+		}
+	}
+	os.MkdirAll(filepath.Join(root, "design"), 0o755)
+	os.WriteFile(filepath.Join(root, "design", "Art.md"), []byte("# Art\n"), 0o644)
+	health := sceneCall(t, `{"name":"health","arguments":{"game":`+string(game)+`,"checks":["art"]}}`)
+	if text := fmt.Sprint(health["structuredContent"]); !strings.Contains(text, "Art.md") {
+		t.Errorf("health read another game's art: %v", health)
+	}
+	// The open game itself has no editor and no such scene.
+	if r := sceneCall(t, `{"name":"scene_view","arguments":{"scene":"scenes/level.scene.json"}}`); r["isError"] != true {
+		t.Errorf("the open game's scene_view found the other's scene: %v", r)
 	}
 }

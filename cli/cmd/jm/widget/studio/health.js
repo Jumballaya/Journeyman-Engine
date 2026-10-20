@@ -14,7 +14,7 @@ studioTabs.push((() => {
     for (const n of which) {  // one at a time: build before goldens, each shown as it lands
       if (state.ctx.game.path !== game) { state.running.clear(); break; }  // another game opened: its checks aren't this one's
       try {
-        const r = await ctx.call("health", { checks: [n] });
+        const r = await ctx.call("health", { checks: [n], game });
         const c = r && r.structuredContent && r.structuredContent.checks && r.structuredContent.checks[0];
         (state.checks[game] = state.checks[game] || {})[n] = c || { name: n, ok: false, summary: "no answer", problems: [] };
       } catch (e) {

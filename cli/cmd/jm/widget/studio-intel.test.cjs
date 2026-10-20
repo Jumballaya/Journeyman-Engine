@@ -32,7 +32,10 @@ test('"unused" finds what nothing uses; a link picks a file', async () => {
   const s = await studio(games, { answers: { game_index: index }, widgetState: { route: '/index?path=scenes/a.scene.json' } });
   await settle(6);
   assert.match(s.app.text, /a\.scene\.json scene/);
-  assert.ok(s.button('Show in editor'));
+  s.button('Show in editor').fire('click');
+  await settle(6);
+  assert.deepEqual(s.calls().find((c) => c.name === 'editor_show').arguments, { scene: 'scenes/a.scene.json', game: '/g/pip' });
+  assert.ok(s.calls().filter((c) => c.name === 'game_index').every((c) => c.arguments.game === '/g/pip'));
   key(s, 'index-find').fire('input', { target: { value: 'unused' } });
   const rows = s.find((e) => e.attributes.role === 'treeitem').map((e) => e.attributes['data-key']);
   assert.ok(rows.includes('tree:assets/old.png') && !rows.includes('tree:assets/hero.png'));
@@ -47,6 +50,7 @@ test('Health\'s art card lists each sprite, how far along, one to the chat', asy
   await settle(2);
   s.button('Check all').fire('click');
   await settle(18);
+  assert.ok(s.calls().filter((c) => c.name === 'health').every((c) => c.arguments.game === '/g/pip'));
   assert.match(s.app.text, /exported\s*Knight\s*· assets\/knight.aseprite · 1 off/);
   assert.match(s.app.text, /done\s*Mira\s*· design\/Characters\/Mira.md/);
   s.find((e) => e.attributes.title === 'Ask your agent about it')[0].fire('click');

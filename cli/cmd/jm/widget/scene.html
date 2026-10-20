@@ -200,7 +200,7 @@
     render();
     try {
       // A file the host opened is drawn in its own game, whichever is open.
-      const r = await host.callTool("scene_render", host.input && host.input.file ? { file: host.input.file } : { scene: s.scene });
+      const r = await host.callTool("scene_render", host.input && host.input.file ? { file: host.input.file } : { scene: s.scene, game: s.root });
       const src = r && !r.isError && r._meta && r._meta["jm/image"];
       drawn.src = src || null;
       drawn.error = src ? "" : ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ") || "The engine drew nothing.";

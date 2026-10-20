@@ -29,7 +29,7 @@ studioTabs.push((() => {
     if (document.visibilityState !== "hidden") {
       const game = forGame(ctx);
       try {
-        const r = await ctx.call("editor_state", {});
+        const r = await ctx.call("editor_state", { game: ctx.game.path });
         const editors = r && r.structuredContent && r.structuredContent.editors;
         if (forGame(state.ctx) === game) {  // else: asked for a game no longer shown
           if (!Array.isArray(editors)) throw new Error((r && r.content && r.content[0] && r.content[0].text) || "no answer");
@@ -57,7 +57,7 @@ studioTabs.push((() => {
   };
 
   const show = (ctx, args, label) =>
-    ctx.act("Showing it in the editor", "editor_show", args, () => `${label} is shown in the editor.`);
+    ctx.act("Showing it in the editor", "editor_show", { ...args, game: ctx.game.path }, () => `${label} is shown in the editor.`);
 
   const sceneEntities = (ctx, scene) => {
     const game = forGame(ctx);
@@ -66,7 +66,7 @@ studioTabs.push((() => {
       const visit = ctx.visit;
       state.scenes[scene] = { ...known, visit };  // the last answer shows meanwhile
       const answer = (value) => { if (state.game === game) { state.scenes[scene] = { ...value, visit }; ctx.rerender(); } };
-      ctx.call("scene_view", { scene }).then((r) => {
+      ctx.call("scene_view", { scene, game: ctx.game.path }).then((r) => {
         const s = r && r.structuredContent;
         answer(s && Array.isArray(s.entities) ? { entities: s.entities } : { error: "Couldn't read it." });
       }, () => answer({ error: "Couldn't read it." }));
@@ -81,7 +81,7 @@ studioTabs.push((() => {
     ctx.rerender();
     let picture;
     try {
-      const r = await ctx.call("scene_render", { scene });
+      const r = await ctx.call("scene_render", { scene, game: ctx.game.path });
       const src = r && r._meta && r._meta["jm/image"];
       picture = src ? { src } : { error: (r && r.content && r.content[0] && r.content[0].text) || "No picture." };
     } catch (e) { picture = { error: String(e && e.message || e) }; }
