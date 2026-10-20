@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <random>
 #include <string>
@@ -16,6 +17,7 @@
 #if !defined(_WIN32)
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -141,13 +143,45 @@ bool writeAtomically(const std::filesystem::path& link, std::string_view bytes, 
 }
 
 #if defined(_WIN32)
-FileLock::FileLock(const std::filesystem::path& path)
-    : _handle(CreateFileW(lockFileFor(path).c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                          nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)) {
-  OVERLAPPED at{};  // every byte, as jm's lock_windows.go
-  if (_handle != INVALID_HANDLE_VALUE && !LockFileEx(_handle, LOCKFILE_EXCLUSIVE_LOCK, 0, MAXDWORD, MAXDWORD, &at)) {
-    CloseHandle(_handle);
-    _handle = INVALID_HANDLE_VALUE;
+namespace {
+// Whether the file `held` is open on is still the one at `name`.
+bool current(HANDLE held, const std::filesystem::path& name) {
+  const HANDLE now = CreateFileW(name.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                 OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (now == INVALID_HANDLE_VALUE) return false;
+  bool same = false;
+  FILE_ID_INFO a{}, b{};  // the 128-bit id: ReFS's 64-bit file index isn't unique
+  if (GetFileInformationByHandleEx(held, FileIdInfo, &a, sizeof a) &&
+      GetFileInformationByHandleEx(now, FileIdInfo, &b, sizeof b)) {
+    same = a.VolumeSerialNumber == b.VolumeSerialNumber && std::memcmp(&a.FileId, &b.FileId, sizeof a.FileId) == 0;
+  } else {
+    BY_HANDLE_FILE_INFORMATION x{}, y{};
+    same = GetFileInformationByHandle(held, &x) && GetFileInformationByHandle(now, &y) &&
+           x.dwVolumeSerialNumber == y.dwVolumeSerialNumber && x.nFileIndexHigh == y.nFileIndexHigh &&
+           x.nFileIndexLow == y.nFileIndexLow;
+  }
+  CloseHandle(now);
+  return same;
+}
+}  // namespace
+
+FileLock::FileLock(const std::filesystem::path& path) : _handle(INVALID_HANDLE_VALUE) {
+  for (;;) {  // as jm's filelock.Hold: a lock file replaced while we waited is no lock; take the one there now
+    const auto name = lockFileFor(path);
+    const HANDLE handle =
+        CreateFileW(name.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                    nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) return;
+    OVERLAPPED at{};  // every byte, as jm's lock_windows.go
+    if (!LockFileEx(handle, LOCKFILE_EXCLUSIVE_LOCK, 0, MAXDWORD, MAXDWORD, &at)) {
+      CloseHandle(handle);
+      return;
+    }
+    if (current(handle, lockFileFor(path))) {  // where path's lock is now: a link may have moved while we waited
+      _handle = handle;
+      return;
+    }
+    CloseHandle(handle);
   }
 }
 
@@ -157,13 +191,22 @@ FileLock::~FileLock() {
 
 bool FileLock::held() const { return _handle != INVALID_HANDLE_VALUE; }
 #else
-FileLock::FileLock(const std::filesystem::path& path) : _fd(open(lockFileFor(path).c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0644)) {
-  int locked = -1;
-  while (_fd >= 0 && (locked = flock(_fd, LOCK_EX)) != 0 && errno == EINTR) {
-  }
-  if (_fd >= 0 && locked != 0) {
-    close(_fd);
-    _fd = -1;
+FileLock::FileLock(const std::filesystem::path& path) : _fd(-1) {
+  for (;;) {  // as jm's filelock.Hold: a lock file replaced while we waited is no lock; take the one there now
+    const auto name = lockFileFor(path);
+    const int fd = open(name.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0644);
+    if (fd < 0) return;
+    int locked = -1;
+    while ((locked = flock(fd, LOCK_EX)) != 0 && errno == EINTR) {
+    }
+    struct stat held{}, now{};  // where path's lock is now: a link may have moved while we waited
+    if (locked == 0 && fstat(fd, &held) == 0 && stat(lockFileFor(path).c_str(), &now) == 0 &&
+        held.st_dev == now.st_dev && held.st_ino == now.st_ino) {
+      _fd = fd;
+      return;
+    }
+    close(fd);
+    if (locked != 0) return;
   }
 }
 

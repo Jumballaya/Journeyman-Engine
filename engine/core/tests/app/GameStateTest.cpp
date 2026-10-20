@@ -65,6 +65,17 @@ TEST(GameClock, InvalidScalePauses) {
   EXPECT_FLOAT_EQ(clock.dt(), 0.05f);
 }
 
+// Physics moves at most kMaxStep a call: a scale past it caps, so scripts get the dt physics moved by.
+TEST(GameClock, AFastScaleCapsAtThePhysicsStep) {
+  GameClock clock;
+  clock.setScale(4.0f);
+  clock.advance(1.0f / 60.0f);
+  EXPECT_FLOAT_EQ(clock.dt(), GameClock::kMaxStep);
+  EXPECT_FLOAT_EQ(clock.unscaledDt(), 1.0f / 60.0f);
+  EXPECT_DOUBLE_EQ(clock.elapsed(), GameClock::kMaxStep);
+  EXPECT_FLOAT_EQ(clock.stepScale(), 3.0f);  // what drawing (tile animation) runs at
+}
+
 TEST(GameState, JsonValuesAndKeys) {
   GameState state;
   state.setJson("party", nlohmann::json::array({"kael", "lyra"}));

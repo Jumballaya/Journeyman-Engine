@@ -654,7 +654,7 @@ void Renderer2DModule::draw(Engine& app, float dt) {
   const float fraction = app.drawFraction();
   const float viewSize = static_cast<float>(std::min(_renderer.logicalSize().x, _renderer.logicalSize().y));
   const StepBlend::Camera camera = _blend.blend(world, {_cameras.view().center, _cameras.view().zoom}, fraction, viewSize);
-  world.runSystems(dt * app.getClock().scale(), SystemStage::Render, SystemStage::Render);
+  world.runSystems(dt * app.getClock().stepScale(), SystemStage::Render, SystemStage::Render);
   const GameClock& clock = app.getClock();
   _renderer.setTime(static_cast<float>(clock.unscaledElapsed() - (1.0f - fraction) * clock.unscaledDt()));
   if (_editorView) {

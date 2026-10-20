@@ -61,7 +61,7 @@ By hand, on macOS or Linux: the CLI (`jm` and the engine) in `~/.jm/bin`, and th
 
 ```sh
 curl -fsSL https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/install.sh | sh -s -- --editor
-export PATH="$HOME/.jm/bin:$PATH"   # and add this line to ~/.zshrc or ~/.bashrc to keep it
+export PATH="$HOME/.jm/bin:$PATH"   # and add this line to ~/.zshrc and ~/.zprofile (Linux: ~/.bashrc) to keep it
 ```
 
 On Windows, in PowerShell:

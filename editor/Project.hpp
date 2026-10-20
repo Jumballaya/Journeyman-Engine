@@ -52,6 +52,10 @@ class Project {
   std::string name() const;
 
   Json& manifest() { return _manifest; }
+  // Writes the editor's changes to the manifest since it was read or last
+  // saved, over what .jm.json holds now: a key another program (jm
+  // settings_update) changed meanwhile keeps its change, unless the editor
+  // changed the same key. The manifest is then what was written.
   bool saveManifest(std::string& error);
   // Whether builds take the file: a scene in the manifest's scene list, or
   // anything else matched by its asset entries (globs as jm reads them).
@@ -77,9 +81,15 @@ class Project {
  private:
   std::filesystem::path _root;
   Json _manifest;
+  Json _manifestRead;  // as it was last read or written: what the editor's changes are against
   std::vector<AssetFile> _files;
   std::filesystem::file_time_type _newest{};
 };
+
+// `mine`'s changes from `base`, applied to `theirs`: what only one side changed
+// is that side's; an object both changed merges key by key; anything else both
+// changed is `mine`'s.
+Json mergeChanges(const Json& base, const Json& mine, const Json& theirs);
 
 // Whether a manifest's entries take `path` into builds (see Project::inBuild).
 bool manifestTakes(const Json& manifest, const std::string& path);

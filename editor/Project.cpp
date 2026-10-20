@@ -125,6 +125,7 @@ std::optional<Project> Project::open(const fs::path& folder, std::string& error)
     error = ".jm.json should hold an object ({\"name\": ...}).";
     return std::nullopt;
   }
+  project._manifestRead = project._manifest;
   project.rescan();
   return project;
 }
@@ -134,9 +135,54 @@ std::string Project::name() const {
   return name.empty() ? _root.filename().string() : name;
 }
 
+namespace {
+
+// A missing key is a discarded value, which compares unequal even to itself.
+bool same(const Json& a, const Json& b) {
+  return a.is_discarded() || b.is_discarded() ? a.is_discarded() == b.is_discarded() : a == b;
+}
+
+Json at(const Json& object, const std::string& key) {
+  return object.is_object() && object.contains(key) ? object.at(key) : Json(Json::value_t::discarded);
+}
+
+}  // namespace
+
+Json mergeChanges(const Json& base, const Json& mine, const Json& theirs) {
+  if (same(mine, base)) return theirs;
+  // Both added an object where there was none: merged as if it had been empty.
+  const bool objects = mine.is_object() && theirs.is_object() && (base.is_object() || base.is_discarded());
+  if (same(theirs, base) || !objects) return mine;
+  Json out = theirs;
+  auto merge = [&](const std::string& key) {
+    if (Json value = mergeChanges(at(base, key), at(mine, key), at(theirs, key)); value.is_discarded())
+      out.erase(key);
+    else
+      out[key] = std::move(value);
+  };
+  for (const auto& [key, value] : mine.items()) merge(key);
+  if (base.is_object()) {
+    for (const auto& [key, value] : base.items()) {
+      if (!mine.contains(key)) merge(key);  // the editor took it out
+    }
+  }
+  return out;
+}
+
 bool Project::saveManifest(std::string& error) {
-  wholeNumbersAsIntegers(_manifest);
-  return writeText(".jm.json", formatJson(_manifest), error);
+  const platform::FileLock lock(abs(".jm.json"));  // as jm holds it while it writes
+  if (!lock.held()) {
+    error = "couldn't lock .jm.json (" + abs("..jm.json.lock").string() + ")";
+    return false;
+  }
+  Json disk = Json::parse(readText(".jm.json"), nullptr, false);
+  if (!disk.is_object()) disk = _manifestRead;  // unreadable now: the editor's is all there is
+  Json merged = mergeChanges(_manifestRead, _manifest, disk);
+  wholeNumbersAsIntegers(merged);
+  if (!writeText(".jm.json", formatJson(merged), error)) return false;
+  _manifest = merged;
+  _manifestRead = std::move(merged);
+  return true;
 }
 
 fs::path gamesFolder() {

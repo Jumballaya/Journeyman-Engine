@@ -4,12 +4,12 @@
 #include <cmath>
 
 #include "Blocking.hpp"
+#include "../core/app/GameClock.hpp"
 #include "BoxColliderComponent.hpp"
 #include "Terrain.hpp"
 
 float simulationStep(float dt) {
-  constexpr float kMaxDt = 1.0f / 20.0f;
-  return std::isfinite(dt) ? std::clamp(dt, 0.0f, kMaxDt) : 0.0f;
+  return std::isfinite(dt) ? std::clamp(dt, 0.0f, GameClock::kMaxStep) : 0.0f;
 }
 
 namespace {

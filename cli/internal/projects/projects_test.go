@@ -70,6 +70,15 @@ func TestTheListIsTheEditorsRecentsThenTheGamesFolder(t *testing.T) {
 	if got := names(List(games)); got != "A,B" {
 		t.Errorf("after forgetting Gone: %s", got)
 	}
+
+	linked := makeGame(t, filepath.Join(root, "work", "c"), "C")
+	if os.Symlink(linked, filepath.Join(games, "c")) == nil && names(List(games)) != "A,B,C" {
+		t.Errorf("a link in the games folder to a game elsewhere: %s", names(List(games)))
+	}
+	unseen := makeGame(t, filepath.Join(games, "d"), "D")
+	if os.Symlink(unseen, filepath.Join(games, "e")) == nil && names(List(games)) != "A,B,C,D" {
+		t.Errorf("a game and a link to it: %s", names(List(games)))
+	}
 }
 
 func TestScanAddsGamesButNotTheirBuildsOrPlays(t *testing.T) {

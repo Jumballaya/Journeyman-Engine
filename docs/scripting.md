@@ -416,7 +416,8 @@ Time.elapsed;  Time.unscaledElapsed;  Time.unscaledDelta;
 ```
 
 `dt` is the fixed step times `Time.scale`: slow motion takes smaller steps,
-not fewer. While paused, gameplay scripts don't run and physics, animation and
+not fewer. A step is at most 0.05 s (physics moves no further a step), so at
+60 steps a second `Time.scale` above 3 runs as 3. While paused, gameplay scripts don't run and physics, animation and
 collisions freeze. Scripts whose `ScriptComponent` sets
 `"runWhenPaused": true` keep running with unscaled `dt`: use that for pause
 menus.

@@ -93,6 +93,10 @@ func TestMCPResourcesAreTheProjectsFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	outside := filepath.Join(t.TempDir(), "secret.json")
+	os.WriteFile(outside, []byte("{}"), 0o644)
+	os.Symlink(outside, filepath.Join(dir, "scenes", "linked.json"))                                       // out of the game
+	os.Symlink(filepath.Join(dir, "build", "scenes", "main.scene.json"), filepath.Join(dir, "built.json")) // into build/
 	t.Chdir(dir)
 	names := []string{}
 	for _, r := range projectResources() {
@@ -261,6 +265,48 @@ func TestABuildIsStaleWhenMissingOrOlderThanItsSources(t *testing.T) {
 	os.Chtimes(filepath.Join(root, "assets", "player.ts"), later, later)
 	if !buildIsStale(root) {
 		t.Error("an edited script doesn't make the build stale")
+	}
+
+	// A script library beside the game (../common) is a source too.
+	game := filepath.Join(t.TempDir(), "game")
+	common := filepath.Join(filepath.Dir(game), "common")
+	os.MkdirAll(filepath.Join(game, "build"), 0o755)
+	os.MkdirAll(common, 0o755)
+	os.WriteFile(filepath.Join(game, ".jm.json"), []byte(`{"scriptLibraries": {"common": "../common"}}`), 0o644)
+	os.WriteFile(filepath.Join(common, "util.ts"), nil, 0o644)
+	os.Chtimes(filepath.Join(game, ".jm.json"), old, old)
+	os.Chtimes(filepath.Join(common, "util.ts"), old, old)
+	os.WriteFile(filepath.Join(game, "build", ".jm.json"), []byte(`{}`), 0o644)
+	if buildIsStale(game) {
+		t.Error("a build newer than its library is stale")
+	}
+	os.Chtimes(filepath.Join(common, "util.ts"), later, later)
+	if !buildIsStale(game) {
+		t.Error("an edited library script doesn't make the build stale")
+	}
+	shared := filepath.Join(t.TempDir(), "shared")
+	os.MkdirAll(shared, 0o755)
+	os.WriteFile(filepath.Join(shared, "util.ts"), nil, 0o644)
+	os.Chtimes(filepath.Join(shared, "util.ts"), old, old)
+	os.Remove(filepath.Join(common, "util.ts"))
+	os.Remove(common)
+	if os.Symlink(shared, common) == nil {
+		os.WriteFile(filepath.Join(game, "build", ".jm.json"), []byte(`{}`), 0o644)
+		if buildIsStale(game) {
+			t.Error("a build newer than its linked library is stale")
+		}
+		os.Chtimes(filepath.Join(shared, "util.ts"), later, later)
+		if !buildIsStale(game) {
+			t.Error("an edit in a linked library's folder doesn't make the build stale")
+		}
+		os.Chtimes(filepath.Join(shared, "util.ts"), old, old)
+		os.Remove(common)
+		os.Symlink(t.TempDir(), common) // repointed, at older files
+		os.WriteFile(filepath.Join(game, "build", ".jm.json"), []byte(`{}`), 0o644)
+		os.Chtimes(filepath.Join(game, "build", ".jm.json"), old, old)
+		if !buildIsStale(game) {
+			t.Error("a library link pointed elsewhere after the build doesn't make it stale")
+		}
 	}
 }
 

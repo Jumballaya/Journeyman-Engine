@@ -4,6 +4,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <thread>
 
@@ -172,6 +173,36 @@ TEST(FileLock, ASecondHolderWaitsForTheFirst) {
   }
   second.join();
   EXPECT_TRUE(sawRelease);
+}
+
+// As jm's filelock.Hold: a waiter whose lock file was replaced (removed and
+// made again, held by someone else) waits for the new one, not the old.
+TEST(FileLock, AWaiterTakesTheLockFileThereNow) {
+#if defined(_WIN32)
+  GTEST_SKIP() << "a held file's name can't be reused on Windows";
+#endif
+  TempDir dir;
+  const auto path = dir.path() / "list.json";
+  std::atomic<bool> replacementReleased = false, sawIt = false;
+  std::thread second;
+  std::optional<platform::FileLock> replacement;
+  {
+    const platform::FileLock first(path);
+    ASSERT_TRUE(first.held());
+    second = std::thread([&] {
+      const platform::FileLock lock(path);
+      sawIt = replacementReleased.load();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));  // the second is (likely) waiting on the old file
+    replacement.emplace(dir.path() / "other.json");               // a new lock file, held...
+    ASSERT_TRUE(replacement->held());
+    fs::rename(dir.path() / ".other.json.lock", dir.path() / ".list.json.lock");  // ...put in its place at once
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(200));  // the old file is free: time to (wrongly) take it
+  replacementReleased = true;
+  replacement.reset();
+  second.join();
+  EXPECT_TRUE(sawIt);
 }
 
 TEST(FileLock, IsntHeldWhereItCantBeMade) {

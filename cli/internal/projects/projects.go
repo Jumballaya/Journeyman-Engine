@@ -53,8 +53,9 @@ func List(gamesFolder string) []Project {
 	}
 	dirs, _ := os.ReadDir(gamesFolder)
 	for _, d := range dirs {
-		dir := canonical(filepath.Join(gamesFolder, d.Name()))
-		if d.IsDir() && isGame(dir) && !seen[dir] {
+		dir := canonical(filepath.Join(gamesFolder, d.Name())) // a link to a game elsewhere is one too
+		if isGame(dir) && !seen[dir] {
+			seen[dir] = true // a game and a link to it are one game
 			out = append(out, describe(entry{Path: dir}))
 		}
 	}

@@ -345,9 +345,9 @@ curl -fsSLO ${RELEASE ? `${GH}/releases/download/${RELEASE.tag}/` : `${GH}/relea
 tar -xzf journeyman-cli-$platform.tar.gz
 mkdir -p ~/.jm && rm -rf ~/.jm/bin && mv journeyman-cli-$platform ~/.jm/bin
 `) + `
-# put it on PATH, now and for new shells
+# put it on PATH, now and for new shells (zsh login shells too: agents run those)
 export PATH="$HOME/.jm/bin:$PATH"
-echo 'export PATH="$HOME/.jm/bin:$PATH"' >> ${profile}
+for f in ${profile}; do echo 'export PATH="$HOME/.jm/bin:$PATH"' >> "$f"; done
 jm --version`));
   const win = editor ? code(`<span class="c"># PowerShell: installs the CLI in ~\\.jm\\bin (on PATH) and the editor</span>
 & ([scriptblock]::Create((irm ${asset("install.ps1")}))) -Editor
@@ -362,8 +362,8 @@ $env:Path += ";$bin"
 <span class="k">jm</span> --version`);
   // A Mac's easiest way, when the release has it: one installer, nothing to type.
   const mac = hasAsset("journeyman-darwin-arm64.pkg")
-    ? `<p>The easiest way: download the installer and open it. It puts the editor in Applications and <code>jm</code> on your PATH.</p><p class="ctas"><a class="btn btn-ghost" href="${asset("journeyman-darwin-arm64.pkg")}">${icon("download-simple")}<span>Mac installer (Apple silicon)</span></a> <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac</a></p><p class="tab-note">Or in a terminal:</p>${unix("~/.zshrc", "darwin-arm64")}`
-    : unix("~/.zshrc", "darwin-arm64");
+    ? `<p>The easiest way: download the installer and open it. It puts the editor in Applications and <code>jm</code> on your PATH.</p><p class="ctas"><a class="btn btn-ghost" href="${asset("journeyman-darwin-arm64.pkg")}">${icon("download-simple")}<span>Mac installer (Apple silicon)</span></a> <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac</a></p><p class="tab-note">Or in a terminal:</p>${unix("~/.zshrc ~/.zprofile", "darwin-arm64")}`
+    : unix("~/.zshrc ~/.zprofile", "darwin-arm64");
   const windows = hasAsset("journeyman-windows-amd64-setup.exe")
     ? `<p>The easiest way: download the setup and open it. It installs the editor (in the Start menu) and puts <code>jm</code> on your PATH, no administrator needed.</p><p><a class="btn btn-ghost" href="${asset("journeyman-windows-amd64-setup.exe")}">${icon("download-simple")}<span>Windows installer</span></a></p><p class="tab-note">Or in PowerShell:</p>${win}`
     : win;

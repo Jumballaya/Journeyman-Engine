@@ -107,7 +107,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 
 		exitOnError("Failed to write the built manifest",
 			editManifest(archive.ManifestEntryKey, filepath.Join(outDir, archive.ManifestEntryKey),
-				func(raw map[string]any) { raw["assets"] = man.Assets }))
+				func(raw map[string]any) { raw["assets"] = append([]string{}, man.Assets...) })) // [], never null: the editor reads an array
 
 		for _, asset := range man.Assets {
 			source := asset
@@ -250,6 +250,17 @@ var packageName = regexp.MustCompile(`^(@[a-z0-9~-][a-z0-9._~-]*/)?[a-z0-9~-][a-
 
 // syncLibrary copies a shared script folder (relative to the project, e.g.
 // "../common") to node_modules/<name>, giving it a package.json if it has none.
+// librarySource is the folder a script library (the manifest's
+// scriptLibraries) is copied from. A sandbox or variant is a copy of the
+// game's own folder: a library beside the game ("../common") is where the game
+// finds it, not beside the copy.
+func librarySource(projectRoot, dir string) string {
+	if game, _ := copyOf(projectRoot); game != "" && !filepath.IsAbs(dir) && !filepath.IsLocal(dir) {
+		return filepath.Join(game, dir)
+	}
+	return filepath.Join(projectRoot, dir)
+}
+
 func syncLibrary(projectRoot, name, dir string) error {
 	// The name becomes a folder that is wiped and refilled.
 	if !packageName.MatchString(name) {
@@ -258,12 +269,7 @@ func syncLibrary(projectRoot, name, dir string) error {
 	if strings.HasPrefix(name, "@jm/") { // jm's own (@jm/runtime, @jm/behaviors): never replaced
 		return fmt.Errorf("%q is reserved for jm's packages: name the library something else", name)
 	}
-	src := filepath.Join(projectRoot, dir)
-	// A sandbox or variant is a copy of the game's own folder: a library beside
-	// the game ("../common") is where the game finds it, not beside the copy.
-	if game, _ := copyOf(projectRoot); game != "" && !filepath.IsAbs(dir) && !filepath.IsLocal(dir) {
-		src = filepath.Join(game, dir)
-	}
+	src := librarySource(projectRoot, dir)
 	if info, err := os.Stat(src); err != nil || !info.IsDir() {
 		return fmt.Errorf("folder %s not found", src)
 	}
@@ -870,19 +876,32 @@ func exitOnError(msg string, err error) {
 }
 
 // buildIsStale says whether the project's build is missing or older than any
-// of its sources (the manifest, scenes, assets).
+// of its sources (the manifest, scenes, assets, its script libraries' folders).
 func buildIsStale(root string) bool {
 	built, err := os.Stat(filepath.Join(root, "build", archive.ManifestEntryKey))
 	if err != nil {
 		return true
 	}
+	sources := []string{archive.ManifestEntryKey, "scenes", "assets"}
+	for i := range sources {
+		sources[i] = filepath.Join(root, sources[i])
+	}
+	if man, err := manifest.LoadManifest(sources[0]); err == nil {
+		for _, dir := range man.ScriptLibraries {
+			src := librarySource(root, dir)
+			sources = append(sources, src) // a link: when it was pointed (WalkDir doesn't follow it)
+			if real, err := filepath.EvalSymlinks(src); err == nil && real != src {
+				sources = append(sources, real) // and what it points at
+			}
+		}
+	}
 	stale := false
-	for _, top := range []string{archive.ManifestEntryKey, "scenes", "assets"} {
-		_ = filepath.WalkDir(filepath.Join(root, top), func(path string, d fs.DirEntry, err error) error {
+	for _, top := range sources {
+		_ = filepath.WalkDir(top, func(path string, d fs.DirEntry, err error) error {
 			if err != nil || stale {
 				return filepath.SkipAll
 			}
-			if d.IsDir() && (d.Name() == "node_modules" || (strings.HasPrefix(d.Name(), ".") && path != filepath.Join(root, top))) {
+			if d.IsDir() && (d.Name() == "node_modules" || (strings.HasPrefix(d.Name(), ".") && path != top)) {
 				return filepath.SkipDir
 			}
 			if info, err := d.Info(); err == nil && !d.IsDir() && info.ModTime().After(built.ModTime()) {

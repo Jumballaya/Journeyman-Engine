@@ -1181,7 +1181,8 @@ func projectResources() []map[string]any {
 		resources = append(resources, map[string]any{"uri": "jm://docs/" + t.Name, "name": "docs/" + t.Name,
 			"mimeType": "text/markdown", "description": t.Title})
 	}
-	for _, f := range gameFiles(func(path string) bool { return mimeOf(path) != "" }) {
+	// Only what resources/read gives back: no link out of the game or into build/.
+	for _, f := range gameFiles(func(path string) bool { _, err := agentFile(path); return mimeOf(path) != "" && err == nil }) {
 		abs, _ := filepath.Abs(f)
 		resources = append(resources, map[string]any{"uri": fileURI(abs), "name": f, "mimeType": mimeOf(f)})
 	}
