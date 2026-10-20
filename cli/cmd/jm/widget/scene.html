@@ -190,15 +190,18 @@
       y0 = Math.min(y0, -sc.y - sc.h / 2); y1 = Math.max(y1, -sc.y + sc.h / 2);
     }
     if (!es.length && !sc) { x0 = y0 = 0; x1 = y1 = 100; }
+    // A camera entity's screen is fitted to the view (a long level scrolls on); without one a script may
+    // move the camera anywhere, so the whole layout is fitted instead.
+    const fit = sc && sc.camera ? sc : null;
     // The margin is the screen's (a long level's would push the screen out of the view).
-    const m = (sc ? Math.max(sc.w, sc.h) : Math.max(x1 - x0, y1 - y0, 1)) * 0.04;
+    const m = (fit ? Math.max(fit.w, fit.h) : Math.max(x1 - x0, y1 - y0, 1)) * 0.04;
     const w = x1 - x0 + 2 * m, h = y1 - y0 + 2 * m;
     // A unit a pixel where it fits (a long level scrolls), down to 4000 × 1200 at most; with
     // the screen known, a screen's width (and its margin) fits the view and a level wider scrolls on.
     const k = Math.min(1, 4000 / w, 1200 / h);
-    const width = sc ? `${Math.max(100, Math.round(w / (sc.w + 2 * m) * 100))}%` : `max(100%, ${Math.round(w * k)}px)`;
+    const width = fit ? `${Math.max(100, Math.round(w / (fit.w + 2 * m) * 100))}%` : `max(100%, ${Math.round(w * k)}px)`;
     // A point's 4 px: in a screen fitted to the view, about 640 px across.
-    const r = sc ? 4 * (sc.w + 2 * m) / 640 : 4 / k;
+    const r = fit ? 4 * (fit.w + 2 * m) / 640 : 4 / k;
     const svg = $("svg:svg", { viewBox: `${x0 - m} ${y0 - m} ${w} ${h}`, style: `width: ${width}` });
     for (const [e, m] of tiled) svg.append($("svg:image", { class: "sprite", href: m.src, x: e.x, y: -e.y - m.h, width: m.w, height: m.h, preserveAspectRatio: "none" }));
     // Each sprite as it looks (its picture tinted by its color, or a solid quad in it), lowest z first;
@@ -223,7 +226,7 @@
     }
     // The screen over the pictures.
     if (sc) svg.append($("svg:rect", { class: "screen", x: sc.x - sc.w / 2, y: -sc.y - sc.h / 2, width: sc.w, height: sc.h, "vector-effect": "non-scaling-stroke" },
-      $("svg:title", {}, `The screen as the game starts (${sc.w}×${sc.h})`)));
+      $("svg:title", {}, sc.camera ? `The screen as the game starts (${sc.w}×${sc.h})` : `The screen before a script moves the camera (${sc.w}×${sc.h})`)));
     for (const e of es) {
       const cls = "shape" + (looks.has(e) ? " drawn" : "") + (e.prefab ? " prefab" : "") + (e.where === state.selected ? " on" : "");
       const pick = () => select(e.where);

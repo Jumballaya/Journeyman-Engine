@@ -325,3 +325,17 @@ func TestAMergeLeavesAnIgnoredFileItDoesntTouch(t *testing.T) {
 		t.Errorf("notes.txt: %q", data)
 	}
 }
+
+// A fresh variant is the game: with no picture of its own, it shows the game's.
+func TestAFreshVariantShowsTheGamesPicture(t *testing.T) {
+	game := variantGame(t)
+	if _, err := newVariant(game, "fresh", ""); err != nil {
+		t.Fatal(err)
+	}
+	golden := filepath.Join(game, "tests", "golden", "start", "frame_1.png") // made after the variant: only the game has it
+	os.MkdirAll(filepath.Dir(golden), 0o755)
+	os.WriteFile(golden, []byte("png"), 0o644)
+	if list := variantsOf(game); len(list) != 1 || list[0].thumb != golden {
+		t.Errorf("variants: %+v", list)
+	}
+}
