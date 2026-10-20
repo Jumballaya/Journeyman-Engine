@@ -24,11 +24,15 @@ func scenePictures(root string, placed []placedEntity) (sprites map[string]strin
 	sprites, maps, used := map[string]string{}, map[string]map[string]any{}, 0
 	uri := func(img image.Image) string {
 		var buf bytes.Buffer
-		if img == nil || png.Encode(&buf, img) != nil || used+buf.Len()*4/3 > pictureBudget {
+		if img == nil || png.Encode(&buf, img) != nil {
 			return ""
 		}
-		used += buf.Len() * 4 / 3
-		return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+		src := "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+		if used+len(src) > pictureBudget {
+			return ""
+		}
+		used += len(src)
+		return src
 	}
 	atlases := map[string]atlas.AtlasConfig{} // atlas file → its sources
 	for _, e := range placed {

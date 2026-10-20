@@ -243,12 +243,17 @@ test('the pages write JSON as jm fmt does', () => {
 test('each sprite is drawn as it looks, lowest z first, its box over it to pick', async () => {
   const { find, fromHost } = await scenePage({ input: null });
   const sprite = (name, z, texture, extra = {}) => ({ where: `entities[${z}]`, name, x: 0, y: 0, z, w: 16, h: 16, ...extra,
-    components: { SpriteComponent: texture === null ? { color: [1, 0, 0, 0.5] } : { texture, color: [0.5, 1, 1, 1] } } });
+    components: { TransformComponent: { scale: [8, 8] }, SpriteComponent: texture === null ? { color: [1, 0, 0, 0.5] } : { texture, color: [0.5, 1, 1, 1] } } });
+  const bare = { where: 'entities[3]', name: 'Bare', x: 50, y: 0, w: 0, h: 0, components: { TransformComponent: {}, SpriteComponent: {} } };
+  const loose = { where: 'entities[4]', name: 'Loose', x: 0, y: 0, w: 0, h: 0, components: { SpriteComponent: {} } };
   fromHost('ui/notifications/tool-result', { content: [], _meta: { 'jm/sprites': { 'a.png': 'data:image/png;base64,AAA' } },
-    structuredContent: { scene: 'scenes/level.scene.json', entities: [sprite('Top', 2, 'a.png', { flipX: true }), sprite('Quad', 1, null), sprite('Missing', 0, 'gone.png')] } });
+    structuredContent: { scene: 'scenes/level.scene.json', entities: [sprite('Top', 2, 'a.png', { flipX: true }), sprite('Quad', 1, null), sprite('Missing', 0, 'gone.png'), bare, loose] } });
   await settle();
   const drawn = find((e) => e.attributes.class === 'sprite');
-  assert.deepEqual(drawn.map((e) => e.tag), ['rect', 'image']);  // the quad (z 1) under the picture (z 2)
+  // The unscaled quad (z 0) is the engine's 2 × 2, under the quad (z 1), under the picture (z 2); without a transform, none.
+  assert.deepEqual(drawn.map((e) => e.tag), ['rect', 'rect', 'image']);
+  assert.deepEqual([drawn[0].attributes.width, drawn[0].attributes.x], [2, 49]);
+  drawn.shift();
   assert.equal(drawn[0].attributes.fill, 'rgb(255 0 0)');
   assert.equal(drawn[0].attributes.opacity, 0.5);
   assert.equal(drawn[1].attributes.href, 'data:image/png;base64,AAA');
@@ -257,5 +262,5 @@ test('each sprite is drawn as it looks, lowest z first, its box over it to pick'
   assert.equal(drawn[1].attributes.filter, 'url(#tint0)');  // its color tints its picture
   assert.match(filter.attributes.values, /^0\.5 0 0 0 0 0 1 /);
   const boxes = find((e) => (e.attributes.class || '').startsWith('shape'));
-  assert.deepEqual(boxes.map((e) => e.attributes.class.includes('drawn')), [true, true, false]);  // no picture: its box as before
+  assert.deepEqual(boxes.map((e) => e.attributes.class.includes('drawn')), [true, true, false, true, false]);  // no picture: its box as before
 });

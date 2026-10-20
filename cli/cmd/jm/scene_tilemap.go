@@ -35,6 +35,10 @@ type tiledLayer struct {
 	Encoding    string       `json:"encoding"`
 	Compression string       `json:"compression"`
 	Layers      []tiledLayer `json:"layers"`
+	Properties  []struct {
+		Name  string `json:"name"`
+		Value any    `json:"value"`
+	} `json:"properties"`
 }
 
 // gids is a tile layer's cells; none for one it can't read.
@@ -120,9 +124,19 @@ func tileMapPicture(root, file string) image.Image {
 		return sets[i].tiles[int(gid-sets[i].first)], sets[i].offset
 	}
 
-	canvas := image.NewNRGBA(image.Rect(0, 0, m.Width*m.TileWidth, m.Height*m.TileHeight))
-	var drawLayer func(l tiledLayer, opacity float64, offset image.Point)
-	drawLayer = func(l tiledLayer, opacity float64, offset image.Point) {
+	// The tile layers in the engine's order: by their "z" property, else stacked
+	// upward in file order (groups' layers in theirs), each with its group's
+	// opacity and offset.
+	type tileLayer struct {
+		cells   []uint32
+		opacity float64
+		offset  image.Point
+		z       float64
+	}
+	var layers []tileLayer
+	depth := 0.0
+	var collect func(l tiledLayer, opacity float64, offset image.Point)
+	collect = func(l tiledLayer, opacity float64, offset image.Point) {
 		if l.Visible != nil && !*l.Visible {
 			return
 		}
@@ -131,27 +145,46 @@ func tileMapPicture(root, file string) image.Image {
 		}
 		offset = offset.Add(image.Pt(int(math.Round(l.OffsetX)), int(math.Round(l.OffsetY))))
 		for _, child := range l.Layers {
-			drawLayer(child, opacity, offset)
+			collect(child, opacity, offset)
 		}
-		cells := l.gids()
-		if l.Type != "tilelayer" || len(cells) != m.Width*m.Height {
+		if l.Type != "tilelayer" {
 			return
 		}
-		mask := image.NewUniform(color.Alpha{uint8(255 * min(1, max(0, opacity)))})
-		for i, gid := range cells {
-			img, shift := tile(gid &^ tileFlags)
-			if img == nil {
-				continue
+		z := depth
+		depth += 0.01
+		for _, p := range l.Properties {
+			if n, ok := p.Value.(float64); ok && p.Name == "z" {
+				z = n
 			}
-			img = flipped(img, gid&tileFlipD != 0, gid&tileFlipH != 0, gid&tileFlipV != 0)
-			// A tile larger than the grid stands on its cell's bottom-left, as in Tiled.
-			b := img.Bounds()
-			at := image.Pt(i%m.Width*m.TileWidth, (i/m.Width+1)*m.TileHeight-b.Dy()).Add(offset).Add(shift)
-			draw.DrawMask(canvas, image.Rectangle{at, at.Add(b.Size())}, img, b.Min, mask, image.Point{}, draw.Over)
+		}
+		if cells := l.gids(); len(cells) == m.Width*m.Height {
+			layers = append(layers, tileLayer{cells, opacity, offset, z})
 		}
 	}
 	for _, l := range m.Layers {
-		drawLayer(l, 1, image.Point{})
+		collect(l, 1, image.Point{})
+	}
+	sort.SliceStable(layers, func(i, j int) bool { return layers[i].z < layers[j].z })
+
+	canvas := image.NewNRGBA(image.Rect(0, 0, m.Width*m.TileWidth, m.Height*m.TileHeight))
+	for _, l := range layers {
+		mask := image.NewUniform(color.Alpha{uint8(255 * min(1, max(0, l.opacity)))})
+		for row := m.Height - 1; row >= 0; row-- { // bottom row first, as the engine draws
+			for col := range m.Width {
+				gid := l.cells[row*m.Width+col]
+				img, shift := tile(gid &^ tileFlags)
+				if img == nil {
+					continue
+				}
+				// A tile stands on its cell's bottom-left, as in Tiled; turned, it turns about its middle.
+				size := img.Bounds().Size()
+				middle := image.Pt(col*m.TileWidth+size.X/2, (row+1)*m.TileHeight-size.Y/2).Add(l.offset).Add(shift)
+				img = flipped(img, gid&tileFlipD != 0, gid&tileFlipH != 0, gid&tileFlipV != 0)
+				b := img.Bounds()
+				at := middle.Sub(image.Pt(b.Dx()/2, b.Dy()/2))
+				draw.DrawMask(canvas, image.Rectangle{at, at.Add(b.Size())}, img, b.Min, mask, image.Point{}, draw.Over)
+			}
+		}
 	}
 	return canvas
 }
@@ -166,10 +199,11 @@ type tilesetImages struct {
 // images of their own (a collection, or a sheet's tile drawn otherwise).
 func (t tiledTileset) cut(root, dir string) map[int]image.Image {
 	tiles := map[int]image.Image{}
-	if sheet := readGameImage(root, path.Join(dir, t.Image)); t.Image != "" && sheet != nil && t.TileWidth > 0 && t.TileHeight > 0 {
-		columns := max(1, t.Columns)
-		rows := (sheet.Bounds().Dy() - t.Margin + t.Spacing) / (t.TileHeight + t.Spacing)
-		for id := range min(t.TileCount, columns*max(0, rows)) {
+	if sheet := readGameImage(root, path.Join(dir, t.Image)); t.Image != "" && sheet != nil && t.TileWidth > 0 && t.TileHeight > 0 && t.Margin >= 0 && t.Spacing >= 0 {
+		// Only the cells the sheet has: its columns and rows bound the count.
+		fits := func(side, tile int) int { return max(0, (side-2*t.Margin+t.Spacing)/(tile+t.Spacing)) }
+		columns := min(max(1, t.Columns), fits(sheet.Bounds().Dx(), t.TileWidth))
+		for id := range min(t.TileCount, columns*fits(sheet.Bounds().Dy(), t.TileHeight)) {
 			at := image.Pt(t.Margin+id%columns*(t.TileWidth+t.Spacing), t.Margin+id/columns*(t.TileHeight+t.Spacing))
 			tiles[id] = subImage(sheet, image.Rectangle{at, at.Add(image.Pt(t.TileWidth, t.TileHeight))})
 		}

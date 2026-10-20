@@ -161,6 +161,16 @@
       const c = Math.abs(Math.cos(e.rotation || 0)), s = Math.abs(Math.sin(e.rotation || 0));
       return [(c * e.w + s * e.h) / 2, (s * e.w + c * e.h) / 2];
     };
+    // A sprite's look: its picture (or a solid quad) and color; with a transform only, as the
+    // engine draws it. Unscaled, the engine's quad is 2 × 2.
+    const looks = new Map();
+    for (const e of es) {
+      const sp = e.components && e.components.SpriteComponent, t = e.components && e.components.TransformComponent;
+      if (!sp || !t || (sp.texture && !sprites[sp.texture])) continue;
+      const c = [0, 1, 2, 3].map((i) => Array.isArray(sp.color) && typeof sp.color[i] === "number" ? sp.color[i] : 1);
+      const unscaled = !Array.isArray(t.scale);
+      looks.set(e, { src: sp.texture ? sprites[sp.texture] : "", c, w: unscaled ? 2 : e.w, h: unscaled ? 2 : e.h });
+    }
     // A tile map stands on its transform (its bottom-left corner), y up.
     const tiled = es.map((e) => [e, maps[e.components && e.components.TileMapComponent && e.components.TileMapComponent.map]]).filter(([, m]) => m);
     for (const [e, m] of tiled) {
@@ -168,7 +178,7 @@
       y0 = Math.min(y0, -e.y - m.h); y1 = Math.max(y1, -e.y);
     }
     for (const e of es) {
-      const [hw, hh] = turned(e);
+      const look = looks.get(e), [hw, hh] = turned(look ? { ...e, w: look.w, h: look.h } : e);
       x0 = Math.min(x0, e.x - hw); x1 = Math.max(x1, e.x + hw);
       y0 = Math.min(y0, -e.y - hh); y1 = Math.max(y1, -e.y + hh);
     }
@@ -191,14 +201,8 @@
     const svg = $("svg:svg", { viewBox: `${x0 - m} ${y0 - m} ${w} ${h}`, style: `width: ${width}` });
     for (const [e, m] of tiled) svg.append($("svg:image", { class: "sprite", href: m.src, x: e.x, y: -e.y - m.h, width: m.w, height: m.h, preserveAspectRatio: "none" }));
     // Each sprite as it looks (its picture tinted by its color, or a solid quad in it), lowest z first;
-    // its box goes over it to pick. Unscaled, the engine's quad is 2 × 2.
-    const looks = new Map(), tints = new Map(), defs = $("svg:defs");
-    for (const e of es) {
-      const sp = e.components && e.components.SpriteComponent;
-      if (!sp || (sp.texture && !sprites[sp.texture])) continue;
-      const c = [0, 1, 2, 3].map((i) => Array.isArray(sp.color) && typeof sp.color[i] === "number" ? sp.color[i] : 1);
-      looks.set(e, { src: sp.texture ? sprites[sp.texture] : "", c, w: e.w > 0 ? e.w : 2, h: e.h > 0 ? e.h : 2 });
-    }
+    // its box goes over it to pick.
+    const tints = new Map(), defs = $("svg:defs");
     const tint = ([r, g, b]) => {
       const key = `${r} ${g} ${b}`;
       if (key === "1 1 1") return undefined;

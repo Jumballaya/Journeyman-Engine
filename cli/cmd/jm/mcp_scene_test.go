@@ -280,6 +280,13 @@ func TestATileMapIsDrawnWhole(t *testing.T) {
 	if img = tileMapPicture(root, "maps/b.tmj"); img == nil || at(0, 0) != red || at(2, 0) != blue || at(3, 0) != blue || at(2, 1) != green || at(3, 1) != green {
 		t.Errorf("base64, diagonal: %v", img)
 	}
+	// A layer's "z" orders it, as the engine's: the later red layer, below, is under the green.
+	os.WriteFile(filepath.Join(root, "maps", "z.tmj"), []byte(`{"width":1,"height":1,"tilewidth":2,"tileheight":2,
+		"tilesets":[{"firstgid":1,"source":"set.tsj"}],"layers":[{"type":"tilelayer","data":[2],"properties":[{"name":"z","type":"float","value":1}]},
+		{"type":"tilelayer","data":[1],"properties":[{"name":"z","type":"float","value":-1}]}]}`), 0o644)
+	if img = tileMapPicture(root, "maps/z.tmj"); img == nil || at(1, 0) != green {
+		t.Errorf("layer z: %v", img)
+	}
 	// Sizes past what's sent (or past what an int holds) are left to the box, not allocated.
 	for _, size := range []string{`"width":4096,"height":4096`, `"width":4294967296,"height":4294967296`} {
 		os.WriteFile(filepath.Join(root, "maps", "c.tmj"), []byte(`{`+size+`,"tilewidth":2,"tileheight":2,"layers":[]}`), 0o644)
