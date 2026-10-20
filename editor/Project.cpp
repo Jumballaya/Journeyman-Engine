@@ -150,7 +150,9 @@ Json at(const Json& object, const std::string& key) {
 
 Json mergeChanges(const Json& base, const Json& mine, const Json& theirs) {
   if (same(mine, base)) return theirs;
-  if (same(theirs, base) || !mine.is_object() || !theirs.is_object() || !base.is_object()) return mine;
+  // Both added an object where there was none: merged as if it had been empty.
+  const bool objects = mine.is_object() && theirs.is_object() && (base.is_object() || base.is_discarded());
+  if (same(theirs, base) || !objects) return mine;
   Json out = theirs;
   auto merge = [&](const std::string& key) {
     if (Json value = mergeChanges(at(base, key), at(mine, key), at(theirs, key)); value.is_discarded())
@@ -159,8 +161,10 @@ Json mergeChanges(const Json& base, const Json& mine, const Json& theirs) {
       out[key] = std::move(value);
   };
   for (const auto& [key, value] : mine.items()) merge(key);
-  for (const auto& [key, value] : base.items()) {
-    if (!mine.contains(key)) merge(key);  // the editor took it out
+  if (base.is_object()) {
+    for (const auto& [key, value] : base.items()) {
+      if (!mine.contains(key)) merge(key);  // the editor took it out
+    }
   }
   return out;
 }

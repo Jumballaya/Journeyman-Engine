@@ -76,4 +76,8 @@ TEST(Project, MergeChangesTakesEachSidesOwnChanges) {
   const Json theirs = Json::parse(R"({"a": 1, "o": {"x": 1, "y": 3}, "gone": 1, "theirs": 1})");
   EXPECT_EQ(mergeChanges(base, mine, theirs), Json::parse(R"({"a": 2, "o": {"x": 2, "y": 3}, "theirs": 1, "new": 1})"));
   EXPECT_EQ(mergeChanges(base, base, theirs), theirs);  // nothing changed here
+  // A section neither had, added on both sides: each side's settings in it stay.
+  EXPECT_EQ(mergeChanges(Json::object(), Json::parse(R"({"config": {"window": {"vsync": false}}})"),
+                         Json::parse(R"({"config": {"window": {"width": 1920}}})")),
+            Json::parse(R"({"config": {"window": {"width": 1920, "vsync": false}}})"));
 }
