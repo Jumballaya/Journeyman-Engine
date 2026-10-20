@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,10 +28,15 @@ import (
 // asset_add: a file the person gave the chat (a picture, a sprite sheet, a
 // Tiled map, an Aseprite file, a sound, a font) saved into the open game's
 // assets folder. The host hands it over as a file parameter (openai/fileParams):
-// a short-lived https link jm downloads.
+// a short-lived https link jm downloads. A widget whose host takes no uploads
+// sends the bytes themselves (data).
 
-// assetLimit: the biggest file asset_add takes.
-const assetLimit = 32 << 20
+// assetLimit: the biggest file asset_add takes; inlineLimit: the biggest
+// sent as data (base64, a third bigger, in one message).
+const (
+	assetLimit  = 32 << 20
+	inlineLimit = 8 << 20
+)
 
 // assetKinds: the extensions a game asset may have, each with the content
 // types a host may serve it as (a generic binary type is always taken).
@@ -109,17 +115,26 @@ func (s *mcpServer) assetTools() []mcpTool {
 			"openai/toolInvocation/invoking": "Adding the file…", "openai/toolInvocation/invoked": "Added"},
 			Description: "Save a file the person attached (a PNG or JPEG, a sprite sheet, a Tiled .tmj/.tsj map, an .aseprite file, a .wav/.ogg/.mp3 sound, a .ttf/.otf font, JSON data) " +
 				"into the open game's assets folder. path: where, from the game's folder, under assets/ (default: assets/<its name>). An existing file is kept unless replace is true. " +
-				fmt.Sprintf("Up to %d MB. Answers the saved path: put it in a scene or prefab next.", assetLimit>>20),
+				fmt.Sprintf("Up to %d MB. Answers the saved path: put it in a scene or prefab next. ", assetLimit>>20) +
+				fmt.Sprintf("data instead of file: the bytes, base64, up to %d MB, with path (Studio sends them where the host takes no uploads).", inlineLimit>>20),
 			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": true}, // fetches from the host; replace overwrites
 			InputSchema: object(map[string]any{"game": gameOfTool, "file": fileSchema,
+				"data":    strArg("the file's bytes, base64, instead of file (needs path)"),
 				"path":    strArg("where to save it, under assets/, e.g. assets/sprites/hero.png"),
-				"replace": boolArg("save over a file already there")}, "file"),
+				"replace": boolArg("save over a file already there")}),
 			OutputSchema: object(map[string]any{"path": typed("string"), "size": typed("integer"), "replaced": typed("boolean")}, "path", "size", "replaced"),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				file, _ := a["file"].(map[string]any)
 				link, _ := file["download_url"].(string)
 				name, _ := file["file_name"].(string)
-				saved, replaced, size, err := addAsset(a.call().context(), root, link, name, a.str("path"), a.flag("replace"))
+				fetch := func(ctx context.Context, types []string) ([]byte, error) { return downloadAsset(ctx, link, types) }
+				if data := a.str("data"); data != "" || file == nil {
+					if file != nil || data == "" || a.str("path") == "" {
+						return textResult("give the file (attached), or its data (base64) with path: nothing was saved", true)
+					}
+					fetch = func(context.Context, []string) ([]byte, error) { return inlineAsset(data) }
+				}
+				saved, replaced, size, err := addAsset(a.call().context(), root, fetch, name, a.str("path"), a.flag("replace"))
 				if err != nil {
 					return textResult(err.Error()+": nothing was saved", true)
 				}
@@ -129,10 +144,11 @@ func (s *mcpServer) assetTools() []mcpTool {
 	}
 }
 
-// addAsset downloads link into the game as target (default assets/<name>):
+// addAsset saves what fetch gives (given the content types the target's
+// extension may come as) into the game as target (default assets/<name>):
 // the saved path, whether a file was there, and its size. A call cancelled
 // (ctx) before the write saves nothing.
-func addAsset(ctx context.Context, root, link, name, target string, replace bool) (string, bool, int64, error) {
+func addAsset(ctx context.Context, root string, fetch func(context.Context, []string) ([]byte, error), name, target string, replace bool) (string, bool, int64, error) {
 	if target == "" {
 		base := path.Base(strings.ReplaceAll(name, "\\", "/"))
 		if name == "" || base == "." || base == "/" || strings.HasPrefix(base, ".") {
@@ -145,7 +161,7 @@ func addAsset(ctx context.Context, root, link, name, target string, replace bool
 		return "", false, 0, err
 	}
 	ext := strings.ToLower(filepath.Ext(rel))
-	data, err := downloadAsset(ctx, link, assetKinds[ext])
+	data, err := fetch(ctx, assetKinds[ext])
 	if err != nil {
 		return "", false, 0, err
 	}
@@ -200,6 +216,21 @@ func assetPath(root, target string) (string, string, error) {
 		return "", "", fmt.Errorf("%s isn't a game asset jm takes (%s)", rel, assetExtensions())
 	}
 	return abs, rel, nil
+}
+
+// inlineAsset is a file sent as base64 data.
+func inlineAsset(data string) ([]byte, error) {
+	if base64.StdEncoding.DecodedLen(len(data)) > inlineLimit+3 {
+		return nil, fmt.Errorf("the file is over %d MB: attach it to the chat instead", inlineLimit>>20)
+	}
+	out, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return nil, errors.New("its data isn't base64")
+	}
+	if len(out) > inlineLimit {
+		return nil, fmt.Errorf("the file is over %d MB: attach it to the chat instead", inlineLimit>>20)
+	}
+	return out, nil
 }
 
 func downloadAsset(ctx context.Context, link string, types []string) ([]byte, error) {

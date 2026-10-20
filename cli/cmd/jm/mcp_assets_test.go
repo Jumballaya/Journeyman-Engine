@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -63,7 +64,7 @@ func TestAssetAddSavesAnAttachedFile(t *testing.T) {
 	srv := assetHost(t)
 	root, tool := assetGame(t)
 	add := tool.run
-	// As openai/fileParams has it: the four fields, download_url and file_id required.
+	// As openai/fileParams has it: the four fields, download_url and file_id required (the file itself isn't: data may come instead).
 	file := tool.InputSchema["properties"].(map[string]any)["file"].(map[string]any)
 	if jsonOf(file["required"]) != `["download_url","file_id"]` || len(file["properties"].(map[string]any)) != 4 || jsonOf(tool.Meta["openai/fileParams"]) != `["file"]` {
 		t.Errorf("file parameter: %v", file)
@@ -87,6 +88,36 @@ func TestAssetAddSavesAnAttachedFile(t *testing.T) {
 	}
 	if r := add(map[string]any{"file": file, "replace": true}); r.Failed || r.Structured.(map[string]any)["replaced"] != true {
 		t.Errorf("replace: %+v", r)
+	}
+}
+
+// Studio, where the host takes no uploads, sends the bytes: checked and saved the same.
+func TestAssetAddSavesDataSentInline(t *testing.T) {
+	root, tool := assetGame(t)
+	add := tool.run
+	b64 := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	if r := add(map[string]any{"data": b64(pngHead), "path": "assets/sprites/hero.png"}); r.Failed || r.Structured.(map[string]any)["path"] != "assets/sprites/hero.png" {
+		t.Fatalf("add: %+v", r)
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "assets", "sprites", "hero.png")); string(data) != pngHead {
+		t.Errorf("saved %q", data)
+	}
+	for name, args := range map[string]map[string]any{
+		"no path":     {"data": b64(pngHead)},
+		"nothing":     {"path": "assets/a.png"},
+		"both":        {"data": b64(pngHead), "path": "assets/b.png", "file": map[string]any{"download_url": "https://x.example/a", "file_id": "f"}},
+		"not base64":  {"data": "%%%", "path": "assets/c.png"},
+		"not a png":   {"data": b64("<html>"), "path": "assets/d.png"},
+		"oversize":    {"data": b64(pngHead + strings.Repeat("x", inlineLimit)), "path": "assets/e.png"},
+		"not assets":  {"data": b64(pngHead), "path": "scenes/f.png"},
+		"over a file": {"data": b64(pngHead), "path": "assets/sprites/hero.png"},
+	} {
+		if r := add(args); !r.Failed {
+			t.Errorf("%s was saved: %+v", name, r)
+		}
+	}
+	if entries, _ := os.ReadDir(filepath.Join(root, "assets")); len(entries) != 1 {
+		t.Errorf("assets: %v", entries)
 	}
 }
 
