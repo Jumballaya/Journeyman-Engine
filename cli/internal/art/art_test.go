@@ -59,6 +59,53 @@ func TestScaffoldedNoteReads(t *testing.T) {
 	}
 }
 
+// The game's own art note, wherever it is, keeps holding the art when the
+// vault is scaffolded or written: no blank Art.md takes its place (R153-1).
+func TestScaffoldKeepsTheGamesArtNote(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, ".jm.json", `{"assets": ["art/*.tsj"]}`)
+	look := "---\ntype: art\ngrid: 2\n---\n# Look\n"
+	write(t, root, "design/Look.md", look)
+	write(t, root, "art/t.tsj", `{"tilewidth": 3, "tileheight": 2, "tiles": [{"id": 0, "image": "t.png", "width": 3, "height": 2}]}`)
+	offGrid := func(when string) {
+		t.Helper()
+		r := Check(root)
+		if r.Bible == nil || r.Bible.Path != "design/Look.md" || !slices.ContainsFunc(r.Findings, func(f Finding) bool { return strings.Contains(f.Message, "off the 2 px grid") }) {
+			t.Errorf("%s: %+v", when, r)
+		}
+	}
+	offGrid("before")
+	if _, err := memory.Scaffold(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := memory.Observe(root, "Notes", "feel", "the tiles look off"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "design", "Art.md")); err == nil {
+		t.Error("a blank Art.md was written beside Look.md")
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "design", "Look.md")); string(data) != look {
+		t.Errorf("Look.md changed: %q", data)
+	}
+	offGrid("after")
+
+	// A game with Art.md keeps it, locks and all, however often it's scaffolded.
+	os.Remove(filepath.Join(root, "design", "Look.md"))
+	canonical := "---\ntype: art\ngrid: 2\n---\n# Art\n"
+	write(t, root, "design/Art.md", canonical)
+	for range 2 {
+		if made, err := memory.Scaffold(root); err != nil || len(made) != 0 {
+			t.Fatalf("made %v: %v", made, err)
+		}
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "design", "Art.md")); string(data) != canonical {
+		t.Errorf("Art.md changed: %q", data)
+	}
+	if r := Check(root); r.Bible == nil || r.Bible.Path != Note || len(r.Findings) == 0 {
+		t.Errorf("Art.md's locks: %+v", r)
+	}
+}
+
 func TestSetTags(t *testing.T) {
 	s := Set{Directions: []string{"down", "left"}, Undirected: []string{"down"}, Actions: map[string]Timing{"walk": {150, 150}, "down": {600}}}
 	tags := s.Tags()

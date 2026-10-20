@@ -61,12 +61,21 @@ func scaffoldHeld(root string) ([]string, error) {
 		if _, err := os.Lstat(filepath.Join(root, Dir, filepath.FromSlash(f.path))); err == nil {
 			continue
 		}
+		if f.text == artNote && hasArtNote(root) { // a blank Art.md would win over the game's own art note
+			continue
+		}
 		if err := write(root, Dir+"/"+f.path, f.text); err != nil {
 			return made, err
 		}
 		made = append(made, Dir+"/"+f.path)
 	}
 	return made, nil
+}
+
+// hasArtNote is whether the game has a note of type art (or may: one it can't read).
+func hasArtNote(root string) bool {
+	all, unread := notes(root)
+	return unread != nil || slices.ContainsFunc(all, func(n Note) bool { return n.Type == "art" })
 }
 
 // Notes are the game's notes, sorted by path; none without design/.

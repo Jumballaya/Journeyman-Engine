@@ -96,8 +96,9 @@ names. Each asset has a status, worked out from files, never stored:
 
 `art.Check(root)` returns a report: the art note, the palette, every asset
 with its status, and findings (file + message). It reads only what the game
-ships (its manifest's assets, as regular files inside the game) and each file
-once. It checks:
+ships (its manifest's assets, as regular files inside the game), and reports
+a file's findings once even when an atlas and a dossier share it (it may read
+the file twice). It checks:
 
 - every atlas's pictures and every tileset's pictures: palette colours only;
 - tilesets: tile size on the grid (a collection's tiles each, by their crop
