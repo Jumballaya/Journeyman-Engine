@@ -193,3 +193,35 @@ func atoi(s string) int {
 	n, _ := strconv.Atoi(s)
 	return n
 }
+
+// SheetFrame is a frame as checks see it: its untrimmed size and milliseconds.
+type SheetFrame struct{ W, H, Milliseconds int }
+
+// SheetTag is a tag's name and its frames, first to last.
+type SheetTag struct {
+	Name     string
+	From, To int
+}
+
+func (s Sheet) Frames() []SheetFrame {
+	out := make([]SheetFrame, len(s.frames))
+	for i, f := range s.frames {
+		out[i] = SheetFrame{f.SourceSize.W, f.SourceSize.H, f.Duration}
+	}
+	return out
+}
+
+// Outside is the first frame that isn't inside a w by h picture, -1 if none.
+func (s Sheet) Outside(w, h int) int {
+	return slices.IndexFunc(s.frames, func(f sheetFrame) bool {
+		return !image.Rect(f.Frame.X, f.Frame.Y, f.Frame.X+f.Frame.W, f.Frame.Y+f.Frame.H).In(image.Rect(0, 0, w, h))
+	})
+}
+
+func (s Sheet) Tags() []SheetTag {
+	out := make([]SheetTag, len(s.tags))
+	for i, t := range s.tags {
+		out[i] = SheetTag{t.Name, t.From, t.To}
+	}
+	return out
+}

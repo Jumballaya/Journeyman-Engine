@@ -75,7 +75,7 @@ func TestHealthReadsChecksProblems(t *testing.T) {
 	for _, c := range checks {
 		summaries = append(summaries, c.(map[string]any)["summary"].(string))
 	}
-	if got := strings.Join(summaries, " | "); got != "no tests yet (tests/*.spec.ts) | no goldens yet (tests/golden/*.golden.json) | no such check (doctor, build, tests, goldens, world)" {
+	if got := strings.Join(summaries, " | "); got != "no tests yet (tests/*.spec.ts) | no goldens yet (tests/golden/*.golden.json) | no such check (doctor, build, tests, goldens, world, art)" {
 		t.Errorf("summaries: %s", got)
 	}
 }
