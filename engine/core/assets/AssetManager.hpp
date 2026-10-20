@@ -64,7 +64,8 @@ class AssetManager {
   };
   Reloaded reloadChanged();
   // After the scene restart reloads asked for: keep them, or (it failed) put back what the scene
-  // last ran with, converters run again; the next change to any file rereads those.
+  // last ran with (in-place reloads beside a restart too), converters run again; the next change
+  // to any file rereads those.
   void keepReloads() { _undo.clear(); }
   void undoReloads();
 

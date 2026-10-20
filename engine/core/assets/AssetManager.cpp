@@ -130,6 +130,9 @@ AssetManager::Reloaded AssetManager::reloadChanged() {
     for (const AssetHandle handle : _undone) changed.emplace_back(handle, true);
   }
   Reloaded reloaded;
+  // A restart still to come (this batch's, or one waiting) puts back what an in-place reload
+  // beside it changed too: an atlas's regions and its picture go back together.
+  const bool restarting = !_undo.empty() || std::ranges::any_of(changed, [](const auto& c) { return c.second; });
   for (const auto& [handle, restart] : changed) {
     RawAsset& asset = _assets.at(handle);
     // Timed before and after: a file replaced while it was read is read again next time.
@@ -139,7 +142,7 @@ AssetManager::Reloaded AssetManager::reloadChanged() {
     _modified[handle] = *before;
     std::erase(_undone, handle);
     if (*bytes == asset.data) continue;  // rewritten, not changed (a rebuild)
-    if (restart) _undo.try_emplace(handle, asset.data);  // the first: what the scene last ran with
+    if (restarting) _undo.try_emplace(handle, asset.data);  // the first: what the scene last ran with
     asset.data = std::move(*bytes);
     runConverters(asset, handle);
     reloaded.paths.push_back(asset.filePath.generic_string());
