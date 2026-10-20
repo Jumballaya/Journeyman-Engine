@@ -30,7 +30,9 @@ test('an entity picked is shown in the editor; a prefab\'s own children aren\'t 
   assert.equal(s.find((e) => e.attributes['data-key'] === 'tree:entities[0]/Shadow').length, 0);
   s.find((e) => e.attributes['data-key'] === 'tree:entities[1]')[0].fire('click');
   await settle(6);
-  assert.deepEqual(s.calls().filter((c) => c.name === 'editor_show'), [{ name: 'editor_show', arguments: { scene: 'scenes/level.scene.json', entity: 'Door' } }]);
+  assert.deepEqual(s.calls().filter((c) => c.name === 'editor_show'), [{ name: 'editor_show', arguments: { scene: 'scenes/level.scene.json', entity: 'Door', game: '/g/pip' } }]);
+  // The tab's game, not whichever the server has open (another chat may have opened another).
+  for (const name of ['editor_state', 'scene_view']) { const calls = s.calls().filter((c) => c.name === name); assert.ok(calls.length && calls.every((c) => c.arguments.game === '/g/pip'), name); }
   assert.match(s.app.text, /Door is shown in the editor/);
 });
 
@@ -70,7 +72,7 @@ test('Render shows the scene as the engine draws it', async () => {
   await settle(6);
   s.button('Render').fire('click');
   await settle(6);
-  assert.deepEqual(s.calls().filter((c) => c.name === 'scene_render'), [{ name: 'scene_render', arguments: { scene: 'scenes/level.scene.json' } }]);
+  assert.deepEqual(s.calls().filter((c) => c.name === 'scene_render'), [{ name: 'scene_render', arguments: { scene: 'scenes/level.scene.json', game: '/g/pip' } }]);
   assert.equal(s.find((e) => e.tag === 'img')[0].attributes.src, 'data:image/jpeg;base64,abc');
 });
 

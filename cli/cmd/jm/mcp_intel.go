@@ -14,35 +14,35 @@ import (
 // Project intelligence: the game's files and how they link (game_index), and
 // whether it's healthy (health: doctor, build, tests, goldens in one answer).
 func (s *mcpServer) intelTools() []mcpTool {
+	home := gamesHome()
 	return []mcpTool{
 		{Name: "game_index", Title: "The game's files and how they link",
 			Description: "The open game at a glance: every scene, prefab, script, asset, map, UI file, design doc and test, " +
 				"with what each uses and what uses it (\"used by\"), and the files nothing uses. " +
 				"With path: that file's links (and a picture of an image). Call it before changing or removing a shared file.",
 			Annotations: readOnly(), Meta: callableMeta("", ""),
-			InputSchema: object(map[string]any{"path": strArg("a file of the game, e.g. assets/textures/ship.png (default: the whole game)")}),
-			run:         gameIndex},
+			InputSchema: object(map[string]any{"game": gameOfTool, "path": strArg("a file of the game, e.g. assets/textures/ship.png (default: the whole game)")}),
+			run:         inRoot(home, gameIndex)},
 		{Name: "health", Title: "Is the game healthy?",
 			Description: "Checks the open game: doctor (setup), build (scripts and content), tests (tests/*.spec.ts), goldens (frames) " +
 				"world (what its design notes state twice and differently: a road of two lengths, a place inside itself) " +
 				"and art (the sprites, sheets and tilesets against design/Art.md's palette, sizes and animation sets; each dossier's sprite planned, drawn, exported or done), " +
 				"each with its problems and where they are. checks picks some (build and goldens take a while).",
 			Annotations: writes(), Meta: callableMeta("Checking the game…", "Checked"),
-			InputSchema: object(map[string]any{"checks": listArg(`some of "doctor", "build", "tests", "goldens", "world", "art" (default: all)`)}),
-			run:         health},
+			InputSchema: object(map[string]any{"game": gameOfTool, "checks": listArg(`some of "doctor", "build", "tests", "goldens", "world", "art" (default: all)`)}),
+			run:         inRoot(home, health)},
 	}
 }
 
-func gameIndex(a toolArgs) toolResult {
-	root, err := projectRoot()
-	if err != nil {
-		return textResult(err.Error(), true)
+func gameIndex(root string, a toolArgs) toolResult {
+	if real, err := realPath(root); err == nil {
+		root = real // a link to the game: WalkDir doesn't follow its root
 	}
 	entries := indexGame(root)
 	if a.str("path") == "" {
 		return toolResult{Text: describeIndex(gameName(root), entries), Structured: map[string]any{"game": gameName(root), "entries": entries}}
 	}
-	rel, err := projectFile(a.str("path"))
+	_, rel, err := gamePath(root, a.str("path"))
 	i := slices.IndexFunc(entries, func(e indexEntry) bool { return e.Path == filepath.ToSlash(rel) })
 	if err != nil || i < 0 {
 		return textResult(fmt.Sprintf("%s isn't one of the game's files (game_index lists them)", a.str("path")), true)
@@ -104,11 +104,7 @@ type healthCheck struct {
 	Art      *art.Report  `json:"art,omitempty"` // the art check's sprites, each how far along
 }
 
-func health(a toolArgs) toolResult {
-	root, err := projectRoot()
-	if err != nil {
-		return textResult(err.Error(), true)
-	}
+func health(root string, a toolArgs) toolResult {
 	checks := a.list("checks")
 	if len(checks) == 0 {
 		checks = []string{"doctor", "build", "tests", "goldens", "world", "art"}
