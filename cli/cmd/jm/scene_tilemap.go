@@ -138,8 +138,8 @@ func tileMapPicture(root, file string) image.Image {
 	}
 	var layers []tileLayer
 	depth := 0.0
-	var collect func(l tiledLayer, shown bool, opacity float64, offset image.Point)
-	collect = func(l tiledLayer, shown bool, opacity float64, offset image.Point) {
+	var collect func(l tiledLayer, shown bool, opacity, offsetX, offsetY float64)
+	collect = func(l tiledLayer, shown bool, opacity, offsetX, offsetY float64) {
 		z := depth // tile, object and image layers each take a step up, shown or not
 		if l.Type == "tilelayer" || l.Type == "objectgroup" || l.Type == "imagelayer" {
 			depth += 0.01
@@ -148,9 +148,9 @@ func tileMapPicture(root, file string) image.Image {
 		if l.Opacity != nil {
 			opacity *= *l.Opacity
 		}
-		offset = offset.Add(image.Pt(int(math.Round(l.OffsetX)), int(math.Round(l.OffsetY))))
+		offsetX, offsetY = offsetX+l.OffsetX, offsetY+l.OffsetY // rounded once, where it's drawn
 		for _, child := range l.Layers {
-			collect(child, shown, opacity, offset)
+			collect(child, shown, opacity, offsetX, offsetY)
 		}
 		if l.Type != "tilelayer" || !shown {
 			return
@@ -162,10 +162,10 @@ func tileMapPicture(root, file string) image.Image {
 		}
 		cells := l.gids()
 		cells = append(cells[:min(len(cells), m.Width*m.Height)], make([]uint32, max(0, m.Width*m.Height-len(cells)))...) // as the engine: short data padded
-		layers = append(layers, tileLayer{cells, opacity, offset, z})
+		layers = append(layers, tileLayer{cells, opacity, image.Pt(int(math.Round(offsetX)), int(math.Round(offsetY))), z})
 	}
 	for _, l := range m.Layers {
-		collect(l, true, 1, image.Point{})
+		collect(l, true, 1, 0, 0)
 	}
 	sort.SliceStable(layers, func(i, j int) bool { return layers[i].z < layers[j].z })
 

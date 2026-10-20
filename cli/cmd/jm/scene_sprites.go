@@ -5,7 +5,9 @@ import (
 	"encoding/base64"
 	"image"
 	"image/png"
+	"os"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
@@ -108,11 +110,26 @@ func atlasRegion(root string, config atlas.AtlasConfig, region string) image.Ima
 		if !sheet {
 			return readGameImage(root, source)
 		}
-		frames, _ := atlasSource(root, source, name)
-		for _, f := range frames {
-			if f.Name == region {
-				return f.Img
-			}
+		// Only the frame asked for, its sheet's image and its size bounded before they're made.
+		i, err := strconv.Atoi(strings.TrimPrefix(region, name+"_"))
+		real, ok := gameFile(root, source)
+		if err != nil || !ok {
+			continue
+		}
+		data, err := os.ReadFile(real)
+		if err != nil {
+			continue
+		}
+		parsed, err := atlas.ParseSheet(data)
+		if err != nil {
+			continue
+		}
+		img := readGameImage(root, path.Join(path.Dir(source), parsed.Image))
+		if img == nil {
+			continue
+		}
+		if frame, err := parsed.Frame(i, img, pictureSideMax); err == nil {
+			return frame
 		}
 	}
 	return nil

@@ -310,6 +310,15 @@ func TestATileMapIsDrawnWhole(t *testing.T) {
 	if img = tileMapPicture(root, "maps/atlas.tmj"); img == nil || at(0, 0) != red || at(3, 0) != green {
 		t.Errorf("atlas tile: %v", img)
 	}
+	// Offsets add up before they're rounded: a group's 0.4 and its layer's 0.4 are the 0.8 of one layer.
+	for _, layers := range []string{`[{"type":"group","offsetx":0.4,"offsety":-0.4,"layers":[{"type":"tilelayer","offsetx":0.4,"offsety":-0.4,"data":[1]}]}]`,
+		`[{"type":"tilelayer","offsetx":0.8,"offsety":-0.8,"data":[1]}]`} {
+		os.WriteFile(filepath.Join(root, "maps", "o.tmj"), []byte(`{"width":2,"height":2,"tilewidth":2,"tileheight":2,
+			"tilesets":[{"firstgid":1,"source":"set.tsj"}],"layers":`+layers+`}`), 0o644)
+		if img = tileMapPicture(root, "maps/o.tmj"); img == nil || at(0, 0).A != 0 || at(1, 0) != red || at(2, 0) != red || at(3, 0).A != 0 {
+			t.Errorf("offset %s: %v %v %v", layers, at(0, 0), at(2, 0), at(3, 0))
+		}
+	}
 	// Sizes past what's sent (or past what an int holds) are left to the box, not allocated.
 	for _, size := range []string{`"width":4096,"height":4096`, `"width":4294967296,"height":4294967296`} {
 		os.WriteFile(filepath.Join(root, "maps", "c.tmj"), []byte(`{`+size+`,"tilewidth":2,"tileheight":2,"layers":[]}`), 0o644)
