@@ -150,3 +150,22 @@ func TestInnerPaddingIsNotPartOfTheFrame(t *testing.T) {
 		t.Fatalf("size %v, first pixel %v (want the sheet's x 3)", img.Bounds().Size(), img.At(0, 0))
 	}
 }
+
+// Frame cuts one frame as Cut does, and refuses one past the size asked
+// before making it (a tiny sheet can claim a huge untrimmed frame).
+func TestOneFrameIsCutAloneAndBounded(t *testing.T) {
+	sheet, _ := ParseSheet([]byte(`{"frames": [{"frame": {"x": 2, "y": 0, "w": 1, "h": 2}, "trimmed": true,` +
+		`"spriteSourceSize": {"x": 1, "y": 0, "w": 1, "h": 2}, "sourceSize": {"w": 2, "h": 2}, "duration": 100},` +
+		`{"frame": {"x": 0, "y": 0, "w": 1, "h": 1}, "sourceSize": {"w": 8192, "h": 8192}, "duration": 100}],` +
+		`"meta": {"image": "kage.png"}}`))
+	sources, _, _ := sheet.Cut("kage", sheetImage(), nil)
+	img, err := sheet.Frame(0, sheetImage(), 64)
+	if err != nil || img.Bounds() != sources[0].Img.Bounds() || img.At(1, 0) != sources[0].Img.At(1, 0) || img.At(0, 0) != sources[0].Img.At(0, 0) {
+		t.Fatalf("frame 0: %v %v", img, err)
+	}
+	for _, i := range []int{1, 2, -1} {
+		if img, err := sheet.Frame(i, sheetImage(), 64); err == nil {
+			t.Errorf("frame %d: %v", i, img.Bounds())
+		}
+	}
+}

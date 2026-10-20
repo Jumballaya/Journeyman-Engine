@@ -239,3 +239,43 @@ test('the pages write JSON as jm fmt does', () => {
   const want = fs.readFileSync(path.join(__dirname, '../../../internal/jsonfmt/testdata/scene.out.json'), 'utf8');
   assert.equal(kit.jsonText(JSON.parse(want)) + '\n', want);
 });
+
+test('each sprite is drawn as it looks, lowest z first, its box over it to pick', async () => {
+  const { find, fromHost } = await scenePage({ input: null });
+  const sprite = (name, z, texture, extra = {}) => ({ where: `entities[${z}]`, name, x: 0, y: 0, z, w: 16, h: 16, look: texture || undefined, ...extra,
+    components: { TransformComponent: { scale: [8, 8] }, SpriteComponent: texture === null ? { color: [1, 0, 0, 0.5] } : { texture, color: [0.5, 1, 1, 1] } } });
+  const bare = { where: 'entities[3]', name: 'Bare', x: 50, y: 0, w: 0, h: 0, components: { TransformComponent: {}, SpriteComponent: {} } };
+  const loose = { where: 'entities[4]', name: 'Loose', x: 0, y: 0, w: 0, h: 0, components: { SpriteComponent: {} } };
+  fromHost('ui/notifications/tool-result', { content: [], _meta: { 'jm/sprites': { 'a.png': 'data:image/png;base64,AAA' } },
+    structuredContent: { scene: 'scenes/level.scene.json', entities: [sprite('Top', 2, 'a.png', { flipX: true }), sprite('Quad', 1, null), sprite('Missing', 0, 'gone.png'), bare, loose] } });
+  await settle();
+  const drawn = find((e) => e.attributes.class === 'sprite');
+  // The unscaled quad (z 0) is the engine's 2 × 2, under the quad (z 1), under the picture (z 2); without a transform, none.
+  assert.deepEqual(drawn.map((e) => e.tag), ['rect', 'rect', 'image']);
+  assert.deepEqual([drawn[0].attributes.width, drawn[0].attributes.x], [2, 49]);
+  drawn.shift();
+  assert.equal(drawn[0].attributes.fill, 'rgb(255 0 0)');
+  assert.equal(drawn[0].attributes.opacity, 0.5);
+  assert.equal(drawn[1].attributes.href, 'data:image/png;base64,AAA');
+  assert.match(drawn[1].attributes.transform, /scale\(-1 1\)/);
+  const filter = find((e) => e.tag === 'feColorMatrix')[0];
+  assert.equal(drawn[1].attributes.filter, 'url(#tint0)');  // its color tints its picture
+  assert.match(filter.attributes.values, /^0\.5 0 0 0 0 0 1 /);
+  const boxes = find((e) => (e.attributes.class || '').startsWith('shape'));
+  assert.deepEqual(boxes.map((e) => e.attributes.class.includes('drawn')), [true, true, false, true, false]);  // no picture: its box as before
+});
+
+test('a tile map is drawn whole, standing on its transform, under the sprites; without a transform, not at all', async () => {
+  const { find, fromHost } = await scenePage({ input: null });
+  const map = (name, components) => ({ where: name, name, x: 10, y: 20, w: 0, h: 0, components });
+  fromHost('ui/notifications/tool-result', { content: [], _meta: { 'jm/maps': { 'a.tmj': { src: 'data:image/png;base64,MAP', w: 64, h: 32 } } },
+    structuredContent: { scene: 'scenes/level.scene.json', entities: [
+      { where: 'entities[0]', name: 'Hero', x: 0, y: 0, w: 4, h: 4, components: { TransformComponent: { scale: [2, 2] }, SpriteComponent: {} } },
+      map('Map', { TransformComponent: { position: [10, 20, 0] }, TileMapComponent: { map: 'a.tmj' } }),
+      map('Loose', { TileMapComponent: { map: 'a.tmj' } })] } });
+  await settle();
+  const drawn = find((e) => e.attributes.class === 'sprite');
+  assert.equal(drawn.length, 2);
+  assert.deepEqual(['href', 'x', 'y', 'width', 'height'].map((k) => drawn[0].attributes[k]), ['data:image/png;base64,MAP', 10, -52, 64, 32]);
+  assert.equal(drawn[1].tag, 'rect');  // the sprite, over the map
+});

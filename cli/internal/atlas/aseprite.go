@@ -145,6 +145,27 @@ func (s Sheet) Cut(name string, img, normal image.Image) ([]SourceImage, map[str
 	return sources, clips, nil
 }
 
+// Frame cuts frame i out of img as Cut does, alone; an error for one that
+// isn't there, isn't inside img, or would be over side pixels on a side.
+func (s Sheet) Frame(i int, img image.Image, side int) (image.Image, error) {
+	if i < 0 || i >= len(s.frames) {
+		return nil, fmt.Errorf("aseprite: no frame %d", i)
+	}
+	f := s.frames[i]
+	r := image.Rect(f.Frame.X, f.Frame.Y, f.Frame.X+f.Frame.W, f.Frame.Y+f.Frame.H)
+	if !r.In(img.Bounds()) {
+		return nil, fmt.Errorf("aseprite: frame %d (%v) is outside the %v sheet", i, r, img.Bounds().Size())
+	}
+	content := image.Pt(f.SpriteSourceSize.W, f.SpriteSourceSize.H)
+	if content.X <= 0 || content.Y <= 0 {
+		content = r.Size()
+	}
+	if max(f.SourceSize.W, content.X) > side || max(f.SourceSize.H, content.Y) > side {
+		return nil, fmt.Errorf("aseprite: frame %d is over %d pixels on a side", i, side)
+	}
+	return untrimmed(img, r, f), nil
+}
+
 // untrimmed is the frame at its full size, its trimmed pixels where Aseprite
 // cut them from (r includes any inner padding around them).
 func untrimmed(sheet image.Image, r image.Rectangle, f sheetFrame) image.Image {
