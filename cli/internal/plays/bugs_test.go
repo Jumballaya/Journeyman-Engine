@@ -84,8 +84,8 @@ func TestAPlayStillBeingRecordedIsntPruned(t *testing.T) {
 	os.MkdirAll(unstarted, 0o755)
 	old := time.Now().Add(-2 * time.Hour)
 	os.Chtimes(unstarted, old, old)
-	if removed, _ := Prune(root, 0, false); removed != 0 {
-		t.Errorf("removed %d", removed)
+	if removed, err := Prune(root, 0, false); err != nil || removed != 1 {
+		t.Errorf("removed %d, %v; want one abandoned folder", removed, err)
 	}
 	if !exists(running.Dir) || exists(unstarted) {
 		t.Errorf("running kept: %v; unstarted gone: %v", exists(running.Dir), !exists(unstarted))

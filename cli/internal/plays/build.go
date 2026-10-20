@@ -176,17 +176,14 @@ func exists(path string) bool {
 	return err == nil
 }
 
-// Prune deletes all but the newest keep plays, counting only unmarked ones
-// when keepMarked (a person marked something in those), and never one still
-// being recorded. Folders of plays that never started go too. It says how
-// many plays went.
+// Prune keeps newest keep plays, plus recordings and (if keepMarked) marked plays.
+// Returns removed folder count, including abandoned and unreadable plays.
 func Prune(projectRoot string, keep int, keepMarked bool) (int, error) {
 	all, err := List(projectRoot)
 	if err != nil {
 		return 0, err
 	}
-	removeUnstarted(projectRoot)
-	kept, removed := 0, 0
+	kept, removed := 0, removeUnstarted(projectRoot)
 	if !keepMarked { // by hand: the folders that aren't plays go too
 		for _, dir := range Unreadable(projectRoot) {
 			if err := os.RemoveAll(filepath.Join(Root(projectRoot), dir)); err == nil {
@@ -216,18 +213,22 @@ func (p *Play) recording() bool {
 	return p.Meta.Ended == "running" && err == nil && time.Since(info.ModTime()) < time.Minute
 }
 
-// removeUnstarted deletes play folders with no session.json an hour on: a
-// game that failed to start (List can't see them, so nothing else would).
-func removeUnstarted(projectRoot string) {
+// removeUnstarted deletes and counts hour-old folders without session.json:
+// games that failed to start and aren't visible to List.
+func removeUnstarted(projectRoot string) int {
 	entries, _ := os.ReadDir(Root(projectRoot))
+	removed := 0
 	for _, e := range entries {
 		dir := filepath.Join(Root(projectRoot), e.Name())
 		info, err := e.Info()
 		if !e.IsDir() || err != nil || exists(filepath.Join(dir, "session.json")) || time.Since(info.ModTime()) < time.Hour {
 			continue
 		}
-		_ = os.RemoveAll(dir)
+		if err := os.RemoveAll(dir); err == nil {
+			removed++
+		}
 	}
+	return removed
 }
 
 // Unreadable are the play folders List leaves out, their session.json
