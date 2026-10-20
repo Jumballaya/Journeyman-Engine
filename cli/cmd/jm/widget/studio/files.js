@@ -90,18 +90,32 @@ studioTabs.push((() => {
   };
 
   // A file from the person's computer into assets/: given to the host (its
-  // upload), which asset_add then fetches. Only where the host takes uploads.
+  // upload), which asset_add then fetches; a host without uploads gets its
+  // bytes (asset_add's data, up to 8 MB).
   const addFile = (ctx) => {
     const { el } = ctx.kit;
     const input = el("input", { type: "file", hidden: true, "data-key": "files-add", accept: ".png,.jpg,.jpeg,.aseprite,.ase,.tmj,.tsj,.json,.wav,.ogg,.mp3,.ttf,.otf",
       onchange: (e) => { const file = e.target.files && e.target.files[0]; e.target.value = ""; if (file) upload(ctx, file); } });
     return [input, el("button", { disabled: ctx.busy, onclick: () => input.click() }, "Add file")];
   };
+  const inlineLimit = 8 << 20;
+  const base64 = (buffer) => {
+    const bytes = new Uint8Array(buffer);
+    let text = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(text);
+  };
   const upload = async (ctx, file) => {
     const mine = state;
-    let given;
-    try { given = await ctx.host.uploadFile(file); } catch (e) { ctx.say("Couldn't upload it: " + (e && e.message || e)); return; }
-    const args = { file: { download_url: given.downloadUrl, file_id: given.fileId, file_name: file.name, mime_type: file.type || undefined } };
+    let args;
+    if (ctx.host.can("uploadFile")) {
+      let given;
+      try { given = await ctx.host.uploadFile(file); } catch (e) { ctx.say("Couldn't upload it: " + (e && e.message || e)); return; }
+      args = { file: { download_url: given.downloadUrl, file_id: given.fileId, file_name: file.name, mime_type: file.type || undefined } };
+    } else {
+      if (file.size > inlineLimit) { ctx.say(`${file.name} is over 8 MB: attach it to the chat instead.`); return; }
+      try { args = { data: base64(await file.arrayBuffer()), path: "assets/" + file.name }; } catch (e) { ctx.say("Couldn't read it: " + (e && e.message || e)); return; }
+    }
     // Still to the game it was picked for; another game shown since keeps its own tab.
     if (mine !== state) await ctx.act("Adding the file", "asset_add", on(ctx, args), (t) => t);
     else await change(ctx, "Adding the file", "asset_add", args, (t) => t, () => pick(ctx, "assets/" + file.name));
@@ -225,7 +239,7 @@ studioTabs.push((() => {
     const head = el("div", { class: "head" }, el("h1", {}, "Files"),
       el("span", { class: "meta" }, `${listed.files.length} files${changed ? ` · ${changed} changed since the last commit` : ""}`),
       el("span", { class: "spacer" }),
-      ctx.host.can("uploadFile") ? addFile(ctx) : null,
+      ctx.host.can("uploadFile") || ctx.host.can("callTool") ? addFile(ctx) : null,
       el("button", { disabled: ctx.busy, onclick: () => { state.draft = { kind: "new", value: "" }; ctx.rerender(); } }, "New file"));
     const draft = state.draft && state.draft.kind === "new"
       ? form(ctx, "Path of the new file, e.g. assets/data/items.json", (path) =>

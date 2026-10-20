@@ -17,8 +17,20 @@ const open = async (tab, openai) => {
   return s;
 };
 
-test('Add file shows only where the host takes uploads; an upload goes to asset_add', async () => {
-  assert.equal((await open('Files')).button('Add file'), undefined);
+test('without host uploads, Add file sends the bytes to asset_add (up to 8 MB)', async () => {
+  const s = await open('Files');
+  const input = s.find((e) => e.attributes['data-key'] === 'files-add')[0];
+  const bytes = new Uint8Array([137, 80, 78, 71]);
+  input.fire('change', { target: { files: [{ name: 'hero.png', type: 'image/png', size: 4, arrayBuffer: async () => bytes.buffer }], value: '' } });
+  await settle(10);
+  assert.deepEqual(s.calls().find((c) => c.name === 'asset_add').arguments, { game: '/g/pip', data: 'iVBORw==', path: 'assets/hero.png' });
+  input.fire('change', { target: { files: [{ name: 'big.wav', size: 9 << 20, arrayBuffer: async () => { throw new Error('read'); } }], value: '' } });
+  await settle(6);
+  assert.equal(s.calls().filter((c) => c.name === 'asset_add').length, 1);
+  assert.match(s.app.text, /big\.wav is over 8 MB: attach it to the chat instead/);
+});
+
+test('with host uploads, Add file uploads there and asset_add fetches it', async () => {
   const uploaded = [];
   const s = await open('Files', {
     uploadFile: async (file) => { uploaded.push(file.name); return { fileId: 'file_9' }; },
