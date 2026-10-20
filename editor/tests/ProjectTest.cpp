@@ -50,5 +50,30 @@ TEST(Project, SavingTheManifestKeepsAnotherProgramsChange) {
   ASSERT_TRUE(project.writeText(".jm.json", R"({"name": "renamed", "window": {"width": 1280}, "version": "2", "entryScene": "scenes/b.scene.json"})", error));
   ASSERT_TRUE(project.saveManifest(error)) << error;
   EXPECT_EQ(Json::parse(project.readText(".jm.json"))["name"], "renamed");
+
+  // Inside one setting too: jm's window width and the editor's vsync both stay.
+  ASSERT_TRUE(project.writeText(
+      ".jm.json",
+      R"({"name": "renamed", "window": {"width": 1920}, "version": "2", "entryScene": "scenes/b.scene.json"})", error));
+  project.manifest()["window"]["vsync"] = false;
+  ASSERT_TRUE(project.saveManifest(error)) << error;
+  const Json window = Json::parse(project.readText(".jm.json"))["window"];
+  EXPECT_EQ(window["width"], 1920);
+  EXPECT_EQ(window["vsync"], false);
+
+  // No lock, no save: writing unlocked could undo jm's write mid-way.
+  std::filesystem::remove(root / "..jm.json.lock");
+  std::filesystem::create_directories(root / "..jm.json.lock" / "in-the-way");  // can't be opened as a lock
+  project.manifest()["version"] = "3";
+  EXPECT_FALSE(project.saveManifest(error));
+  EXPECT_EQ(Json::parse(project.readText(".jm.json"))["version"], "2");
   std::filesystem::remove_all(root);
+}
+
+TEST(Project, MergeChangesTakesEachSidesOwnChanges) {
+  const Json base = Json::parse(R"({"a": 1, "o": {"x": 1, "y": 1}, "gone": 1})");
+  const Json mine = Json::parse(R"({"a": 2, "o": {"x": 2, "y": 1}, "new": 1})");
+  const Json theirs = Json::parse(R"({"a": 1, "o": {"x": 1, "y": 3}, "gone": 1, "theirs": 1})");
+  EXPECT_EQ(mergeChanges(base, mine, theirs), Json::parse(R"({"a": 2, "o": {"x": 2, "y": 3}, "theirs": 1, "new": 1})"));
+  EXPECT_EQ(mergeChanges(base, base, theirs), theirs);  // nothing changed here
 }

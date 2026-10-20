@@ -333,6 +333,7 @@ class SettingsDialog {
  private:
   bool _open = false;
   Json _draft;
+  Json _draftBase;                   // the manifest as the draft was taken: what Save's changes are against
   std::filesystem::path _draftRoot;  // the project the draft was taken from
   int _section = 0;
   std::string _newEntry;

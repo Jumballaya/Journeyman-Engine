@@ -527,7 +527,7 @@ void SettingsDialog::draw(Editor& editor) {
     ImGui::OpenPopup("Project Settings");
     _open = false;
     if (_section == kAgentsSection) editor.agents().refresh();
-    _draft = project->manifest();
+    _draft = _draftBase = project->manifest();
     _draftRoot = project->root();
   }
   ui::centerNextWindow({780, 600});
@@ -675,7 +675,10 @@ void SettingsDialog::draw(Editor& editor) {
   pruneEmptyObjects(changed);
   pruneEmptyObjects(saved);
   if (dialogButtons("Save", changed != saved)) {
-    project->manifest() = changed;
+    // Only what was changed here: the manifest may have moved on since the dialog opened.
+    Json base = _draftBase;
+    pruneEmptyObjects(base);
+    project->manifest() = mergeChanges(base, changed, project->manifest());
     std::string error;
     if (project->saveManifest(error)) {
       editor.toasts().show(Toasts::Kind::Success, "Project settings saved", "The project rebuilds with them now.");

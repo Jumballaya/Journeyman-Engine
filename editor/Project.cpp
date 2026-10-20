@@ -135,16 +135,45 @@ std::string Project::name() const {
   return name.empty() ? _root.filename().string() : name;
 }
 
+namespace {
+
+// A missing key is a discarded value, which compares unequal even to itself.
+bool same(const Json& a, const Json& b) {
+  return a.is_discarded() || b.is_discarded() ? a.is_discarded() == b.is_discarded() : a == b;
+}
+
+Json at(const Json& object, const std::string& key) {
+  return object.is_object() && object.contains(key) ? object.at(key) : Json(Json::value_t::discarded);
+}
+
+}  // namespace
+
+Json mergeChanges(const Json& base, const Json& mine, const Json& theirs) {
+  if (same(mine, base)) return theirs;
+  if (same(theirs, base) || !mine.is_object() || !theirs.is_object() || !base.is_object()) return mine;
+  Json out = theirs;
+  auto merge = [&](const std::string& key) {
+    if (Json value = mergeChanges(at(base, key), at(mine, key), at(theirs, key)); value.is_discarded())
+      out.erase(key);
+    else
+      out[key] = std::move(value);
+  };
+  for (const auto& [key, value] : mine.items()) merge(key);
+  for (const auto& [key, value] : base.items()) {
+    if (!mine.contains(key)) merge(key);  // the editor took it out
+  }
+  return out;
+}
+
 bool Project::saveManifest(std::string& error) {
   const platform::FileLock lock(abs(".jm.json"));  // as jm holds it while it writes
-  Json merged = Json::parse(readText(".jm.json"), nullptr, false);
-  if (!merged.is_object()) merged = _manifestRead;  // unreadable now: the editor's is all there is
-  for (const auto& [key, value] : _manifest.items()) {
-    if (!_manifestRead.contains(key) || _manifestRead[key] != value) merged[key] = value;
+  if (!lock.held()) {
+    error = "couldn't lock .jm.json (" + abs("..jm.json.lock").string() + ")";
+    return false;
   }
-  for (const auto& [key, value] : _manifestRead.items()) {
-    if (!_manifest.contains(key)) merged.erase(key);
-  }
+  Json disk = Json::parse(readText(".jm.json"), nullptr, false);
+  if (!disk.is_object()) disk = _manifestRead;  // unreadable now: the editor's is all there is
+  Json merged = mergeChanges(_manifestRead, _manifest, disk);
   wholeNumbersAsIntegers(merged);
   if (!writeText(".jm.json", formatJson(merged), error)) return false;
   _manifest = merged;

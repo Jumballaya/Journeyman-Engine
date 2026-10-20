@@ -86,6 +86,11 @@ class Project {
   std::filesystem::file_time_type _newest{};
 };
 
+// `mine`'s changes from `base`, applied to `theirs`: what only one side changed
+// is that side's; an object both changed merges key by key; anything else both
+// changed is `mine`'s.
+Json mergeChanges(const Json& base, const Json& mine, const Json& theirs);
+
 // Whether a manifest's entries take `path` into builds (see Project::inBuild).
 bool manifestTakes(const Json& manifest, const std::string& path);
 // Whether one manifest asset entry (a path or a glob) matches `path`.
