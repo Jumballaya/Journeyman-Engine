@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -16,9 +17,13 @@
 class TempDir {
  public:
   TempDir() {
+    // ctest runs each test as its own process, each counting from 0: the
+    // random part keeps two started in the same tick from sharing a folder
+    // (and one removing the other's files).
     static std::atomic<uint64_t> counter{0};
+    static const uint32_t process = std::random_device{}();
     auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-    std::string name = "jm_test_" + std::to_string(now) + "_" +
+    std::string name = "jm_test_" + std::to_string(now) + "_" + std::to_string(process) + "_" +
                        std::to_string(counter.fetch_add(1));
     _path = std::filesystem::temp_directory_path() / name;
     std::filesystem::create_directories(_path);
