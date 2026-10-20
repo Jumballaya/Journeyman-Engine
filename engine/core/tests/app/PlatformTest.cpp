@@ -193,10 +193,10 @@ TEST(FileLock, AWaiterTakesTheLockFileThereNow) {
       const platform::FileLock lock(path);
       sawIt = replacementReleased.load();
     });
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));  // the second is waiting on the old file
-    fs::remove(dir.path() / ".list.json.lock");
-    replacement.emplace(path);  // a new lock file, held
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));  // the second is (likely) waiting on the old file
+    replacement.emplace(dir.path() / "other.json");               // a new lock file, held...
     ASSERT_TRUE(replacement->held());
+    fs::rename(dir.path() / ".other.json.lock", dir.path() / ".list.json.lock");  // ...put in its place at once
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(200));  // the old file is free: time to (wrongly) take it
   replacementReleased = true;

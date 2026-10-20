@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <random>
 #include <string>
@@ -148,10 +149,17 @@ bool current(HANDLE held, const std::filesystem::path& name) {
   const HANDLE now = CreateFileW(name.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
                                  OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
   if (now == INVALID_HANDLE_VALUE) return false;
-  BY_HANDLE_FILE_INFORMATION a{}, b{};
-  const bool same = GetFileInformationByHandle(held, &a) && GetFileInformationByHandle(now, &b) &&
-                    a.dwVolumeSerialNumber == b.dwVolumeSerialNumber && a.nFileIndexHigh == b.nFileIndexHigh &&
-                    a.nFileIndexLow == b.nFileIndexLow;
+  bool same = false;
+  FILE_ID_INFO a{}, b{};  // the 128-bit id: ReFS's 64-bit file index isn't unique
+  if (GetFileInformationByHandleEx(held, FileIdInfo, &a, sizeof a) &&
+      GetFileInformationByHandleEx(now, FileIdInfo, &b, sizeof b)) {
+    same = a.VolumeSerialNumber == b.VolumeSerialNumber && std::memcmp(&a.FileId, &b.FileId, sizeof a.FileId) == 0;
+  } else {
+    BY_HANDLE_FILE_INFORMATION x{}, y{};
+    same = GetFileInformationByHandle(held, &x) && GetFileInformationByHandle(now, &y) &&
+           x.dwVolumeSerialNumber == y.dwVolumeSerialNumber && x.nFileIndexHigh == y.nFileIndexHigh &&
+           x.nFileIndexLow == y.nFileIndexLow;
+  }
   CloseHandle(now);
   return same;
 }
@@ -169,7 +177,7 @@ FileLock::FileLock(const std::filesystem::path& path) : _handle(INVALID_HANDLE_V
       CloseHandle(handle);
       return;
     }
-    if (current(handle, name)) {
+    if (current(handle, lockFileFor(path))) {  // where path's lock is now: a link may have moved while we waited
       _handle = handle;
       return;
     }
@@ -191,9 +199,9 @@ FileLock::FileLock(const std::filesystem::path& path) : _fd(-1) {
     int locked = -1;
     while ((locked = flock(fd, LOCK_EX)) != 0 && errno == EINTR) {
     }
-    struct stat held{}, now{};
-    if (locked == 0 && fstat(fd, &held) == 0 && stat(name.c_str(), &now) == 0 && held.st_dev == now.st_dev &&
-        held.st_ino == now.st_ino) {
+    struct stat held{}, now{};  // where path's lock is now: a link may have moved while we waited
+    if (locked == 0 && fstat(fd, &held) == 0 && stat(lockFileFor(path).c_str(), &now) == 0 &&
+        held.st_dev == now.st_dev && held.st_ino == now.st_ino) {
       _fd = fd;
       return;
     }
