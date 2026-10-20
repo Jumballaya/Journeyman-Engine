@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/vcs"
 )
@@ -332,10 +333,24 @@ func TestAFreshVariantShowsTheGamesPicture(t *testing.T) {
 	if _, err := newVariant(game, "fresh", ""); err != nil {
 		t.Fatal(err)
 	}
-	golden := filepath.Join(game, "tests", "golden", "start", "frame_1.png") // made after the variant: only the game has it
+	sb, err := newSandbox(game, "try", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden := filepath.Join(game, "tests", "golden", "start", "frame_1.png") // made after them: only the game has it
 	os.MkdirAll(filepath.Dir(golden), 0o755)
 	os.WriteFile(golden, []byte("png"), 0o644)
 	if list := variantsOf(game); len(list) != 1 || list[0].thumb != golden {
 		t.Errorf("variants: %+v", list)
+	}
+	if list, _ := sandboxesOf(game); len(list) != 1 || list[0].thumb != golden {
+		t.Errorf("sandboxes: %+v", list)
+	}
+	// One with a picture of its own shows that.
+	own := filepath.Join(sb.Dir, "tests", "golden", "mine", "frame_1.png")
+	os.MkdirAll(filepath.Dir(own), 0o755)
+	os.WriteFile(own, []byte("png"), 0o644)
+	if list, _ := sandboxesOf(game); len(list) != 1 || list[0].thumb != own {
+		t.Errorf("sandbox's own: %+v", list)
 	}
 }

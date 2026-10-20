@@ -149,12 +149,12 @@ func TestSceneRenderTakesOnlyAScene(t *testing.T) {
 func TestSceneScreenIsTheGamesView(t *testing.T) {
 	root := t.TempDir()
 	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{"config":{"window":{"width":800,"height":600},"renderer":{"logicalWidth":320,"logicalHeight":180}}}`), 0o644)
-	if s, ok := screenOf(root, nil); !ok || s["w"] != 320 || s["h"] != 180 || s["x"] != 0 {
+	if s, ok := screenOf(root, nil); !ok || s["w"] != 320 || s["h"] != 180 || s["x"] != 0 || s["camera"] != 0 { // no camera: the default
 		t.Errorf("logical: %v %v", s, ok)
 	}
 	at := map[string]any{"position": []any{}}
 	cam := placedEntity{X: 50, Y: -10, Components: map[string]any{"CameraComponent": map[string]any{"zoom": 2.0}, "TransformComponent": at}}
-	if s, _ := screenOf(root, []placedEntity{{}, cam}); s["x"] != 50 || s["y"] != -10 || s["w"] != 160 || s["h"] != 90 {
+	if s, _ := screenOf(root, []placedEntity{{}, cam}); s["x"] != 50 || s["y"] != -10 || s["w"] != 160 || s["h"] != 90 || s["camera"] != 1 {
 		t.Errorf("a camera's: %v", s)
 	}
 	// The highest priority camera is shown, on the entity it follows.
