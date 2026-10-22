@@ -44,6 +44,9 @@ func schemaError(prop map[string]any, v any) error {
 			return errors.New("a list")
 		}
 		of, _ := prop["items"].(map[string]any)
+		if choices := choicesIn(prop); choices != nil { // a multi-select's choices are the list's (a form's files)
+			of = map[string]any{"type": "string", "enum": choices}
+		}
 		for i, item := range items {
 			if err := schemaError(of, item); err != nil {
 				return fmt.Errorf("a list whose item %d is %v", i+1, err)

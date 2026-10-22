@@ -53,3 +53,12 @@ func TestAFormsIntegerIsWhole(t *testing.T) {
 		t.Error("a form took 1.5 for an integer, or refused 2")
 	}
 }
+
+// A multi-select's choices are its list's: a file no longer offered isn't taken.
+func TestAMultiSelectTakesOnlyItsChoices(t *testing.T) {
+	field := map[string]any{"type": "array", "items": map[string]any{"type": "string", "format": "uri"},
+		"x-openai-input": map[string]any{"options": []map[string]any{{"uri": "jm://a", "name": "a"}}}}
+	if schemaError(field, []any{"jm://a"}) != nil || schemaError(field, []any{"jm://a", "jm://gone"}) == nil {
+		t.Error("a multi-select took what it doesn't offer, or refused what it does")
+	}
+}
