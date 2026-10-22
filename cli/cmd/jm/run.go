@@ -189,12 +189,11 @@ func runWith(target string, opts runOptions) error {
 			env = append(env, "JM_NET_JOIN="+opts.join)
 		}
 		if root, ok := recordingProject(g, opts); ok {
-			_, _ = plays.Prune(root, keptPlays, true)
-			dir, err := plays.Create(root, plays.ReadBuild(filepath.Join(root, "build")), version)
+			dir, recording, err := personsPlay(root, plays.ReadBuild(filepath.Join(root, "build")))
 			if err != nil {
 				return err
 			}
-			env = append(env, "JM_RECORD_DIR="+dir, "JM_CONTROL="+newLiveDir(root)) // play_live steers it
+			env = append(env, recording...)
 			fmt.Fprintf(os.Stderr, "Recording this play as %s (F8 marks a moment; jm plays show %s)\n",
 				filepath.Base(dir), filepath.Base(dir))
 		}

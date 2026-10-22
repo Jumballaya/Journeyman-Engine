@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 )
 
 func TestArchiveManifestRejectsDamagedEntries(t *testing.T) {
@@ -188,5 +190,57 @@ func TestRunOpensFullscreenOrWindowedAsAsked(t *testing.T) {
 	}
 	if err := runWith(fakeBuild(t), runOptions{fullscreen: true, peers: 2}); err == nil {
 		t.Error("fullscreen peers")
+	}
+}
+
+// Whichever way a person comes to play (jm run, or resuming a play), the run
+// is recorded and play_live can steer it.
+func TestAPersonsPlayIsRecordedAndSteerable(t *testing.T) {
+	skipOnWindows(t)
+	root := t.TempDir()
+	build := filepath.Join(root, "build")
+	os.MkdirAll(build, 0o755)
+	manifestJSON := `{"name":"x","entryScene":"s","scenes":["s"]}`
+	os.WriteFile(filepath.Join(root, archive.ManifestEntryKey), []byte(manifestJSON), 0o644)
+	os.WriteFile(filepath.Join(build, archive.ManifestEntryKey), []byte(manifestJSON), 0o644)
+	envFile := filepath.Join(t.TempDir(), "env")
+	t.Setenv("JM_ENGINE", fakeProgram(t, t.TempDir(), "engine", "env > "+envFile))
+	for _, v := range []string{"JM_EXIT_AFTER_FRAMES", "JM_DRIVE", "JM_RECORD_DIR", "JM_CONTROL", "CODEX_SANDBOX"} {
+		t.Setenv(v, "")
+	}
+	launched := func(how string) {
+		t.Helper()
+		data, _ := os.ReadFile(envFile)
+		env := string(data)
+		if !strings.Contains(env, "JM_RECORD_DIR="+plays.Root(evalOrSelf(root))) && !strings.Contains(env, "JM_RECORD_DIR="+plays.Root(root)) {
+			t.Errorf("%s isn't recorded: %s", how, env)
+		}
+		if !strings.Contains(env, "JM_CONTROL="+liveDir(root)) && !strings.Contains(env, "JM_CONTROL="+liveDir(evalOrSelf(root))) {
+			t.Errorf("%s can't be steered by play_live", how)
+		}
+		os.Remove(envFile)
+	}
+	t.Chdir(root)
+	if err := runWith(build, runOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	launched("jm run")
+	p, err := plays.Create(root, plays.ReadBuild(build), version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(p, "session.json"), []byte(`{"frames": 60, "seconds": 1, "started": "2000-01-01T00:00:00Z"}`), 0o644) // a second of play
+	os.WriteFile(filepath.Join(p, "frames.bin"), make([]byte, 4*60), 0o644)                                                          // its frames' times (dt 0)
+	for i := range keptPlays {                                                                                                       // newer plays: the resumed one is the oldest, first to be pruned
+		later := filepath.Join(plays.Root(root), fmt.Sprintf("2999-01-01_%06d", i))
+		os.MkdirAll(later, 0o755)
+		os.WriteFile(filepath.Join(later, "session.json"), []byte(`{"format":1,"frames":1,"markers":[],"started":"2999-01-01T00:00:00Z"}`), 0o644)
+	}
+	if err := resumePlay(root, filepath.Base(p), "0"); err != nil {
+		t.Fatal(err)
+	}
+	launched("a resumed play")
+	if _, err := os.Stat(filepath.Join(p, "frames.bin")); err != nil {
+		t.Error("the play a resume replays went with older plays:", err)
 	}
 }

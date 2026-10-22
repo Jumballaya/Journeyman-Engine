@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -174,9 +175,10 @@ func exists(path string) bool {
 	return err == nil
 }
 
-// Prune keeps newest keep plays, plus recordings and (if keepMarked) marked plays.
-// Returns removed folder count, including abandoned and unreadable plays.
-func Prune(projectRoot string, keep int, keepMarked bool) (int, error) {
+// Prune keeps newest keep plays, plus recordings, the plays in spare (folders a
+// run reads) and (if keepMarked) marked plays. Returns removed folder count,
+// including abandoned and unreadable plays.
+func Prune(projectRoot string, keep int, keepMarked bool, spare ...string) (int, error) {
 	all, err := List(projectRoot)
 	if err != nil {
 		return 0, err
@@ -190,7 +192,7 @@ func Prune(projectRoot string, keep int, keepMarked bool) (int, error) {
 		}
 	}
 	for _, p := range all {
-		if (keepMarked && len(p.Meta.Markers) > 0) || p.recording() {
+		if (keepMarked && len(p.Meta.Markers) > 0) || p.recording() || slices.Contains(spare, p.Dir) {
 			continue
 		}
 		if kept++; kept <= keep {
