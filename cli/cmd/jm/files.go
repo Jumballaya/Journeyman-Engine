@@ -9,9 +9,9 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -20,6 +20,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
+	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 	"github.com/Jumballaya/Journeyman-Engine/internal/schema"
 	"github.com/Jumballaya/Journeyman-Engine/internal/vcs"
 	"github.com/spf13/cobra"
@@ -160,45 +161,27 @@ func fileEtag(data []byte) string {
 }
 
 // gamePath is path (from the game's folder, or absolute) as the real file it
-// names (symlinks resolved) and its path from the game: an error for one
-// outside the game or in a hidden folder. The file needn't exist yet.
+// names (links resolved) and its path from the game: an error for one outside
+// the game or in a hidden folder. The file needn't exist yet.
 func gamePath(root, path string) (string, string, error) {
-	notOurs := fmt.Errorf("%s isn't one of the game's files", path)
 	if root == "" {
 		return "", "", errNoGame
 	}
 	if path == "" {
 		return "", "", fmt.Errorf("give a file's path, e.g. scenes/main.scene.json")
 	}
-	abs := filepath.FromSlash(path)
-	if slices.Contains(strings.Split(filepath.ToSlash(abs), "/"), "..") {
-		return "", "", notOurs // ".." after a symlink isn't where Clean says
+	real, rel, ok := realpath.Rel(root, filepath.FromSlash(path))
+	if !ok || hiddenFromAgents(filepath.Dir(rel)) || hiddenFromAgents(rel) && isDir(real) {
+		return "", "", fmt.Errorf("%s isn't one of the game's files", path)
 	}
-	if !filepath.IsAbs(abs) {
-		abs = filepath.Join(root, abs)
-	}
-	realRoot, err := realPath(root)
-	if err != nil {
-		return "", "", err
-	}
-	// Its nearest part that exists, resolved; a link to nothing is refused (a write would follow it).
-	existing, rest := filepath.Clean(abs), ""
-	for {
-		if _, err := os.Lstat(existing); err == nil || filepath.Dir(existing) == existing {
-			break
-		}
-		existing, rest = filepath.Dir(existing), filepath.Join(filepath.Base(existing), rest)
-	}
-	real, err := filepath.EvalSymlinks(existing)
-	if err != nil {
-		return "", "", notOurs
-	}
-	real = filepath.Join(real, rest)
-	rel, err := filepath.Rel(realRoot, real)
-	if err != nil || !filepath.IsLocal(rel) && rel != "." || hiddenFromAgents(filepath.Dir(rel)) || hiddenFromAgents(rel) && isDir(real) {
-		return "", "", notOurs
-	}
-	return real, filepath.ToSlash(rel), nil
+	return real, rel, nil
+}
+
+// contentFile is gamePath for a path the game's own files name (an atlas's
+// source, a sprite's image): read as the build reads it, its ".." cleaned away.
+func contentFile(root, ref string) (string, error) {
+	real, _, err := gamePath(root, path.Clean(filepath.ToSlash(ref)))
+	return real, err
 }
 
 func isDir(path string) bool {

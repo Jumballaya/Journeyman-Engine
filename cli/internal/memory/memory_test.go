@@ -461,3 +461,19 @@ func TestAnUnlistableFolderChangesNothing(t *testing.T) {
 		}
 	}
 }
+
+// A game named by a relative path is checked where it is, not under itself.
+func TestARelativeGamesLinkedDesignFolderGetsNothing(t *testing.T) {
+	top, outside := t.TempDir(), t.TempDir()
+	os.MkdirAll(filepath.Join(top, "game"), 0o755)
+	if os.Symlink(outside, filepath.Join(top, "game", Dir)) != nil {
+		t.Skip("no symlinks here")
+	}
+	t.Chdir(top)
+	if _, _, err := GameFacts("game").Remember("fact", "jumps are short", ""); err == nil {
+		t.Error("remembered through the link")
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Errorf("wrote outside the game: %v", entries)
+	}
+}

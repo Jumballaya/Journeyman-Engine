@@ -116,8 +116,8 @@ func viewFile(root string, a toolArgs) (file map[string]any, summary string, thu
 // atlasSource is an atlas source's images as the build cuts them: a PNG whole,
 // an Aseprite sheet's JSON as its frames (name_0, name_1...).
 func atlasSource(root, source, name string) ([]atlas.SourceImage, error) {
-	real, ok := gameFile(root, source)
-	if !ok {
+	real, outside := contentFile(root, source)
+	if outside != nil {
 		return nil, fmt.Errorf("not a file of the game")
 	}
 	decode := func(file string) (image.Image, error) {
@@ -144,8 +144,8 @@ func atlasSource(root, source, name string) ([]atlas.SourceImage, error) {
 	if err != nil {
 		return nil, err
 	}
-	png, ok := gameFile(root, path.Join(path.Dir(source), sheet.Image))
-	if !ok {
+	png, outside := contentFile(root, path.Join(path.Dir(source), sheet.Image))
+	if outside != nil {
 		return nil, fmt.Errorf("its image isn't a file of the game")
 	}
 	img, err := decode(png)
