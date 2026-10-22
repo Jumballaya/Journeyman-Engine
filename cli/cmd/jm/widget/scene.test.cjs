@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { jsonText, jsonEdit } = require('./jmlayout.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -36,7 +37,7 @@ async function scenePage({ caps = { experimental: { 'openai/resource': {} }, upd
       sent.push(m);
       if (m.id === undefined) return;
       const answer = m.method === 'ui/initialize' ? { hostCapabilities: caps }
-        : m.method === 'tools/call' ? answers[m.params.name] : answers[m.method];
+        : m.method === 'tools/call' ? answers[m.params.name] || (m.params.name === 'json_edit' && ((r) => jsonEdit(r.params.arguments))) : answers[m.method];
       const result = typeof answer === 'function' ? answer(m) : answer || {};
       setImmediate(() => listeners.message({ source: parent, data: { jsonrpc: '2.0', id: m.id, result } }));
     },
@@ -119,7 +120,7 @@ test('a file changed elsewhere isn\'t overwritten: it\'s read again', async () =
   } });
   pick(find, 'Kage');
   xInput(find).listeners.change({ target: { value: '42' } });
-  await settle();
+  for (let i = 0; i < 4; i++) await settle();  // jm lays out the edit, the write, the read again (its layout checked)
   assert.equal(of('resources/read').length, 2);
   assert.match(app.text, /changed since/);
   assert.equal(plain(of('tools/call').at(-1).params).name, 'scene_view', 'laid out again');
@@ -263,10 +264,9 @@ test('the scene is drawn y up, each shape turned as the engine turns it', async 
   assert.deepEqual([x + m, y + m, w - 2 * m, h - 2 * m].map((v) => Math.round(v * 1e6) / 1e6), [96, -58, 8, 16], 'turned, it stands 8 wide and 16 tall');
 });
 
-test('the pages write JSON as jm fmt does', () => {
-  const kit = vm.runInNewContext(`${fs.readFileSync(path.join(__dirname, 'kit.js'), 'utf8')}; kit`, {});
+test("the tests' stand-in for json_edit lays JSON out as jm fmt does", () => {
   const want = fs.readFileSync(path.join(__dirname, '../../../internal/jsonfmt/testdata/scene.out.json'), 'utf8');
-  assert.equal(kit.jsonText(JSON.parse(want)) + '\n', want);
+  assert.equal(jsonText(JSON.parse(want)) + '\n', want);
 });
 
 test('each sprite is drawn as it looks, lowest z first, its box over it to pick', async () => {

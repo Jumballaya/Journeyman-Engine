@@ -15,7 +15,9 @@ const testSchema = `{"schemaVersion": 1, "components": {
     "fields": [{"key": "bus", "kind": "choice", "default": "sfx", "choices": ["sfx", "music"]},
                {"key": "shadow", "kind": "group", "default": null, "fields": [{"key": "x", "kind": "number", "default": 0}]},
                {"key": "zones", "kind": "list", "default": [], "fields": [{"key": "min", "kind": "vec2", "default": [0, 0]}]}]},
-  "LocalTransformComponent": {"label": "", "category": "", "summary": "", "fields": [], "scriptFields": []}
+  "LocalTransformComponent": {"label": "", "category": "", "summary": "", "fields": [], "scriptFields": []},
+  "TintComponent": {"label": "Tint", "category": "Rendering", "summary": "", "scriptFields": [],
+    "fields": [{"key": "color", "kind": "color", "default": [1, 1, 1, 1]}]}
 }}`
 
 func check(t *testing.T, doc string) []string {
@@ -74,6 +76,20 @@ func TestWrongKindsAreReported(t *testing.T) {
 	} {
 		if !strings.Contains(strings.Join(problems, "\n"), want) {
 			t.Errorf("missing %q in\n%s", want, strings.Join(problems, "\n"))
+		}
+	}
+}
+
+// A color is what the engine reads as one: 3 or 4 numbers, or #rgb(a)/#rrggbb(aa).
+func TestColorsAreTheEnginesColors(t *testing.T) {
+	for _, ok := range []string{`[1, 0, 0]`, `[1, 0, 0, 0.5]`, `"#f00"`, `"#F008"`, `"#ff0000"`, `"#ff000080"`} {
+		if problems := check(t, `{"entities": [{"name": "A", "components": {"TintComponent": {"color": `+ok+`}}}]}`); len(problems) != 0 {
+			t.Errorf("%s: %v", ok, problems)
+		}
+	}
+	for _, bad := range []string{`"#ff000"`, `"#gg0000"`, `"red"`, `[1, 0]`} {
+		if problems := check(t, `{"entities": [{"name": "A", "components": {"TintComponent": {"color": `+bad+`}}}]}`); len(problems) != 1 {
+			t.Errorf("%s: %v", bad, problems)
 		}
 	}
 }

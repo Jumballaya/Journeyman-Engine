@@ -2,6 +2,7 @@
 // too). The page as jm serves it (mcp_widgets.go, mcp_studio.go): bridge and
 // kit, then every widget/studio/*.js in name order.
 const fs = require('node:fs');
+const { jsonEdit } = require('./jmlayout.cjs');
 const path = require('node:path');
 const vm = require('node:vm');
 
@@ -73,7 +74,8 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
       const reply = (r) => setImmediate(() => listeners.message({ source: parent, data: { jsonrpc: '2.0', id: m.id, result: r } }));
       if (m.method === 'ui/initialize') reply({ hostCapabilities: { updateModelContext: { text: {} }, ...caps }, hostContext: { displayMode: 'fullscreen', ...context } });
       else if (m.method === 'tools/call') {
-        const a = answers[m.params.name], answer = typeof a === 'function' ? a(m.params.arguments) : a || (m.params.name === 'games' ? result : { content: [{ type: 'text', text: 'ok' }] });
+        const a = answers[m.params.name] || (m.params.name === 'json_edit' ? jsonEdit : null);  // jm lays out edits as jm does
+        const answer = typeof a === 'function' ? a(m.params.arguments) : a || (m.params.name === 'games' ? result : { content: [{ type: 'text', text: 'ok' }] });
         Promise.resolve(answer).then((r) => {  // a promise: answered when the test resolves it
           if (r && r.rpcError) setImmediate(() => listeners.message({ source: parent, data: { jsonrpc: '2.0', id: m.id, error: { code: -1, message: r.rpcError } } }));  // the call itself fails
           else reply(r);

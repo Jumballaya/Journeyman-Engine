@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -17,7 +18,10 @@ import (
 // task per "- [ ] text ^t3" line (^t3: its id, an Obsidian block id). A task
 // links what it's about: [[Note]], `game/file.json`, jm://play/<id>/m2 (a
 // marker), jm://entity?scene=…&name=… (an entity). Changes patch the file's
-// lines: whatever else the person wrote there stays.
+// lines: whatever else the person wrote there stays. Its lastTask property
+// is the highest id given: a removed task's id is never another's. A task
+// written without one is listed by a draft id (new-…, from its text) that a
+// change finds it by; a change gives each draft a real id.
 
 // Columns are a new board's, in order; a task moved to Done is ticked.
 var Columns = []string{"To do", "Doing", "Done"}
@@ -45,6 +49,8 @@ type board struct {
 	columns []string
 	tasks   []Task
 	at, end []int // each task's line, and the line after its block (it and its notes)
+	last    int   // the highest id given, kept over scans
+	kept    int   // the lastTask the file has (save raises it to last)
 }
 
 // readBoard reads Tasks.md; a new board's page when there's none.
@@ -67,6 +73,11 @@ func readBoard(root string) (*board, error) {
 func (b *board) scan() {
 	b.columns, b.tasks, b.at, b.end = nil, nil, nil, nil
 	column, code, open := "", codeBlocks(b.lines), false // open: the last task's block goes on
+	if front, _, err := frontmatter(b.text()); err == nil {
+		b.kept = lastTaskOf(front)
+	}
+	b.last = max(b.last, b.kept)
+	seen := map[string]bool{}
 	for i, line := range b.lines {
 		indented := line == "" || line[0] == ' ' || line[0] == '\t'
 		if n := len(b.tasks); open && (indented || code[i] > 0 && code[i] == code[i-1]) { // a fence it opened goes on to its end
@@ -84,10 +95,22 @@ func (b *board) scan() {
 			b.columns = append(b.columns, column)
 		} else if m := taskLine.FindStringSubmatch(line); m != nil && column != "" {
 			t := Task{ID: m[3], Text: m[2], Column: column, Links: links(m[2])}
+			if v, ok := idNumber(t.ID); ok && !seen[t.ID] {
+				seen[t.ID], b.last = true, max(b.last, v)
+			} else { // none, or a copied task's: a draft, below
+				t.ID = ""
+			}
 			if m[1] != " " { // ticked by hand (Obsidian): done, whatever column it's in
 				t.Column = "Done"
 			}
 			b.tasks, b.at, b.end, open = append(b.tasks, t), append(b.at, i), append(b.end, i+1), true
+		}
+	}
+	// A draft id is its text's as of the board's highest id: two alike share
+	// one (find refuses it), and a change giving ids retires every draft listed.
+	for i, t := range b.tasks {
+		if t.ID == "" {
+			b.tasks[i].ID = "new-" + fmt.Sprintf("%x", sha256.Sum256([]byte(strconv.Itoa(b.last)+"\x00"+t.Text)))[:16]
 		}
 	}
 	for _, c := range Columns {
@@ -97,30 +120,27 @@ func (b *board) scan() {
 	}
 }
 
-// ided gives every task an id, a copied task's id a new one: true when it changed the lines.
-func (b *board) ided() bool {
-	next, seen, changed := b.nextID(), map[string]bool{}, false
-	for i, t := range b.tasks {
-		if t.ID == "" || seen[t.ID] {
-			b.tasks[i].ID = "t" + strconv.Itoa(next)
-			next++
-			b.lines[b.at[i]] = taskText(b.tasks[i])
-			changed = true
-		}
-		seen[b.tasks[i].ID] = true
-	}
-	return changed
+// idNumber is a real id's number (t3: 3).
+func idNumber(id string) (int, bool) {
+	n, ok := strings.CutPrefix(id, "t")
+	v, err := strconv.Atoi(n)
+	return v, ok && err == nil && v > 0
 }
 
-// nextID is the number after the highest task id.
-func (b *board) nextID() int {
-	next := 1
-	for _, t := range b.tasks {
-		if v, err := strconv.Atoi(strings.TrimPrefix(t.ID, "t")); err == nil && v >= next {
-			next = v + 1
+// ided gives each task listed by a draft id a real one, in its line.
+func (b *board) ided() {
+	for i, t := range b.tasks {
+		if _, real := idNumber(t.ID); !real {
+			b.tasks[i].ID = b.newID()
+			b.lines[b.at[i]] = taskText(b.tasks[i])
 		}
 	}
-	return next
+}
+
+// newID is an id no task has had.
+func (b *board) newID() string {
+	b.last++
+	return "t" + strconv.Itoa(b.last)
 }
 
 func taskText(t Task) string {
@@ -159,12 +179,86 @@ func (b *board) put(column string, lines ...string) error {
 	return nil
 }
 
-func (b *board) find(id string) int {
-	return slices.IndexFunc(b.tasks, func(t Task) bool { return t.ID == id })
+// find is the task id names (-1: none); an error when it names more than one
+// (hand-written tasks alike share a draft id: which one it meant isn't known).
+func (b *board) find(id string) (int, error) {
+	at := -1
+	for i, t := range b.tasks {
+		if t.ID != id {
+			continue
+		}
+		if at >= 0 {
+			return -1, fmt.Errorf("more than one task reads %q: give one an id (^t…) or new text in %s", t.Text, tasksPath)
+		}
+		at = i
+	}
+	return at, nil
 }
 
+func (b *board) text() string { return strings.Join(b.lines, "\n") + "\n" }
+
+// save writes the board, its lastTask raised to the highest id given; not at
+// all when that can't be kept (an id given now could be given again).
 func (b *board) save(root string) error {
-	return write(root, tasksPath, strings.Join(b.lines, "\n")+"\n")
+	text := b.text()
+	if b.last > b.kept {
+		var err error
+		if text, err = withLastTask(text, b.last); err != nil {
+			return err
+		}
+	}
+	return write(root, tasksPath, text)
+}
+
+// withLastTask is text with lastTask: t<last> in its frontmatter (made for it
+// if it has none), indented as the frontmatter is; an error when YAML wouldn't
+// read it back so (its frontmatter unreadable, an anchor others use).
+func withLastTask(text string, last int) (string, error) {
+	refused := fmt.Errorf("%s's frontmatter can't take lastTask: t%d (the highest task id given): make lastTask a plain value, then try again", tasksPath, last)
+	front, _, err := frontmatter(text)
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", refused, err)
+	}
+	mark := "lastTask: t" + strconv.Itoa(last)
+	if len(front) > 0 {
+		mark = front[0].raw[:len(front[0].raw)-len(strings.TrimLeft(front[0].raw, " "))] + mark
+	}
+	out := "---\n" + mark + "\n---\n\n" + text
+	if at := slices.IndexFunc(front, func(p property) bool { return p.key == "lastTask" }); at >= 0 {
+		lines := strings.Split(front[at].raw, "\n")
+		value := len(lines) // its value's lines (a block's too); the comments and blank lines after it stay
+		for value > 1 && (strings.TrimSpace(lines[value-1]) == "" || strings.HasPrefix(strings.TrimSpace(lines[value-1]), "#")) {
+			value--
+		}
+		for _, c := range []string{front[at].keyNode.LineComment, front[at].node.LineComment} { // its line's comment too
+			if c != "" {
+				mark += " " + c
+			}
+		}
+		kept := []string{mark}
+		for _, line := range lines[1:value] { // and those among its value's lines
+			if strings.HasPrefix(strings.TrimSpace(line), "#") {
+				kept = append(kept, line)
+			}
+		}
+		out = strings.Replace(text, "\n"+front[at].raw+"\n", "\n"+strings.Join(append(kept, lines[value:]...), "\n")+"\n", 1)
+	} else if strings.HasPrefix(text, "---\n") && strings.Contains(text[3:], "\n---\n") {
+		out = "---\n" + mark + "\n" + text[4:]
+	}
+	if after, _, err := frontmatter(out); err != nil || lastTaskOf(after) != last {
+		return "", refused
+	}
+	return out, nil
+}
+
+// lastTaskOf is the frontmatter's lastTask (0: none, or not an id).
+func lastTaskOf(front []property) int {
+	for _, p := range front {
+		if v, ok := idNumber(p.text()); ok && p.key == "lastTask" {
+			return v
+		}
+	}
+	return 0
 }
 
 // Tasks is the board: its columns (a new board's, then any the person added)
@@ -174,7 +268,6 @@ func Tasks(root string) ([]string, []Task, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	b.ided() // ids for display; written with the next change
 	if b.tasks == nil {
 		b.tasks = []Task{}
 	}
@@ -230,7 +323,7 @@ func AddTask(root, text, column string, with []string) (t Task, err error) {
 			return false, err
 		}
 		b.ided()
-		t = Task{ID: "t" + strconv.Itoa(b.nextID()), Text: text, Column: column, Links: links(text)}
+		t = Task{ID: b.newID(), Text: text, Column: column, Links: links(text)}
 		return true, b.put(column, taskText(t))
 	})
 }
@@ -242,11 +335,14 @@ func MoveTask(root, id, column string) (t Task, err error) {
 		if err != nil {
 			return false, err
 		}
-		b.ided()
-		i := b.find(id)
+		i, err := b.find(id) // first: a draft id is the board's as listed
+		if err != nil {
+			return false, err
+		}
 		if i < 0 {
 			return false, fmt.Errorf("no task %s (the board lists them)", id)
 		}
+		b.ided()
 		t = b.tasks[i]
 		t.Column = column
 		block := append([]string{taskText(t)}, b.lines[b.at[i]+1:b.end[i]]...)
@@ -259,12 +355,13 @@ func MoveTask(root, id, column string) (t Task, err error) {
 // RemoveTask takes a task (and its notes) off the board; one that isn't there is already off.
 func RemoveTask(root, id string) error {
 	return change(root, func(b *board) (bool, error) {
-		changed := b.ided()
-		if i := b.find(id); i >= 0 {
-			b.lines = slices.Delete(b.lines, b.at[i], b.end[i])
-			changed = true
+		i, err := b.find(id)
+		if i < 0 {
+			return false, err
 		}
-		return changed, nil
+		b.ided() // first: a copy of it (a draft, its ^id the same) isn't left to become it
+		b.lines = slices.Delete(b.lines, b.at[i], b.end[i])
+		return true, nil
 	})
 }
 

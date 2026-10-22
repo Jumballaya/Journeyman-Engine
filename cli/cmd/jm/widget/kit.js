@@ -144,36 +144,33 @@ const kit = (() => {
     return root;
   };
 
-  // jm's JSON layout (internal/jsonfmt), without the last newline: small diffs whoever writes a file.
-  const jsonText = (v, depth = 0) => {
-    const pad = "  ".repeat(depth + 1), end = "  ".repeat(depth);
-    if (Array.isArray(v)) {
-      if (!v.length) return "[]";
-      if (v.every((x) => x === null || typeof x !== "object")) {
-        const line = "[" + v.map((x) => jsonText(x)).join(", ") + "]";
-        if (line.length <= 72) return line;
-      }
-      return "[\n" + v.map((x) => pad + jsonText(x, depth + 1)).join(",\n") + "\n" + end + "]";
+  // edits are what makes prev next, by path: a value changed, a key added or
+  // taken away; a list of another length whole.
+  const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);  // "constructor" is a key like any
+  const edits = (prev, next, path = []) => {
+    const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+    if (isObject(prev) && isObject(next)) {
+      return [...Object.keys(prev).filter((k) => !own(next, k)).map((k) => ({ path: [...path, k], remove: true })),
+        ...Object.keys(next).flatMap((k) => own(prev, k) ? edits(prev[k], next[k], [...path, k]) : [{ path: [...path, k], value: next[k] }])];
     }
-    if (v && typeof v === "object") {
-      const keys = Object.keys(v);
-      if (!keys.length) return "{}";
-      return "{\n" + keys.map((k) => pad + JSON.stringify(k) + ": " + jsonText(v[k], depth + 1)).join(",\n") + "\n" + end + "}";
-    }
-    if (typeof v === "number") {
-      const n = Math.abs(v) < 1e9 ? Math.round(v * 1e6) / 1e6 : v;
-      return Math.abs(n) >= 1e15 ? n.toExponential() : String(n);  // nlohmann's exponent past 1e15
-    }
-    return JSON.stringify(v);
+    if (Array.isArray(prev) && Array.isArray(next) && prev.length === next.length) return next.flatMap((v, i) => edits(prev[i], v, [...path, i]));
+    return JSON.stringify(prev) === JSON.stringify(next) ? [] : [{ path, value: next }];
   };
 
   // The JSON file the host opened, edited on this page: read through the host
-  // for its version, writable only when it reads back as jm fmt writes it.
+  // for its version, writable only when it reads back as jm fmt writes it; a
+  // save is jm's text for the edits (json_edit: the layout is jm's alone).
   // One save at a time; a read or save that ends after another began changes
   // nothing. say(notice) shows what happened; changed() re-renders.
   const jsonFile = (host, { say, changed }) => {
     let reads = 0, wanted = "";
-    const f = { file: null, saving: false };  // file: { uri, doc, etag, writable, why }
+    const f = { file: null, saving: false };  // file: { uri, text, doc, etag, writable, why, unchecked }
+    // laid is text with edits made, as jm fmt writes it.
+    const laid = async (text, made) => {
+      const r = await host.callTool("json_edit", { text, edits: made });
+      if (!r || r.isError || !r.structuredContent) throw new Error(said(r) || "jm didn't lay it out");
+      return r.structuredContent.text;
+    };
     // read: false when another read began meanwhile (this one then changes nothing).
     f.read = async (uri) => {
       const n = ++reads;
@@ -181,9 +178,12 @@ const kit = (() => {
       let file = null, notice = "";
       try {
         const r = await host.readResource(uri);
-        const doc = JSON.parse(r.text);
-        file = { uri, doc, etag: r.etag, writable: r.writable && !!r.etag && jsonText(doc) + "\n" === r.text,
-                 why: !r.writable || !r.etag ? "the host won't save it" : "it isn't as jm fmt writes it (jm fmt it)" };
+        file = { uri, text: r.text, doc: JSON.parse(r.text), etag: r.etag, writable: false, why: "the host won't save it" };
+        if (r.writable && r.etag) {
+          file.why = "it isn't as jm fmt writes it (jm fmt it)";
+          try { file.writable = (await laid(r.text, [])) === r.text; }
+          catch { file.writable = file.unchecked = true; }  // jm couldn't say now: the save asks again
+        }
       } catch (e) { notice = "Couldn't read the file: " + (e && e.message || e); }
       if (n !== reads) return false;
       if (file) f.file = file; else say(notice);
@@ -204,8 +204,11 @@ const kit = (() => {
       f.saving = true; say("Saving…"); changed();
       let outcome = "failed", notice = "Couldn't save.";
       try {
-        const r = await host.writeResource(s.uri, jsonText(doc) + "\n", s.etag);
-        if (r && r.outcome === "saved") { Object.assign(s, { doc, etag: r.etag }); outcome = "saved"; notice = "Saved."; }
+        if (s.unchecked && (await laid(s.text, [])) !== s.text) { s.writable = false; throw new Error(s.why); }
+        s.unchecked = false;
+        const text = await laid(s.text, edits(s.doc, doc));
+        const r = await host.writeResource(s.uri, text, s.etag);
+        if (r && r.outcome === "saved") { Object.assign(s, { text, doc, etag: r.etag }); outcome = "saved"; notice = "Saved."; }
         else if (r && r.outcome === "conflict") { outcome = "conflict"; notice = "The file changed since: read it again, make the change again."; }
         else if (r && r.outcome === "too-large") notice = `Too large to save (at most ${r.maxBytes} bytes).`;
       } catch (e) { notice = "Couldn't save: " + (e && e.message || e); }
@@ -249,5 +252,5 @@ const kit = (() => {
   const empty = (text, ...kids) => el("div", { class: "empty" }, el("div", {}, text), kids);
   const section = (title, ...kids) => el("section", { class: "section" }, el("h2", {}, title), kids);
 
-  return { el, theme, ago, tree, grid, split, empty, section, focusKey, jsonText, jsonFile, said, answer, latest, icon, nothumb, plural };
+  return { el, theme, ago, tree, grid, split, empty, section, focusKey, edits, jsonFile, said, answer, latest, icon, nothumb, plural };
 })();

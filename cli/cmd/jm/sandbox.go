@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/copies"
 	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 	"github.com/Jumballaya/Journeyman-Engine/internal/vcs"
 
@@ -123,34 +124,10 @@ type sandboxMeta struct {
 	Expires int64 `json:"expires"`
 }
 
-// sandboxStore is the game's .jm/sandboxes, each step its own folder (a link
-// is refused, never followed); "" when there's none and create is false.
-func sandboxStore(root string, create bool) (string, error) {
-	dir := root
-	for _, step := range []string{".jm", "sandboxes"} {
-		dir = filepath.Join(dir, step)
-		info, err := os.Lstat(dir)
-		if errors.Is(err, fs.ErrNotExist) && create {
-			if err = os.Mkdir(dir, 0o755); err == nil {
-				info, err = os.Lstat(dir)
-			}
-		}
-		switch {
-		case errors.Is(err, fs.ErrNotExist):
-			return "", nil
-		case err != nil:
-			return "", err
-		case !info.IsDir():
-			return "", fmt.Errorf("%s isn't a folder of the game's own (a link?): sandboxes are kept only there", dir)
-		}
-	}
-	return dir, nil
-}
-
 // sandboxesOf is the game's sandboxes, by name, the expired ones removed first.
 func sandboxesOf(root string) ([]sandbox, error) {
 	out := []sandbox{}
-	store, err := sandboxStore(root, false)
+	store, err := copies.OpenStore(root, copies.Sandbox, false)
 	if err != nil || store == "" {
 		return out, err
 	}
@@ -167,7 +144,7 @@ func sandboxesOf(root string) ([]sandbox, error) {
 			_ = dropSandbox(root, name)
 			continue
 		}
-		out = append(out, sandbox{Name: name, Dir: dir, Made: m.Made, Expires: m.Expires, Changes: differences(root, dir), thumb: thumbOf(root, "sandbox", name, dir)})
+		out = append(out, sandbox{Name: name, Dir: dir, Made: m.Made, Expires: m.Expires, Changes: differences(root, dir), thumb: thumbOf(root, copies.Sandbox, name, dir)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
@@ -193,7 +170,7 @@ func newSandbox(root, name string, ttl time.Duration) (sandbox, error) {
 	if err != nil {
 		return sandbox{}, err
 	}
-	store, err := sandboxStore(root, true)
+	store, err := copies.OpenStore(root, copies.Sandbox, true)
 	if err != nil {
 		return sandbox{}, err
 	}
@@ -396,12 +373,12 @@ func dropSandbox(root, name string) error {
 	if !variantName.MatchString(name) {
 		return fmt.Errorf("no sandbox %q", name)
 	}
-	store, err := sandboxStore(root, false)
+	store, err := copies.OpenStore(root, copies.Sandbox, false)
 	if err != nil || store == "" {
 		return err
 	}
 	_ = os.Remove(filepath.Join(store, name+".json"))
-	_ = os.Remove(compareImage(root, "sandbox", name))
+	_ = os.Remove(compareImage(root, string(copies.Sandbox), name))
 	return os.RemoveAll(filepath.Join(store, name))
 }
 

@@ -28,16 +28,7 @@ import (
 const inlineWidth = 72
 
 // Format rewrites a JSON document in the shared layout.
-func Format(data []byte) ([]byte, error) {
-	value, err := parse(data)
-	if err != nil {
-		return nil, err
-	}
-	var out strings.Builder
-	write(&out, value, 0)
-	out.WriteByte('\n')
-	return []byte(out.String()), nil
-}
+func Format(data []byte) ([]byte, error) { return Edited(data, nil) }
 
 // FormatKeeping is Format for an edited document (decoded and re-encoded,
 // which loses key order): each object keeps its keys in the order they had

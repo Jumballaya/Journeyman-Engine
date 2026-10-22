@@ -3,6 +3,7 @@ add_executable(test_engine_renderer2d
     AtlasManagerTest.cpp
     AtlasManagerDynamicTest.cpp
     SpriteShadowTest.cpp
+    ComponentColorsTest.cpp
     SpriteAnimationSystemTest.cpp
     LetterboxTest.cpp
     NullRendererTest.cpp
