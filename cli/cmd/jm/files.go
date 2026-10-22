@@ -22,7 +22,6 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/schema"
 	"github.com/Jumballaya/Journeyman-Engine/internal/vcs"
-
 	"github.com/spf13/cobra"
 )
 
@@ -510,4 +509,62 @@ func startAndForget(cmd *exec.Cmd) error {
 	}
 	go func() { _ = cmd.Wait() }()
 	return nil
+}
+
+// realPath is path absolute, with every symlink on the way resolved.
+func realPath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(abs)
+}
+
+// hiddenFromAgents says whether a folder of the project (a path from its
+// folder) is one resources leave out: dot-folders (.git, .jm), build output,
+// node_modules, dist.
+func hiddenFromAgents(dir string) bool {
+	for _, part := range strings.Split(filepath.ToSlash(dir), "/") {
+		lower := strings.ToLower(part) // macOS's and Windows' disks don't tell BUILD from build
+		if part != "." && (strings.HasPrefix(part, ".") || lower == "build" || lower == "node_modules" || lower == "dist") {
+			return true
+		}
+	}
+	return false
+}
+
+// eachGameFile calls visit with each file of the game agents see: its slash
+// path from root and its real file (a link counts while it stays in the game).
+func eachGameFile(root string, visit func(rel, real string)) {
+	if root == "" { // no game open
+		return
+	}
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, path)
+		if d.IsDir() {
+			if rel != "." && hiddenFromAgents(rel) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if real, _, err := gamePath(root, rel); err == nil && !isDir(real) { // a link keeps its own name
+			visit(filepath.ToSlash(rel), real)
+		}
+		return nil
+	})
+}
+
+// gameFiles are the paths of the game's files agents see that keep says to, sorted.
+func gameFiles(root string, keep func(rel string) bool) []string {
+	var files []string
+	eachGameFile(root, func(rel, _ string) {
+		if keep(rel) {
+			files = append(files, rel)
+		}
+	})
+	sort.Strings(files)
+	return files
 }

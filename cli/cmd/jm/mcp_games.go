@@ -130,56 +130,6 @@ func gamesHome() string {
 	return abs
 }
 
-// openGame makes dir the server's game, stopping the game the driver ran.
-// openRecentIfNone: a server started outside a game (ChatGPT starts one per
-// chat) works on the client's root that's a game, else the game opened last
-// (the shared list), as if opened here.
-func (s *mcpServer) openRecentIfNone() {
-	if s.opened() != "" {
-		return
-	}
-	if game := s.rootGame(); game != "" {
-		s.openRootIfDefault(game)
-		return
-	}
-	for _, p := range projects.List("") {
-		if p.Opened > 0 && !p.Missing && s.setOpen(p.Path) == nil { // not Remember: the list stays as the person left it
-			s.byRecent = true
-			return
-		}
-	}
-}
-
-func (s *mcpServer) openGame(dir string) string {
-	if err := s.setOpen(dir); err != nil {
-		return err.Error()
-	}
-	s.byRecent = false
-	_ = projects.Remember(dir) // the person's list of games: a convenience, so best effort
-	return "Opened " + dir + ". Read its AGENTS.md first." + keepInMind(dir) + planned(dir)
-}
-
-// setOpen makes dir the game calls work on when they name none (the driven
-// game is its own: it keeps running). It's kept as the folder's real path: a
-// link retargeted later doesn't move it. The working folder never moves.
-func (s *mcpServer) setOpen(dir string) error {
-	real := evalOrSelf(dir)
-	if !isDir(real) {
-		return fmt.Errorf("no folder %s", dir)
-	}
-	s.open.Store(real)
-	return nil
-}
-
-// opened is the open game: "" when none is, or its folder isn't a game any more.
-func (s *mcpServer) opened() string {
-	open, _ := s.open.Load().(string)
-	if open == "" || !exists(filepath.Join(open, archive.ManifestEntryKey)) {
-		return ""
-	}
-	return open
-}
-
 // newGame makes the game c names in home: an empty one (jm init) or a copy of
 // an example, renamed, with c's settings.
 func newGame(ctx context.Context, home string, c newGameChoice) (string, error) {
@@ -222,22 +172,6 @@ func makeGame(ctx context.Context, dir, name string, c newGameChoice) error {
 		f.setPath(path, v)
 	}
 	return f.save()
-}
-
-// findGame is the folder game names: an absolute path, else one folder in the
-// games folder (never a path from the open game, nor one nested or beside it).
-func findGame(home, game string) (string, error) {
-	dir := game
-	if !filepath.IsAbs(game) {
-		dir = filepath.Join(home, game)
-		if filepath.Base(game) != game || filepath.Dir(dir) != home {
-			return "", fmt.Errorf("no game %q: give a name from games, or an absolute path", game)
-		}
-	}
-	if game == "" || !exists(filepath.Join(dir, archive.ManifestEntryKey)) {
-		return "", fmt.Errorf("no game %q (games lists them)", game)
-	}
-	return filepath.Clean(dir), nil
 }
 
 // listGames is the game open now and the person's games; their pictures go
