@@ -276,7 +276,7 @@ func flipped(img image.Image, d, h, v bool) image.Image {
 }
 
 func readGameJSON(root, file string, v any) bool {
-	real, _, outside := gamePath(root, file)
+	real, outside := contentFile(root, file)
 	if outside != nil {
 		return false
 	}
@@ -285,7 +285,7 @@ func readGameJSON(root, file string, v any) bool {
 }
 
 func readGameImage(root, file string) image.Image {
-	real, _, outside := gamePath(root, file)
+	real, outside := contentFile(root, file)
 	if outside != nil {
 		return nil
 	}

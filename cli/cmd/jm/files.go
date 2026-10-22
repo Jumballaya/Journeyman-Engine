@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -174,6 +175,13 @@ func gamePath(root, path string) (string, string, error) {
 		return "", "", fmt.Errorf("%s isn't one of the game's files", path)
 	}
 	return real, rel, nil
+}
+
+// contentFile is gamePath for a path the game's own files name (an atlas's
+// source, a sprite's image): read as the build reads it, its ".." cleaned away.
+func contentFile(root, ref string) (string, error) {
+	real, _, err := gamePath(root, path.Clean(filepath.ToSlash(ref)))
+	return real, err
 }
 
 func isDir(path string) bool {

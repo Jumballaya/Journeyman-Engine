@@ -467,3 +467,21 @@ func TestDeletingTheSettingsFromAGameKeepsOneLock(t *testing.T) {
 		t.Fatalf("after the lock went: %v", err)
 	}
 }
+
+// A path the game's files name reads as the build reads it (cleaned); one an
+// agent gives is taken as written, so its ".." is refused.
+func TestContentPathsReadAsTheBuildReadsThem(t *testing.T) {
+	game := filesGame(t, t.TempDir())
+	os.MkdirAll(filepath.Join(game, "assets", "raw"), 0o755)
+	os.WriteFile(filepath.Join(game, "assets", "hero.png"), nil, 0o644)
+	want, _ := filepath.EvalSymlinks(filepath.Join(game, "assets", "hero.png"))
+	if real, err := contentFile(game, "assets/raw/../hero.png"); err != nil || real != want {
+		t.Errorf("content's assets/raw/../hero.png = %q, %v", real, err)
+	}
+	if _, err := contentFile(game, "assets/../../outside.png"); err == nil {
+		t.Error("content led out of the game")
+	}
+	if _, _, err := gamePath(game, "assets/raw/../hero.png"); err == nil {
+		t.Error(`an agent's ".." was taken`)
+	}
+}

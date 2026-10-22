@@ -112,7 +112,7 @@ func atlasRegion(root string, config atlas.AtlasConfig, region string) image.Ima
 		}
 		// Only the frame asked for, its sheet's image and its size bounded before they're made.
 		i, err := strconv.Atoi(strings.TrimPrefix(region, name+"_"))
-		real, _, outside := gamePath(root, source)
+		real, outside := contentFile(root, source)
 		if err != nil || outside != nil || region != name+"_"+strconv.Itoa(i) { // hero_00 is another source's, not hero_0
 			continue
 		}

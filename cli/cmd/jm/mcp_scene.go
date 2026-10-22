@@ -363,7 +363,7 @@ type prefabFile struct {
 // the game's own file.
 func readPrefab(root, prefab string) prefabFile {
 	var p prefabFile
-	if real, _, err := gamePath(root, prefab); err == nil {
+	if real, err := contentFile(root, prefab); err == nil {
 		if data, err := os.ReadFile(real); err == nil {
 			_ = json.Unmarshal(data, &p)
 		}
