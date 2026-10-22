@@ -298,7 +298,9 @@ func TestTextFilesAreListedAsTheirType(t *testing.T) {
 	reply, _ := newMCPServer().respond(data)
 	data, _ = json.Marshal(reply)
 	var out struct {
-		Result struct{ Resources []struct{ Name, MimeType string } }
+		Result struct {
+			Resources []struct{ Name, MimeType string }
+		}
 	}
 	json.Unmarshal(data, &out)
 	got := map[string]string{}
