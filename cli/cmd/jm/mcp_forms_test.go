@@ -211,7 +211,7 @@ func TestPickOffersFilesWithPreviews(t *testing.T) {
 	if got := pick.run(toolArgs{"kind": "scene"}); !strings.Contains(got.Text, "a.scene.json\nb.scene.json") {
 		t.Errorf("no forms: the choices to ask about: %s", got.Text)
 	}
-	abs, _ := filepath.Abs("b.scene.json")
+	abs := filepath.Join(evalOrSelf(here(t)), "b.scene.json") // as offered
 	asked := formHost(t, s, openaiForms, accept(map[string]any{"picked": []any{fileURI(abs)}}))
 	got := pick.run(toolArgs{"kind": "scene", "many": true})
 	if picked := got.Structured.(map[string]any)["picked"]; jsonOf(picked) != `["b.scene.json"]` {
@@ -277,7 +277,7 @@ func TestAFormIsAnsweredWhileItsToolWaits(t *testing.T) {
 	if preview := next(); preview["id"] != 3.0 {
 		t.Fatalf("a preview waits for the picker: %v", preview)
 	}
-	abs, _ := filepath.Abs("a.scene.json")
+	abs := filepath.Join(evalOrSelf(here(t)), "a.scene.json") // as offered
 	reply, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": form["id"], "result": accept(map[string]any{"picked": fileURI(abs)})})
 	inW.Write(append(reply, '\n'))
 	if result := next(); !strings.Contains(jsonOf(result["result"]), "The person picked: a.scene.json") {

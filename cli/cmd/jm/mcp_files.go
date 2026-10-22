@@ -124,13 +124,27 @@ var gameOfTool = strArg("a name or path from `games` (default: the open game)")
 // gameRoot is the game a call works on: the one holding the file a host opened
 // it from, else the one its "game" names (a name or absolute path), else the open game.
 func (s *mcpServer) gameRoot(a toolArgs) (string, error) {
-	if file := a.resource(); file != "" {
-		return evalOrSelf(gameRootOf(file)), nil
-	}
-	if v, named := a["game"]; named && v != "" {
+	named := ""
+	if v, given := a["game"]; given && v != "" {
 		game, _ := v.(string) // mistyped: findGame says there's no such game
 		root, err := findGame(s.home, game)
-		return evalOrSelf(root), err
+		if err != nil {
+			return "", err
+		}
+		named = evalOrSelf(root)
+	}
+	if file := a.resource(); file != "" {
+		root := gameHolding(file)
+		switch {
+		case root == "":
+			return "", fmt.Errorf("%s isn't in a game: open_game its game first", filepath.Base(file))
+		case named != "" && named != root:
+			return "", fmt.Errorf("%s is %s's, not %s's", filepath.Base(file), gameName(root), gameName(named))
+		}
+		return root, nil
+	}
+	if named != "" {
+		return named, nil
 	}
 	if root := s.opened(); root != "" {
 		return root, nil

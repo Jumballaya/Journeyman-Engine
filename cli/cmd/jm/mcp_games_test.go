@@ -396,3 +396,50 @@ func TestSettingsAreTheCallsGameOrNone(t *testing.T) {
 		t.Errorf("A after its change: %v", got)
 	}
 }
+
+// An opened file names the game holding it, links resolved; one in no game names
+// none (a call can't make a folder a game), and a call naming another game is refused.
+func TestAnOpenedFileIsInItsGameOrNone(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"A", "B"} {
+		filesGame(t, filepath.Join(home, g))
+		os.WriteFile(filepath.Join(home, g, "level.scene.json"), []byte(`{"entities": [{"name": "From`+g+`"}]}`), 0o644)
+	}
+	loose := t.TempDir()
+	os.WriteFile(filepath.Join(loose, "loose.bindings.json"), []byte(`{}`), 0o644)
+	link := filepath.Join(loose, "level.scene.json")
+	if os.Symlink(filepath.Join(home, "A", "level.scene.json"), link) != nil {
+		t.Skip("no symlinks here")
+	}
+	s := newMCPServer()
+	s.openGame(filepath.Join(home, "B"))
+	if got := toolOf(t, s, "scene_view").run(toolArgs{resourceKey: resourcePath(link)}); got.Failed || !strings.Contains(got.Text, "FromA") {
+		t.Errorf("a link to A's scene: %s", got.Text)
+	}
+	looseFile := toolArgs{resourceKey: resourcePath(filepath.Join(loose, "loose.bindings.json")), "set": map[string]any{"name": "X"}}
+	if got := toolOf(t, s, "settings_update").run(looseFile); !got.Failed || exists(filepath.Join(loose, ".jm.json")) {
+		t.Errorf("a file in no game made its folder one: %s", got.Text)
+	}
+	named := toolArgs{resourceKey: resourcePath(filepath.Join(home, "A", "level.scene.json")), "game": "B"}
+	if got := toolOf(t, s, "scene_view").run(named); !got.Failed {
+		t.Errorf("A's file, called as B's: %s", got.Text)
+	}
+}
+
+// A picked link is the option offered, under its own name.
+func TestAPickedLinkIsTheOptionOffered(t *testing.T) {
+	scratchSettings(t)
+	inProject(t, map[string]string{".jm.json": `{}`, "source.json": `{}`})
+	if os.Symlink("source.json", "level.scene.json") != nil {
+		t.Skip("no symlinks here")
+	}
+	s := newMCPServer()
+	abs := filepath.Join(evalOrSelf(here(t)), "level.scene.json") // as offered
+	formHost(t, s, openaiForms, accept(map[string]any{"picked": fileURI(abs)}))
+	got := toolOf(t, s, "pick").run(toolArgs{"kind": "scene"})
+	if picked := got.Structured.(map[string]any)["picked"]; jsonOf(picked) != `["level.scene.json"]` {
+		t.Errorf("picked: %v (%s)", picked, got.Text)
+	}
+}

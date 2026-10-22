@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -247,6 +246,10 @@ func pickTool(s *mcpServer) mcpTool {
 				return textResult("The game has no "+a.str("kind")+" files.", false)
 			}
 			files = files[:min(len(files), 200)]
+			byURI := map[string]string{} // an answer is one of the options offered
+			for _, f := range files {
+				byURI[fileURI(filepath.Join(game, f))] = f
+			}
 			message := cmp.Or(a.str("message"), "Pick the "+a.str("kind")+" you mean.")
 			answer, outcome := s.ask(message, map[string]any{"picked": pickField(game, files, a.flag("many"))}, "picked")
 			switch outcome {
@@ -257,26 +260,13 @@ func pickTool(s *mcpServer) mcpTool {
 			}
 			var picked []string
 			for _, uri := range answers(answer["picked"]) {
-				if f := pickedFile(game, uri); slices.Contains(files, f) {
+				if f, ok := byURI[uri]; ok {
 					picked = append(picked, f)
 				}
 			}
 			return toolResult{Text: "The person picked: " + cmp.Or(strings.Join(picked, ", "), "nothing") + " (in " + game + ")",
 				Structured: map[string]any{"picked": picked, "game": game}}
 		}}
-}
-
-// pickedFile is the game's file a picked file:// uri names, however spelled; "" for none.
-func pickedFile(game, uri string) string {
-	path, err := url.PathUnescape(strings.TrimPrefix(uri, "file://"))
-	if err != nil || !strings.HasPrefix(uri, "file://") {
-		return ""
-	}
-	_, rel, err := gamePath(game, path)
-	if err != nil {
-		return ""
-	}
-	return rel
 }
 
 // pickField is a picker of the game's files: each a resource with its picture
