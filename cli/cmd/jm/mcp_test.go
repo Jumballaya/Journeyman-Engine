@@ -100,7 +100,7 @@ func TestMCPResourcesAreTheProjectsFiles(t *testing.T) {
 	os.Symlink(filepath.Join(dir, "build", "scenes", "main.scene.json"), filepath.Join(dir, "built.json")) // into build/
 	t.Chdir(dir)
 	names := []string{}
-	for _, r := range projectResources() {
+	for _, r := range projectResources(here(t)) {
 		if name := r["name"].(string); !strings.HasPrefix(name, "docs/") {
 			names = append(names, name)
 		}
@@ -109,13 +109,13 @@ func TestMCPResourcesAreTheProjectsFiles(t *testing.T) {
 		t.Fatalf("resources: %v", names)
 	}
 	abs, _ := filepath.Abs("assets/scripts/hero.ts")
-	if text, mime, err := readResource("file://" + filepath.ToSlash(abs)); err != nil || text != "// hero" || mime != "text/x-typescript" {
+	if text, mime, err := readResource(here(t), "file://"+filepath.ToSlash(abs)); err != nil || text != "// hero" || mime != "text/x-typescript" {
 		t.Fatalf("read: %q %q %v", text, mime, err)
 	}
-	if text, mime, err := readResource("jm://docs/agents"); err != nil || !strings.Contains(text, "jm build --json") || mime != "text/markdown" {
+	if text, mime, err := readResource(here(t), "jm://docs/agents"); err != nil || !strings.Contains(text, "jm build --json") || mime != "text/markdown" {
 		t.Fatalf("docs: %q %v", mime, err)
 	}
-	if _, _, err := readResource("file:///etc/hosts"); err == nil {
+	if _, _, err := readResource(here(t), "file:///etc/hosts"); err == nil {
 		t.Fatal("files outside the project can't be read")
 	}
 }

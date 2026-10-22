@@ -23,11 +23,11 @@ func TestMCPResourcesStayInTheProject(t *testing.T) {
 	os.WriteFile(".git/config.txt", []byte("token=abc"), 0o644)
 	here, _ := filepath.Abs(".")
 	for _, uri := range []string{"link.txt", ".git/config.txt", "../" + filepath.Base(outside) + "/secret.txt"} {
-		if text, _, err := readResource("file://" + filepath.Join(here, uri)); err == nil {
+		if text, _, err := readResource(here, "file://"+filepath.Join(here, uri)); err == nil {
 			t.Errorf("%s was read: %q", uri, text)
 		}
 	}
-	if _, _, err := readResource("file://" + filepath.Join(here, ".jm.json")); err != nil {
+	if _, _, err := readResource(here, "file://"+filepath.Join(here, ".jm.json")); err != nil {
 		t.Errorf("the manifest isn't readable: %v", err)
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -8,7 +9,6 @@ import (
 	"maps"
 	"os"
 	"path"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -26,13 +26,12 @@ func (s *mcpServer) fileViewTools() []mcpTool {
 		Annotations: readOnly(),
 		InputSchema: object(map[string]any{
 			"path": strArg("a file of the game: a .prefab.json, .atlas.json or .bindings.json"),
-			"game": strArg("a name or path from `games` (default: the open game)"),
 			"file": map[string]any{"type": "object", "description": "the file a host opened (its file entrypoint)", "properties": map[string]any{
 				"name": map[string]any{"type": "string"}, "resourceUri": map[string]any{"type": "string"}}},
 		}),
 		Meta: studio.toolMeta("Opening the file…", "The file", fileEntrypoint(".prefab.json", ".atlas.json", ".bindings.json")),
-		run: func(a toolArgs) toolResult {
-			file, summary, thumbs, err := viewFile(home, a)
+		onGame: func(root string, a toolArgs) toolResult {
+			file, summary, thumbs, err := viewFile(root, a)
 			if err != nil {
 				return textResult(err.Error(), true)
 			}
@@ -44,38 +43,19 @@ func (s *mcpServer) fileViewTools() []mcpTool {
 		}}}
 }
 
-// viewFile reads the file a call means (the one a host opened, else path) as
-// its kind shows it, with pictures of an atlas's images by path.
-func viewFile(home string, a toolArgs) (file map[string]any, summary string, thumbs map[string]string, err error) {
-	abs := a.resource()
-	if abs == "" {
-		if game := a.str("game"); game != "" { // that game's, open or not
-			dir, err := findGame(home, game)
-			if err != nil {
-				return nil, "", nil, err
-			}
-			real, inside := gameFile(dir, a.str("path"))
-			if _, statErr := os.Stat(real); !inside || statErr != nil {
-				return nil, "", nil, fmt.Errorf("%s: no such file in %s", a.str("path"), gameName(dir))
-			}
-			abs = real
-		} else {
-			rel, err := projectFile(a.str("path"))
-			if err != nil {
-				return nil, "", nil, err
-			}
-			abs, _ = filepath.Abs(rel)
-		}
-	}
-	root := gameRootOf(abs)
-	rel, _ := filepath.Rel(root, abs)
-	rel = filepath.ToSlash(rel)
-	data, err := os.ReadFile(abs)
+// viewFile reads the file of the game at root a call means (the one a host
+// opened, else path) as its kind shows it, with pictures of an atlas's images by path.
+func viewFile(root string, a toolArgs) (file map[string]any, summary string, thumbs map[string]string, err error) {
+	abs, rel, err := gamePath(root, cmp.Or(a.resource(), a.str("path")))
 	if err != nil {
 		return nil, "", nil, err
 	}
-	// root: the game's folder itself, which a page tells games apart by (names can be alike).
-	file = map[string]any{"path": rel, "game": gameName(root), "root": evalOrSelf(root)}
+	data, err := os.ReadFile(abs)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("%s: no such file in %s", rel, gameName(root))
+	}
+	// game: its folder, which a page tells games apart by (names can be alike).
+	file = map[string]any{"path": rel, "game": root, "gameName": gameName(root)}
 	thumbs = map[string]string{}
 	name := path.Base(rel)
 	switch {

@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const { studio, settle } = require('./studio-host.cjs');
 
 const listing = { structuredContent: { open: '/g/pip', games: [{ name: 'Pip', path: '/g/pip', opened: 1, scenes: ['scenes/main.scene.json'] }] } };
-const files = { structuredContent: { root: '/g/pip', game: 'Pip', files: [
+const files = { structuredContent: { game: '/g/pip', gameName: 'Pip', files: [
   { path: '.jm.json', size: 300 }, { path: 'assets/scripts/player.ts', size: 2048, status: 'M' },
   { path: 'assets/textures/pip.png', size: 900 }, { path: 'scenes/main.scene.json', size: 120 }, { path: 'scenes/old.scene.json', size: 0, status: 'D' }] } };
 const read = { 'scenes/main.scene.json': { structuredContent: { path: 'scenes/main.scene.json', text: '{\n  "entities": []\n}\n', size: 20, etag: 'e1',
@@ -100,7 +100,7 @@ test('a deep link opens a file at a line', async () => {
 test('another game starts the tab over; a file and a folder of one name both show', async () => {
   let open = '/g/pip';
   const games = () => ({ structuredContent: { open, games: [{ name: 'Pip', path: '/g/pip', opened: 1, scenes: [] }, { name: 'Bo', path: '/g/bo', opened: 1, scenes: [] }] } });
-  const both = { structuredContent: { root: '/g/bo', files: [{ path: 'foo', size: 0, status: 'D' }, { path: 'foo/bar.txt', size: 3, status: '?' }] } };
+  const both = { structuredContent: { game: '/g/bo', files: [{ path: 'foo', size: 0, status: 'D' }, { path: 'foo/bar.txt', size: 3, status: '?' }] } };
   const s = await studio(games(), { answers: { games, files: () => (open === '/g/pip' ? files : both), file_read: ({ path }) => read[path] } });
   s.tab('Files').fire('click');
   await settle(6);
@@ -120,7 +120,7 @@ test('another game starts the tab over; a file and a folder of one name both sho
 test('a delete finished after another game opened leaves that game\'s tab alone', async () => {
   let open = '/g/pip', deleted;
   const games = () => ({ structuredContent: { open, games: [{ name: 'Pip', path: '/g/pip', opened: 1, scenes: [] }, { name: 'Bo', path: '/g/bo', opened: 1, scenes: [] }] } });
-  const bo = { structuredContent: { root: '/g/bo', files: [{ path: 'bo.txt', size: 3 }] } };
+  const bo = { structuredContent: { game: '/g/bo', files: [{ path: 'bo.txt', size: 3 }] } };
   const s = await studio(games(), { answers: { games, files: (a) => (a.game === '/g/bo' ? bo : files), file_read: ({ path }) => read[path],
     file_delete: () => new Promise((resolve) => { deleted = () => resolve({ content: [{ type: 'text', text: 'deleted' }] }); }) } });
   s.tab('Files').fire('click');

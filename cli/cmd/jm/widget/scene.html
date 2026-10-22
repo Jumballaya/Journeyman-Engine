@@ -246,7 +246,7 @@
     render();
     try {
       // A file the host opened is drawn in its own game, whichever is open.
-      const r = await host.callTool("scene_render", host.input && host.input.file ? { file: host.input.file } : { scene: s.scene, game: s.root });
+      const r = await host.callTool("scene_render", host.input && host.input.file ? { file: host.input.file } : { scene: s.scene, game: s.game });
       const src = r && !r.isError && r._meta && r._meta["jm/image"];
       drawn.src = src || null;
       drawn.error = src ? "" : ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ") || "The engine drew nothing.";
@@ -308,7 +308,7 @@
   const select = (where) => { state.selected = where; render(); };
 
   // The entity, said for the model: the picked one is an item in the person's chat.
-  const said = (s, e) => `${e.name || e.where} (${e.where}) in ${s.scene}${s.game ? ` of ${s.game}` : ""}, at ${e.x}, ${e.y}: ` +
+  const said = (s, e) => `${e.name || e.where} (${e.where}) in ${s.scene}${s.gameName ? ` of ${s.gameName}` : ""}, at ${e.x}, ${e.y}: ` +
     JSON.stringify(e.components);
   const ask = (s, e, target) => host.message([host.text(said(s, e), { title: e.name || e.where })],
     { send: false, target, instead: `Let's look at ${e.name || e.where} in ${s.scene}.` }).catch(() => {});
@@ -320,7 +320,7 @@
     const key = `${s.scene}:${e ? e.where : ""}`;
     if (key === state.shared) return;
     state.shared = key;
-    const of = s.game ? ` of ${s.game}` : "";
+    const of = s.gameName ? ` of ${s.gameName}` : "";
     host.updateContext(e ? {
       content: [host.text(said(s, e), { title: e.name || e.where }),
         host.text(`The person is looking at ${e.name || e.where} (${e.where}) in ${s.scene}${of}.`, { hidden: true })],
@@ -349,7 +349,7 @@
     if (!d.scene) { app.append($("div", { class: "none" }, d.said || "This answer isn't a scene.")); return; }
     const s = d.scene;
     const shown = !!state.drawn && state.drawn.of === s;
-    app.append($("header", {}, $("h1", {}, s.name || s.scene), $("span", { class: "meta" }, `${s.scene}${s.game ? " · " + s.game : ""} · ${s.entities.length} ${s.entities.length === 1 ? "entity" : "entities"}`),
+    app.append($("header", {}, $("h1", {}, s.name || s.scene), $("span", { class: "meta" }, `${s.scene}${s.gameName ? " · " + s.gameName : ""} · ${s.entities.length} ${s.entities.length === 1 ? "entity" : "entities"}`),
         host.can("callTool") ? $("span", { class: "asks" }, $("button", { "aria-pressed": String(shown), disabled: shown && state.drawn.src === "",
           onclick: () => shown ? (state.drawn = null, render()) : draw(s) }, "Rendered")) : null),
       $("div", { class: "status" }, state.notice || status(uri)),

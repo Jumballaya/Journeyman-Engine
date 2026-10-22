@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -38,8 +39,8 @@ func (s *mcpServer) mentionTools() []mcpTool {
 		Description: "What the person can @-mention: scenes, prefabs, scripts, design notes, entities, recorded plays and their markers, matching query (empty: the latest first).",
 		Annotations: readOnly(), InputSchema: object(map[string]any{"query": strArg("what was typed after @ (may be empty)")}, "query"),
 		Meta: map[string]any{"ui": map[string]any{"visibility": []string{"app"}}},
-		run: func(a toolArgs) toolResult {
-			found := searchMentions(mentionables(), a.str("query"), mentionLimit)
+		onGame: func(root string, a toolArgs) toolResult {
+			found := searchMentions(mentionables(root), a.str("query"), mentionLimit)
 			items := []map[string]any{}
 			var lines []string
 			for _, m := range found {
@@ -50,13 +51,9 @@ func (s *mcpServer) mentionTools() []mcpTool {
 		}}}
 }
 
-// mentionables are the open game's parts in the order an empty query shows
-// them: the latest play and its markers, scenes, prefabs, scripts, entities, older plays.
-func mentionables() []mention {
-	root, err := projectRoot()
-	if err != nil {
-		return nil
-	}
+// mentionables are the game's parts in the order an empty query shows them:
+// the latest play and its markers, scenes, prefabs, scripts, entities, older plays.
+func mentionables(root string) []mention {
 	all, _ := plays.List(root)
 	var latest, older []mention
 	for i, p := range all {
@@ -70,7 +67,7 @@ func mentionables() []mention {
 			older = append(older, ms...)
 		}
 	}
-	files, entities := fileMentions()
+	files, entities := fileMentions(root)
 	return append(append(append(latest, files...), entities...), older...)
 }
 
@@ -91,47 +88,29 @@ func markerMentions(p *plays.Play) []mention {
 	return out
 }
 
-// fileMentions are the project's scenes, prefabs and scripts, and each
+// fileMentions are the game's scenes, prefabs and scripts, and each
 // scene's entities by name (one mention for all of a name in a scene).
-func fileMentions() (files, entities []mention) {
+func fileMentions(root string) (files, entities []mention) {
 	var scenes, prefabs, scripts, notes []mention
-	_ = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			if path != "." && hiddenFromAgents(path) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		real, err := agentFile(path)
-		if err != nil {
-			return nil // a link out of the project, or into build/
-		}
-		rel := filepath.ToSlash(path)
+	eachGameFile(root, func(rel, real string) {
 		// A link is the kind it's named and the kind it leads to (what readers judge), or none.
-		real = filepath.ToSlash(real)
 		is := func(suffix string) bool { return strings.HasSuffix(rel, suffix) && strings.HasSuffix(real, suffix) }
-		abs, _ := filepath.Abs(path)
-		uri := fileURI(abs)
-		base := filepath.Base(rel)
+		uri := fileURI(filepath.Join(root, filepath.FromSlash(rel)))
+		base := path.Base(rel)
 		switch {
 		case is(".scene.json"):
 			scenes = append(scenes, mention{"scene", strings.TrimSuffix(base, ".scene.json"), uri, "application/json", rel})
-			entities = append(entities, entityMentions(rel)...)
+			entities = append(entities, entityMentions(rel, real)...)
 		case is(".prefab.json"):
 			prefabs = append(prefabs, mention{"prefab", strings.TrimSuffix(base, ".prefab.json"), uri, "application/json", rel})
 		case is(".ts") && !strings.HasSuffix(rel, ".d.ts") && !strings.HasSuffix(real, ".d.ts"):
 			scripts = append(scripts, mention{"script", strings.TrimSuffix(base, ".ts"), uri, "text/x-typescript", rel})
 		}
-		return nil
 	})
 	// The notes as memory reads them (design/ may be a link to a folder in the game), those agents may read.
-	root, _ := filepath.Abs(".")
 	for _, n := range memory.Notes(root) {
 		abs := filepath.Join(root, filepath.FromSlash(n.Path))
-		if _, err := agentFile(abs); err == nil {
+		if _, _, err := gamePath(root, abs); err == nil {
 			notes = append(notes, mention{"note", strings.TrimSuffix(filepath.Base(n.Path), ".md"), fileURI(abs), "text/markdown", n.Path})
 		}
 	}
@@ -161,11 +140,12 @@ func childrenOf(e map[string]any) []map[string]any {
 	return children
 }
 
-func entityMentions(scene string) []mention {
+// entityMentions are the named entities of the scene rel (its real file: real).
+func entityMentions(rel, real string) []mention {
 	var out []mention
 	counts := map[string]int{}
 	var names []string
-	eachEntity(readScene(scene).Entities, "entities", func(e map[string]any, _ string) {
+	eachEntity(readScene(real).Entities, "entities", func(e map[string]any, _ string) {
 		name, _ := e["name"].(string)
 		if name == "" {
 			return
@@ -175,13 +155,13 @@ func entityMentions(scene string) []mention {
 		}
 		counts[name]++
 	})
-	short := strings.TrimSuffix(filepath.Base(scene), ".scene.json")
+	short := strings.TrimSuffix(path.Base(rel), ".scene.json")
 	for _, name := range names {
 		where := "in " + short
 		if counts[name] > 1 {
 			where = fmt.Sprintf("%d in %s", counts[name], short)
 		}
-		out = append(out, mention{"entity", name, entityURI(scene, name), "application/json", where})
+		out = append(out, mention{"entity", name, entityURI(rel, name), "application/json", where})
 	}
 	return out
 }
@@ -224,29 +204,28 @@ func searchMentions(all []mention, query string, limit int) []mention {
 	return found[:min(len(found), limit)]
 }
 
-// readMentioned reads a play, marker or entity a mention linked; false: uri
-// isn't one of those.
-func readMentioned(uri string) ([]map[string]any, bool, error) {
+// readMentioned reads a play, marker or entity of the game at root a mention
+// linked; false: uri isn't one of those.
+func readMentioned(root, uri string) ([]map[string]any, bool, error) {
 	if rest, ok := strings.CutPrefix(uri, "jm://play/"); ok {
-		contents, err := readPlayMention(uri, rest)
+		contents, err := readPlayMention(root, uri, rest)
 		return contents, true, err
 	}
 	if strings.HasPrefix(uri, "jm://entity?") {
-		contents, err := readEntityMention(uri)
+		contents, err := readEntityMention(root, uri)
 		return contents, true, err
 	}
 	return nil, false, nil
 }
 
-func readPlayMention(uri, rest string) ([]map[string]any, error) {
+func readPlayMention(root, uri, rest string) ([]map[string]any, error) {
 	id, marker, _ := strings.Cut(rest, "/")
 	id, err := url.PathUnescape(id)
 	if err != nil {
 		return nil, err
 	}
-	root, err := projectRoot() // mentions still read the open game off the working folder (design debt G6)
-	if err != nil {
-		return nil, err
+	if root == "" {
+		return nil, errNoGame
 	}
 	p, b, err := openPlay(root, id)
 	if err != nil {
@@ -273,13 +252,13 @@ func readPlayMention(uri, rest string) ([]map[string]any, error) {
 	return contents, nil
 }
 
-func readEntityMention(uri string) ([]map[string]any, error) {
+func readEntityMention(root, uri string) ([]map[string]any, error) {
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
 	}
 	scene, name := u.Query().Get("scene"), u.Query().Get("name")
-	rel, err := agentFile(scene)
+	real, rel, err := gamePath(root, scene)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +270,7 @@ func readEntityMention(uri string) ([]map[string]any, error) {
 		Entity map[string]any `json:"entity"`
 	}
 	var matches []found
-	eachEntity(readScene(rel).Entities, "entities", func(e map[string]any, where string) {
+	eachEntity(readScene(real).Entities, "entities", func(e map[string]any, where string) {
 		if e["name"] == name {
 			matches = append(matches, found{where, e})
 		}

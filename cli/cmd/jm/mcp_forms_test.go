@@ -211,7 +211,7 @@ func TestPickOffersFilesWithPreviews(t *testing.T) {
 	if got := pick.run(toolArgs{"kind": "scene"}); !strings.Contains(got.Text, "a.scene.json\nb.scene.json") {
 		t.Errorf("no forms: the choices to ask about: %s", got.Text)
 	}
-	abs, _ := filepath.Abs("b.scene.json")
+	abs := filepath.Join(evalOrSelf(here(t)), "b.scene.json") // as offered
 	asked := formHost(t, s, openaiForms, accept(map[string]any{"picked": []any{fileURI(abs)}}))
 	got := pick.run(toolArgs{"kind": "scene", "many": true})
 	if picked := got.Structured.(map[string]any)["picked"]; jsonOf(picked) != `["b.scene.json"]` {
@@ -231,16 +231,20 @@ func TestPickOffersFilesWithPreviews(t *testing.T) {
 	}
 }
 
-// A scene's preview stays the scene of the game picked in: once another game
-// opens, it fails rather than show that game's scene of the same name.
+// A scene's preview stays the scene of the game picked in, whichever game opens after.
 func TestPickPreviewStaysInItsGame(t *testing.T) {
-	inProject(t, map[string]string{".jm.json": `{}`, "level.scene.json": `{"entities": [{"name": "FromA"}]}`})
-	args := pickField([]string{"level.scene.json"}, false)["x-openai-input"].(map[string]any)["options"].([]map[string]any)[0]["_meta"].(map[string]any)["openai/preview"].(map[string]any)["target"].(map[string]any)["arguments"].(map[string]any)
-	if got := sceneView(gamesHome(), toolArgs(args)); got.Failed || !strings.Contains(got.Text, "FromA") {
-		t.Errorf("in its game: %s", got.Text)
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"A", "B"} {
+		filesGame(t, filepath.Join(home, g))
+		os.WriteFile(filepath.Join(home, g, "level.scene.json"), []byte(`{"entities": [{"name": "From`+g+`"}]}`), 0o644)
 	}
-	inProject(t, map[string]string{".jm.json": `{}`, "level.scene.json": `{"entities": [{"name": "FromB"}]}`})
-	if got := sceneView(gamesHome(), toolArgs(args)); !got.Failed {
+	s := newMCPServer()
+	s.openGame(filepath.Join(home, "A"))
+	args := pickField(s.opened(), []string{"level.scene.json"}, false)["x-openai-input"].(map[string]any)["options"].([]map[string]any)[0]["_meta"].(map[string]any)["openai/preview"].(map[string]any)["target"].(map[string]any)["arguments"].(map[string]any)
+	s.openGame(filepath.Join(home, "B"))
+	if got := toolOf(t, s, "scene_view").run(toolArgs(args)); got.Failed || !strings.Contains(got.Text, "FromA") {
 		t.Errorf("after another game opened: %s", got.Text)
 	}
 }
@@ -273,7 +277,7 @@ func TestAFormIsAnsweredWhileItsToolWaits(t *testing.T) {
 	if preview := next(); preview["id"] != 3.0 {
 		t.Fatalf("a preview waits for the picker: %v", preview)
 	}
-	abs, _ := filepath.Abs("a.scene.json")
+	abs := filepath.Join(evalOrSelf(here(t)), "a.scene.json") // as offered
 	reply, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": form["id"], "result": accept(map[string]any{"picked": fileURI(abs)})})
 	inW.Write(append(reply, '\n'))
 	if result := next(); !strings.Contains(jsonOf(result["result"]), "The person picked: a.scene.json") {
@@ -317,4 +321,3 @@ func TestNewGameCanStartFromAnExample(t *testing.T) {
 		t.Errorf("the copy: %+v %v", man, err)
 	}
 }
-

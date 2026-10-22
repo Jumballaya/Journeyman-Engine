@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const { studio, settle, plain } = require('./studio-host.cjs');
 
 const games = { open: '/g/pip', games: [{ name: 'Pip', path: '/g/pip', opened: 1, scenes: [] }] };
-const bindingsFile = { path: 'assets/input.bindings.json', game: 'Pip', root: '/g/pip', kind: 'bindings', actions: { jump: ['Space', 'Gamepad.A'], fire: ['Z'] } };
+const bindingsFile = { path: 'assets/input.bindings.json', game: '/g/pip', gameName: 'Pip', kind: 'bindings', actions: { jump: ['Space', 'Gamepad.A'], fire: ['Z'] } };
 const text = '{\n  "actions": {\n    "jump": ["Space", "Gamepad.A"],\n    "fire": ["Z"]\n  }\n}\n';
 const opened = { file: { name: 'input.bindings.json', resourceUri: 'host://1' } };
 const resource = { contents: [{ text, _meta: { 'openai/resource': { etag: 'v1', writable: true } } }] };
@@ -36,10 +36,10 @@ test('bindings not opened by the host are read only', async () => {
 });
 
 test('a prefab from Index shows its entities and components; an atlas its images', async () => {
-  const prefab = { path: 'assets/prefabs/cloud.prefab.json', game: 'Pip', root: '/g/pip', kind: 'prefab', entities: [
+  const prefab = { path: 'assets/prefabs/cloud.prefab.json', game: '/g/pip', gameName: 'Pip', kind: 'prefab', entities: [
     { where: 'cloud', name: 'cloud', components: { TransformComponent: { position: [0, 0, 0] } } },
     { where: 'cloud/Shadow', name: 'Shadow', inherited: true, components: {} }] };
-  const atlas = { path: 'assets/fx.atlas.json', game: 'Pip', root: '/g/pip', kind: 'atlas', images: [{ path: 'assets/fx/orb.png', region: 'orb', size: '8×8' }] };
+  const atlas = { path: 'assets/fx.atlas.json', game: '/g/pip', gameName: 'Pip', kind: 'atlas', images: [{ path: 'assets/fx/orb.png', region: 'orb', size: '8×8' }] };
   const s = await studio({ structuredContent: games }, { widgetState: { route: '/file?path=assets/prefabs/cloud.prefab.json' },
     answers: { file_view: (a) => a.path.endsWith('.prefab.json') ? { structuredContent: { ...games, file: prefab } }
       : { structuredContent: { ...games, file: atlas }, _meta: { 'jm/files': { 'assets/fx/orb.png': 'data:image/png;base64,orb' } } } } });
@@ -93,7 +93,7 @@ const twoGames = () => {
   const listing = () => ({ structuredContent: { open, games: [{ name: 'Same', path: '/g/a', opened: 2, scenes: [] }, { name: 'Same', path: '/g/b', opened: 1, scenes: [] }] } });
   return { listing, answers: { games: () => listing(), open_game: (a) => { open = a.game.replace(/\/$/, ''); return { content: [{ type: 'text', text: 'ok' }] }; } } };
 };
-const bindingsOf = (root, key) => ({ path: 'assets/input.bindings.json', game: 'Same', root, kind: 'bindings', actions: { jump: [key] } });
+const bindingsOf = (root, key) => ({ path: 'assets/input.bindings.json', game: root, gameName: 'Same', kind: 'bindings', actions: { jump: [key] } });
 const later = () => { let release; const p = new Promise((resolve) => { release = resolve; }); return { p, release }; };
 
 test('the same file of another game, of the same name, is that game\'s and read only', async () => {

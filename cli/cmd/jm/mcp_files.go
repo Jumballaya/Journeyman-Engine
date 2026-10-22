@@ -17,13 +17,13 @@ func (s *mcpServer) fileTools() []mcpTool {
 		{Name: "files", Meta: callableMeta("", ""), Title: "The game's files", Description: "The open game's files (not .git, .jm, build, dist, node_modules) with sizes and git's mark for each changed one " +
 			"(M changed, A added, ? new to git, D deleted, U in conflict). jm files.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{}),
-			OutputSchema: object(map[string]any{"root": typed("string"), "game": typed("string"), "files": typed("array")}, "root", "game", "files"),
+			OutputSchema: object(map[string]any{"game": typed("string"), "gameName": typed("string"), "files": typed("array")}, "game", "gameName", "files"),
 			onGame: func(root string, _ toolArgs) toolResult {
 				list, err := listFiles(root)
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				return toolResult{Text: filesText(list), Structured: map[string]any{"root": root, "game": gameName(root), "files": list}}
+				return toolResult{Text: filesText(list), Structured: map[string]any{"game": root, "gameName": gameName(root), "files": list}}
 			}},
 		{Name: "file_read", Meta: callableMeta("", ""), Title: "Read a file", Description: "A file of the open game: its text, an etag (give it to file_write so you don't save over someone's change) " +
 			"and what's wrong with it (JSON that doesn't parse or isn't in jm fmt's layout, a scene's or prefab's problems with the engine's schema). An image comes back as one.",
@@ -121,19 +121,38 @@ func (s *mcpServer) fileTools() []mcpTool {
 // game says which, so another caller opening a game in between can't redirect it.
 var gameOfTool = strArg("a name or path from `games` (default: the open game)")
 
-// gameRoot is the game a call works on: the one its "game" names (a name in
-// the games folder, or an absolute path), else the open game.
+// gameRoot is the game a call works on: the one holding the file a host opened
+// it from, else the one its "game" names (a name or absolute path), else the open game.
 func (s *mcpServer) gameRoot(a toolArgs) (string, error) {
-	if v, named := a["game"]; named && v != "" {
+	named := ""
+	if v, given := a["game"]; given && v != "" {
 		game, _ := v.(string) // mistyped: findGame says there's no such game
 		root, err := findGame(s.home, game)
-		return evalOrSelf(root), err
+		if err != nil {
+			return "", err
+		}
+		named = evalOrSelf(root)
+	}
+	if file := a.resource(); file != "" {
+		root := gameHolding(file)
+		switch {
+		case root == "":
+			return "", fmt.Errorf("%s isn't in a game: open_game its game first", filepath.Base(file))
+		case named != "" && named != root:
+			return "", fmt.Errorf("%s is %s's, not %s's", filepath.Base(file), gameName(root), gameName(named))
+		}
+		return root, nil
+	}
+	if named != "" {
+		return named, nil
 	}
 	if root := s.opened(); root != "" {
 		return root, nil
 	}
-	return "", errors.New("No game open: games, then open_game.")
+	return "", errNoGame
 }
+
+var errNoGame = errors.New("No game open: games, then open_game.")
 
 // filesText is the list for the model: what changed, then every path while there are few.
 func filesText(list []projectEntry) string {

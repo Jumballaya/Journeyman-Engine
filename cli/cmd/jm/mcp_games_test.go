@@ -224,10 +224,7 @@ func TestEveryToolSaysWhichGameItWorksOn(t *testing.T) {
 	}
 	// Design debt: these still find their game themselves (their own "game", or the
 	// working folder). Each moves to onGame (todos: Design debt, G2–G6), then off this list.
-	ownWay := map[string]bool{
-		"play_live": true, "game_log": true, "scene_view": true, "scene_render": true, "file_view": true,
-		"mention_search": true, "settings_read": true, "settings_update": true, "pick": true,
-	}
+	ownWay := map[string]bool{}
 	for _, tool := range newMCPServer().tools {
 		listed := noGame[tool.Name] || ownWay[tool.Name]
 		switch {
@@ -344,5 +341,112 @@ func TestACallFallsBackToTheRecentGameWhenTheOpenOneIsGone(t *testing.T) {
 	reply, _ := s.respond(data)
 	if out, _ := json.Marshal(reply); !strings.Contains(string(out), `"text":"b`) {
 		t.Errorf("read: %s", out)
+	}
+}
+
+// A call from a file the host opened works on that file's game, whichever is open.
+func TestAnOpenedFileNamesItsGame(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"A", "B"} {
+		filesGame(t, filepath.Join(home, g))
+		os.WriteFile(filepath.Join(home, g, "level.scene.json"), []byte(`{"entities": [{"name": "From`+g+`"}]}`), 0o644)
+	}
+	s := newMCPServer()
+	s.openGame(filepath.Join(home, "B"))
+	opened := toolArgs{resourceKey: resourcePath(filepath.Join(home, "A", "level.scene.json"))}
+	if got := toolOf(t, s, "scene_view").run(opened); got.Failed || !strings.Contains(got.Text, "FromA") {
+		t.Errorf("A's scene, opened while B is: %s", got.Text)
+	}
+}
+
+// Settings are the named game's, else the open game's, else only those beyond a game.
+func TestSettingsAreTheCallsGameOrNone(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"A", "B"} {
+		filesGame(t, filepath.Join(home, g))
+		os.WriteFile(filepath.Join(home, g, ".jm.json"), []byte(`{"name": "`+g+`"}`), 0o644)
+	}
+	t.Chdir(t.TempDir())
+	s := newMCPServer()
+	name := func(a toolArgs) any {
+		r := toolOf(t, s, "settings_read").run(a)
+		if r.Failed {
+			t.Fatalf("settings_read %v: %s", a, r.Text)
+		}
+		return r.Structured.(map[string]any)["values"].(map[string]any)["name"]
+	}
+	if got := name(toolArgs{}); got != nil {
+		t.Errorf("no game open, yet a game's name: %v", got)
+	}
+	s.openGame(filepath.Join(home, "B"))
+	if got := name(toolArgs{"game": "A"}); got != "A" {
+		t.Errorf("named A while B is open: %v", got)
+	}
+	if r := toolOf(t, s, "settings_update").run(toolArgs{"game": "A", "set": map[string]any{"name": "A2"}}); r.Failed {
+		t.Fatal(r.Text)
+	}
+	if got := name(toolArgs{}); got != "B" {
+		t.Errorf("the open game's after A changed: %v", got)
+	}
+	if got := name(toolArgs{"game": "A"}); got != "A2" {
+		t.Errorf("A after its change: %v", got)
+	}
+}
+
+// An opened file names the game holding it, links resolved; one in no game names
+// none (a call can't make a folder a game), and a call naming another game is refused.
+func TestAnOpenedFileIsInItsGameOrNone(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"A", "B"} {
+		filesGame(t, filepath.Join(home, g))
+		os.WriteFile(filepath.Join(home, g, "level.scene.json"), []byte(`{"entities": [{"name": "From`+g+`"}]}`), 0o644)
+	}
+	loose := t.TempDir()
+	os.WriteFile(filepath.Join(loose, "loose.bindings.json"), []byte(`{}`), 0o644)
+	link := filepath.Join(loose, "level.scene.json")
+	if os.Symlink(filepath.Join(home, "A", "level.scene.json"), link) != nil {
+		t.Skip("no symlinks here")
+	}
+	s := newMCPServer()
+	s.openGame(filepath.Join(home, "B"))
+	if got := toolOf(t, s, "scene_view").run(toolArgs{resourceKey: resourcePath(link)}); got.Failed || !strings.Contains(got.Text, "FromA") {
+		t.Errorf("a link to A's scene: %s", got.Text)
+	}
+	looseFile := toolArgs{resourceKey: resourcePath(filepath.Join(loose, "loose.bindings.json")), "set": map[string]any{"name": "X"}}
+	if got := toolOf(t, s, "settings_update").run(looseFile); !got.Failed || exists(filepath.Join(loose, ".jm.json")) {
+		t.Errorf("a file in no game made its folder one: %s", got.Text)
+	}
+	named := toolArgs{resourceKey: resourcePath(filepath.Join(home, "A", "level.scene.json")), "game": "B"}
+	if got := toolOf(t, s, "scene_view").run(named); !got.Failed {
+		t.Errorf("A's file, called as B's: %s", got.Text)
+	}
+	// A page's own call carries its game too (Studio's tab): the file's, so it goes through.
+	for _, game := range []string{"A", filepath.Join(home, "A"), filepath.Join(evalOrSelf(home), "A")} { // by name, path, real path
+		agreed := toolArgs{resourceKey: resourcePath(link), "game": game}
+		if got := toolOf(t, s, "scene_view").run(agreed); got.Failed || !strings.Contains(got.Text, "FromA") {
+			t.Errorf("A's file, called as A's (%s): %s", game, got.Text)
+		}
+	}
+}
+
+// A picked link is the option offered, under its own name.
+func TestAPickedLinkIsTheOptionOffered(t *testing.T) {
+	scratchSettings(t)
+	inProject(t, map[string]string{".jm.json": `{}`, "source.json": `{}`})
+	if os.Symlink("source.json", "level.scene.json") != nil {
+		t.Skip("no symlinks here")
+	}
+	s := newMCPServer()
+	abs := filepath.Join(evalOrSelf(here(t)), "level.scene.json") // as offered
+	formHost(t, s, openaiForms, accept(map[string]any{"picked": fileURI(abs)}))
+	got := toolOf(t, s, "pick").run(toolArgs{"kind": "scene"})
+	if picked := got.Structured.(map[string]any)["picked"]; jsonOf(picked) != `["level.scene.json"]` {
+		t.Errorf("picked: %v (%s)", picked, got.Text)
 	}
 }

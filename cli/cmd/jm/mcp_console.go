@@ -11,22 +11,14 @@ import (
 // The game's log (the engine's logs/engine.log, where its last run wrote it),
 // for Studio's Console tab and the agent.
 func (s *mcpServer) consoleTools() []mcpTool {
-	home := gamesHome()
 	return []mcpTool{{Name: "game_log", Title: "The game's log",
 		Description: "The last lines of the open game's log (its latest run: played or tested), each with its level, " +
 			"and how many warnings and errors there are. errors: only warnings and errors.",
 		Annotations: readOnly(), Meta: callableMeta("", ""),
 		InputSchema: object(map[string]any{"lines": intArg("how many of the last lines (default 200, at most 2000)"),
-			"errors": boolArg("only warnings and errors"), "game": strArg("a name or path from `games` (default: the open game)")}),
-		run: func(a toolArgs) toolResult {
-			root, err := projectRoot()
-			if game := a.str("game"); game != "" {
-				root, err = findGame(home, game)
-			}
-			if err != nil {
-				return textResult(err.Error(), true)
-			}
-			game := evalOrSelf(root) // whose log: a page following one game's can tell
+			"errors": boolArg("only warnings and errors")}),
+		onGame: func(root string, a toolArgs) toolResult {
+			game := root // whose log: a page following one game's can tell
 			log := latestLog(root)
 			if log == "" {
 				return toolResult{Text: "No log yet: the game hasn't run here.", Structured: map[string]any{"lines": []logLine{}, "game": game}}

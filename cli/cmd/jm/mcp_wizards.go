@@ -227,37 +227,31 @@ func pickTool(s *mcpServer) mcpTool {
 	}
 	slices.Sort(kinds)
 	return mcpTool{Name: "pick", Title: "Ask the person to pick", Meta: callableMeta("", ""),
-		Description: "Ask the person to point at files of the open game (scenes, prefabs, textures, scripts, sounds, UI, maps) in a picker with previews, " +
+		Description: "Ask the person to point at files of a game (scenes, prefabs, textures, scripts, sounds, UI, maps) in a picker with previews, " +
 			"when \"this one\" or \"that level\" is unclear. Gives the picked files' paths. Hosts without forms: lists the choices to ask about in chat.",
 		Annotations: readOnly(), InputSchema: object(map[string]any{
 			"kind":    map[string]any{"type": "string", "enum": kinds, "description": "what to pick"},
 			"message": strArg("the question, e.g. \"Which level feels too long?\""),
 			"many":    boolArg("let them pick several"),
 		}, "kind"),
-		run: func(a toolArgs) toolResult {
+		onGame: func(game string, a toolArgs) toolResult {
 			suffixes, ok := pickKinds[a.str("kind")]
 			if !ok {
 				return textResult("kind: one of "+strings.Join(kinds, ", "), true)
 			}
-			if !exists(archive.ManifestEntryKey) {
-				return textResult("No game open: open_game first.", true)
-			}
-			files := gameFiles(func(path string) bool {
-				_, err := agentFile(path) // not a link out of the game
-				return err == nil && slices.ContainsFunc(suffixes, func(suffix string) bool { return strings.HasSuffix(path, suffix) })
+			files := gameFiles(game, func(rel string) bool {
+				return slices.ContainsFunc(suffixes, func(suffix string) bool { return strings.HasSuffix(rel, suffix) })
 			})
 			if len(files) == 0 {
 				return textResult("The game has no "+a.str("kind")+" files.", false)
 			}
 			files = files[:min(len(files), 200)]
-			game, _ := os.Getwd()
-			byURI := map[string]string{} // made now: a call while the person picks may open another game
+			byURI := map[string]string{} // an answer is one of the options offered
 			for _, f := range files {
-				abs, _ := filepath.Abs(f)
-				byURI[fileURI(abs)] = f
+				byURI[fileURI(filepath.Join(game, f))] = f
 			}
 			message := cmp.Or(a.str("message"), "Pick the "+a.str("kind")+" you mean.")
-			answer, outcome := s.ask(message, map[string]any{"picked": pickField(files, a.flag("many"))}, "picked")
+			answer, outcome := s.ask(message, map[string]any{"picked": pickField(game, files, a.flag("many"))}, "picked")
 			switch outcome {
 			case formUnavailable:
 				return textResult("This host shows no picker: ask the person in chat which of these they mean:\n"+strings.Join(files, "\n"), false)
@@ -275,21 +269,21 @@ func pickTool(s *mcpServer) mcpTool {
 		}}
 }
 
-// pickField is a picker of files: each a resource with its picture (a
-// texture's own) and a preview (a scene opens in scene_view).
-func pickField(files []string, many bool) map[string]any {
+// pickField is a picker of the game's files: each a resource with its picture
+// (a texture's own) and a preview (a scene opens in scene_view).
+func pickField(game string, files []string, many bool) map[string]any {
 	var options []map[string]any
 	for _, f := range files {
-		abs, _ := filepath.Abs(f)
+		abs := filepath.Join(game, filepath.FromSlash(f))
 		meta := map[string]any{}
 		if mimeOf(f) != "" { // a resource jm serves
 			meta["openai/preview"] = map[string]any{"target": map[string]any{"type": "resource_link", "uri": fileURI(abs), "name": f}}
 		}
 		if strings.HasSuffix(f, ".scene.json") {
-			meta["openai/preview"] = map[string]any{"target": map[string]any{"type": "mcp_app_tool", "name": "scene_view", "arguments": map[string]any{"scene": abs}}} // stays this game's when another opens
+			meta["openai/preview"] = map[string]any{"target": map[string]any{"type": "mcp_app_tool", "name": "scene_view", "arguments": map[string]any{"scene": f, "game": game}}} // stays this game's when another opens
 		}
 		if slices.Contains(pickKinds["texture"], filepath.Ext(f)) {
-			if thumb := dataURI(f, 160); thumb != "" {
+			if thumb := dataURI(abs, 160); thumb != "" {
 				meta["openai/thumbnail"] = map[string]any{"src": thumb}
 			}
 		}
