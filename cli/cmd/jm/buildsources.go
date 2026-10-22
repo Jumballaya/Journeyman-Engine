@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/gametree"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 	"github.com/Jumballaya/Journeyman-Engine/internal/stdlib"
@@ -26,10 +27,6 @@ import (
 
 // sourcesFile is where a build keeps its sources' fingerprint (hidden: never packed).
 const sourcesFile = ".sources"
-
-// notSources are the game's own folders jm and its runs write: builds and
-// their staging, exports, engine logs, captured frames.
-var notSources = []string{"build", outDir, outDir + ".modules", "build.old", "dist", "logs", "frames"}
 
 // runOutputs are the JM_* variables naming where a run writes (as peerEnv
 // gives each peer its own): set in this process (jm run --watch), not sources.
@@ -65,16 +62,10 @@ func buildSources(root string) map[string]string {
 	}
 	// output: file is one jm or a run writes.
 	output := func(file string) bool {
-		rel, err := filepath.Rel(realRoot, file)
-		if err == nil && filepath.IsLocal(rel) {
-			first, _, _ := strings.Cut(filepath.ToSlash(rel), "/")
-			if slices.ContainsFunc(notSources, func(n string) bool { return strings.EqualFold(n, first) }) {
-				return true
-			}
-		}
 		return slices.ContainsFunc(outputs, func(o string) bool { return file == o || strings.HasPrefix(file, o+string(filepath.Separator)) })
 	}
-	// walk stamps top's files; the game's (top is the game) but hidden ones and archives.
+	// walk stamps top's files; the game's (top is the game) but what isn't the
+	// game's (gametree), hidden files and archives; a library's but its npm installs.
 	walk := func(top string, key func(string) string) {
 		game := top == realRoot
 		_ = filepath.WalkDir(top, func(file string, d fs.DirEntry, err error) error {
@@ -82,14 +73,17 @@ func buildSources(root string) map[string]string {
 				return nil
 			}
 			name := d.Name()
-			skip := output(file) || name == "node_modules" || (game && strings.HasPrefix(name, "."))
+			skip := output(file)
 			if d.IsDir() {
+				rel, _ := filepath.Rel(realRoot, file)
+				skip = skip || game && gametree.Skip(filepath.ToSlash(rel)) || name == "node_modules"
+
 				if skip || (!game && file == realRoot) { // a library holding the game: the game's files are the game's
 					return filepath.SkipDir
 				}
 				return nil
 			}
-			if !skip && !(game && strings.HasSuffix(name, ".jm")) {
+			if !skip && !(game && (strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".jm"))) {
 				stamp(key(file), file)
 			}
 			return nil

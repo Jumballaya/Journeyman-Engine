@@ -19,6 +19,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
+	"github.com/Jumballaya/Journeyman-Engine/internal/gametree"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 	"github.com/Jumballaya/Journeyman-Engine/internal/schema"
@@ -504,17 +505,8 @@ func realPath(path string) (string, error) {
 }
 
 // hiddenFromAgents says whether a folder of the project (a path from its
-// folder) is one resources leave out: dot-folders (.git, .jm), build output,
-// node_modules, dist.
-func hiddenFromAgents(dir string) bool {
-	for _, part := range strings.Split(filepath.ToSlash(dir), "/") {
-		lower := strings.ToLower(part) // macOS's and Windows' disks don't tell BUILD from build
-		if part != "." && (strings.HasPrefix(part, ".") || lower == "build" || lower == "node_modules" || lower == "dist") {
-			return true
-		}
-	}
-	return false
-}
+// folder) is one resources leave out: in a folder that isn't the game's (gametree).
+func hiddenFromAgents(dir string) bool { return gametree.Skip(filepath.ToSlash(dir)) }
 
 // eachGameFile calls visit with each file of the game agents see: its slash
 // path from root and its real file (a link counts while it stays in the game).

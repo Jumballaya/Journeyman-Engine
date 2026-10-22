@@ -12,6 +12,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/gametree"
 	"github.com/spf13/cobra"
 )
 
@@ -91,7 +92,7 @@ func projectJSONFiles(root string) ([]string, error) {
 				return err
 			}
 			if d.IsDir() {
-				if name := d.Name(); name == "node_modules" || name == "build" || strings.HasPrefix(name, ".") {
+				if rel, _ := filepath.Rel(root, path); gametree.Skip(filepath.ToSlash(rel)) {
 					return filepath.SkipDir
 				}
 				return nil

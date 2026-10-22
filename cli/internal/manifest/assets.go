@@ -1,6 +1,7 @@
 package manifest
 
 import (
+	"github.com/Jumballaya/Journeyman-Engine/internal/gametree"
 	"io/fs"
 	"path"
 	"regexp"
@@ -63,7 +64,7 @@ func projectFiles(root fs.FS) ([]string, error) {
 		}
 		name := d.Name()
 		if d.IsDir() {
-			if p != "." && (name == "node_modules" || name == "build" || name == "dist" || strings.HasPrefix(name, ".")) {
+			if gametree.Skip(p) {
 				return fs.SkipDir
 			}
 			return nil
