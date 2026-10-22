@@ -128,12 +128,14 @@ func openScriptCache(root string, sources map[string]string, tc toolchain.Toolch
 	return scriptCache{filepath.Join(top, key), true}
 }
 
-// importSpec is a module an import or export names, in quotes.
-var importSpec = regexp.MustCompile(`(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']`)
+// pathSpec is a quoted path: any an import may name (and more: a string
+// that only looks like one costs a file read, never a stale compile).
+var pathSpec = regexp.MustCompile(`["']((?:\.{1,2}|/)[^"'\n]*)["']`)
 
-// importsOf is each file compiles' scripts import by a relative or absolute
-// path, however far (hidden, outside the game), by its path: "none" for one
-// not there (asc says why). A package's are its library's, in sources.
+// importsOf is each file compiles' scripts may import by a relative or
+// absolute path, however far (hidden, outside the game): every file asc may
+// resolve one to, by its path, "none" where there isn't one. A package's
+// imports are its library's, in sources.
 func importsOf(root string, compiles []compile) map[string]string {
 	out := map[string]string{}
 	var follow func(file string)
@@ -142,27 +144,20 @@ func importsOf(root string, compiles []compile) map[string]string {
 		if err != nil {
 			return
 		}
-		for _, m := range importSpec.FindAllSubmatch(data, -1) {
+		for _, m := range pathSpec.FindAllSubmatch(data, -1) {
 			base := filepath.FromSlash(string(m[1]))
-			switch {
-			case strings.HasPrefix(base, "."):
+			if !filepath.IsAbs(base) {
 				base = filepath.Join(filepath.Dir(file), base)
-			case !filepath.IsAbs(base):
-				continue
 			}
-			found := ""
-			for _, f := range []string{base, base + ".ts", filepath.Join(base, "index.ts")} {
-				if strings.HasSuffix(f, ".ts") && exists(f) {
-					found = f
-					break
+			for _, f := range []string{base, base + ".ts", base + ".d.ts", filepath.Join(base, "index.ts"), filepath.Join(base, "index.d.ts")} {
+				if _, seen := out[f]; seen {
+					continue
 				}
-			}
-			if found == "" {
-				out[base] = "none"
-			} else if _, seen := out[found]; !seen {
-				text, _ := os.ReadFile(found)
-				out[found] = string(text)
-				follow(found)
+				out[f] = "none"
+				if text, err := os.ReadFile(f); err == nil && strings.HasSuffix(f, ".ts") {
+					out[f] = string(text)
+					follow(f)
+				}
 			}
 		}
 	}
