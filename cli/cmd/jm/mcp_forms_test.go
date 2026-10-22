@@ -205,11 +205,15 @@ func TestPickOffersFilesWithPreviews(t *testing.T) {
 	scratchSettings(t)
 	var img bytes.Buffer
 	png.Encode(&img, image.NewRGBA(image.Rect(0, 0, 4, 4)))
-	inProject(t, map[string]string{".jm.json": `{}`, "a.scene.json": `{}`, "b.scene.json": `{}`, "hero.png": img.String()})
+	inProject(t, map[string]string{".jm.json": `{}`, "a.scene.json": `{}`, "b.scene.json": `{}`, "hero.png": img.String(),
+		"hero.ts": "", "hero.spec.ts": "", "env.d.ts": ""})
 	s := newMCPServer()
 	pick := toolOf(t, s, "pick")
 	if got := pick.run(toolArgs{"kind": "scene"}); !strings.Contains(got.Text, "a.scene.json\nb.scene.json") {
 		t.Errorf("no forms: the choices to ask about: %s", got.Text)
+	}
+	if got := pick.run(toolArgs{"kind": "script"}); !strings.Contains(got.Text, "hero.ts") || strings.Contains(got.Text, "spec.ts") || strings.Contains(got.Text, "d.ts") {
+		t.Errorf("scripts are scripts, not tests or declarations: %s", got.Text)
 	}
 	abs := filepath.Join(evalOrSelf(here(t)), "b.scene.json") // as offered
 	asked := formHost(t, s, openaiForms, accept(map[string]any{"picked": []any{fileURI(abs)}}))

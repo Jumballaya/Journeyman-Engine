@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
+	"github.com/Jumballaya/Journeyman-Engine/internal/formats"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plugin"
 )
@@ -29,17 +30,6 @@ type indexEntry struct {
 	Unused bool     `json:"unused,omitempty"` // nothing uses it, and it's a kind something should
 }
 
-// fileKinds name a game's files by their endings, the longest first.
-var fileKinds = []struct{ suffix, kind string }{
-	{".scene.json", "scene"}, {".prefab.json", "prefab"}, {".atlas.json", "atlas"}, {".golden.json", "golden"},
-	{".spec.ts", "test"}, {".d.ts", ""}, {".ts", "script"}, {".json", "data"},
-	{".png", "texture"}, {".jpg", "texture"}, {".jpeg", "texture"}, {".aseprite", "texture"},
-	{".wav", "audio"}, {".ogg", "audio"}, {".mp3", "audio"}, {".flac", "audio"},
-	{".ttf", "font"}, {".otf", "font"}, {".fnt", "font"},
-	{".tmj", "map"}, {".tsj", "map"}, {".tmx", "map"}, {".tsx", "map"},
-	{".html", "ui"}, {".css", "ui"}, {".frag", "shader"}, {".vert", "shader"}, {".glsl", "shader"}, {".md", "doc"},
-}
-
 func kindOf(rel string) string {
 	switch path.Base(rel) {
 	case ".jm.json":
@@ -50,12 +40,8 @@ func kindOf(rel string) string {
 	if strings.HasPrefix(rel, goldenDir+"/") {
 		return "golden" // its specs and their frames
 	}
-	for _, k := range fileKinds {
-		if strings.HasSuffix(rel, k.suffix) {
-			return k.kind
-		}
-	}
-	return ""
+	f, _ := formats.Of(rel)
+	return f.Kind
 }
 
 // quoted finds the paths a text file names files with: in matching quotes

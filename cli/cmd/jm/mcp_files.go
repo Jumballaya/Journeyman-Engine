@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/formats"
 )
 
 // The open game's files as tools: what a host without a shell (ChatGPT)
@@ -138,10 +140,8 @@ func filesText(list []projectEntry) string {
 	return text
 }
 
+// imageFile says whether path is an image the engine reads (a PNG or JPEG).
 func imageFile(path string) bool {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".png", ".jpg", ".jpeg":
-		return true
-	}
-	return false
+	f, _ := formats.Of(strings.ToLower(path))
+	return f.Archive == "image"
 }

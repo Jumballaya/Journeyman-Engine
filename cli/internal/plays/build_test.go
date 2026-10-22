@@ -166,3 +166,17 @@ func TestAPlayReferenceThatIsntOneSaysSo(t *testing.T) {
 		t.Errorf("latest-0: %v %v", p, err)
 	}
 }
+
+// What counts toward how a game plays is exactly what fingerprintMethod 2
+// counted: a README or an image changes none of it.
+func TestWhatPlaysDifferentlyIsMethodTwos(t *testing.T) {
+	for path, want := range map[string]bool{
+		"assets/scripts/hero.ts": true, "assets/data/items.json": true, "scenes/a.scene.json": true, "assets/maps/a.tmj": true,
+		"assets/ui/hud.ui.html": true, "assets/ui/hud.CSS": true, "assets/fonts/a.fnt": true, "assets/fonts/a.ttf": true,
+		"assets/README.md": false, "assets/maps/a.tmx": false, "assets/sprites/a.png": false, "assets/sfx/a.ogg": false, "assets/fx/a.frag": false,
+	} {
+		if playsDifferently(path) != want {
+			t.Errorf("playsDifferently(%s) = %v", path, !want)
+		}
+	}
+}
