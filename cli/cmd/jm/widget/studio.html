@@ -188,7 +188,7 @@ const studioTabs = [];
   // open is the game this tab is on (here), game its record as last listed.
   // Before jm answers, the games it gave last time (cached: true), kept in the
   // page's storage so the sidebar's Studio opens at once.
-  const CACHE = "journeyman:studio:games:v1";
+  const CACHE = "journeyman:studio:games:v2";  // v2: entries hold the tab's game record
   const games = () => {
     const out = state.listed && state.listed.over === host.result ? state.listed.result : host.result;
     if (!out) return cached();
