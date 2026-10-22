@@ -51,10 +51,8 @@ func (s *mcpServer) sceneTools() []mcpTool {
 func sceneRender(root string, a toolArgs) toolResult {
 	var engine string
 	_, scene, err := scenePath(root, a)
-	if err == nil && buildIsStale(root) {
-		if out, failed := jmIn(a.call(), root, "build", "--json"); failed {
-			err = fmt.Errorf("the build failed:\n%s", out)
-		}
+	if err == nil {
+		err = freshBuild(a.call(), root)
 	}
 	if err == nil {
 		engine, err = resolveEnginePath()

@@ -87,10 +87,8 @@ func (s *mcpServer) startDriver(root string, a toolArgs) toolResult {
 	s.stopDriver()
 	// The build is jm's, not the person's files: one that's missing or older
 	// than the sources is made first, so the game driven is the game as it is.
-	if buildIsStale(root) {
-		if out, failed := runJM(a.call(), root, "build", "--json"); failed {
-			return textResult("the build failed, so there's no game to run:\n"+out, true)
-		}
+	if err := freshBuild(a.call(), root); err != nil {
+		return textResult(err.Error()+"\n(so there's no game to run)", true)
 	}
 	o := gameOptions{GL: a.flag("gl"), Visible: a.flag("visible"), Scene: a.str("scene"), Record: a.flag("record")}
 	o.Session, _ = a["session"].(map[string]any)

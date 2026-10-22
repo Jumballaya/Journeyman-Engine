@@ -146,6 +146,23 @@ func recordSources(dir string, sources map[string]string) error {
 	return os.WriteFile(filepath.Join(dir, sourcesFile), []byte(sourcesPrint(sources)+"\n"), 0o644)
 }
 
+// freshBuild builds the game in dir unless its build is of its sources now:
+// what a run of the game starts from. A buildFailed when the build fails.
+func freshBuild(c *toolCall, dir string) error {
+	if !buildIsStale(dir) {
+		return nil
+	}
+	if out, failed := runJM(c, dir, "build", "--json"); failed {
+		return buildFailed{out}
+	}
+	return nil
+}
+
+// buildFailed is a build that failed, problems its --json lines.
+type buildFailed struct{ problems string }
+
+func (b buildFailed) Error() string { return "the build failed:\n" + b.problems }
+
 // buildIsStale says whether the game at root has no build, or one made from
 // other sources than it has now.
 func buildIsStale(root string) bool {
