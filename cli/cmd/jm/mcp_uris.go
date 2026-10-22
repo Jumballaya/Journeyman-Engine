@@ -236,9 +236,12 @@ func (s *mcpServer) stampOf(uri string) (string, error) {
 	return fileStamp(file), nil
 }
 
-// there: a doc, play or marker uri names one there is. Checked once, when
-// subscribed: polls only stat. A file needn't be there yet.
+// there: a doc, play or marker uri names one there is, in a game there is.
+// Checked once, when subscribed: polls only stat. A file needn't be there yet.
 func (s *mcpServer) there(uri string) error {
+	if _, ok := readWidget(uri); ok {
+		return nil
+	}
 	if topic, ok := strings.CutPrefix(uri, "jm://docs/"); ok {
 		_, err := docs.Read(topic)
 		return err

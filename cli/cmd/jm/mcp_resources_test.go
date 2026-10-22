@@ -144,6 +144,9 @@ func TestSubscriptionsSayWhatChanged(t *testing.T) {
 	if reply, _ := request(t, send, next, 3, "resources/subscribe", `{"uri":"`+marker+`"}`); reply["error"] != nil {
 		t.Fatal(reply["error"])
 	}
+	if reply, _ := request(t, send, next, 4, "resources/subscribe", `{"uri":"`+widgetResources()[0]["uri"].(string)+`"}`); reply["error"] != nil {
+		t.Errorf("a widget: %v", reply["error"])
+	}
 	os.WriteFile(scene, []byte(`{"entities":[]}`), 0o644)
 	waitFor(t, next, "notifications/resources/updated "+uri)
 	os.WriteFile(filepath.Join(plays.Root("."), "2000-01-02_000000", "session.json"), []byte(`{"format":1,"markers":[{"n":1}]}`), 0o644)
@@ -183,6 +186,7 @@ func TestCompletionsSuggestWhatStartsSo(t *testing.T) {
 		{`{"type":"ref/resource","uri":"jm://game/{game}/play/{play}"}`, "play", "2000-01-02", `{}`, `["2000-01-02_000000"]`},
 		{marker, "marker", "", `{"play":"2000-01-02_000000"}`, `["m1"]`},
 		{marker, "marker", "", `{"play":"2000-01-01_000000"}`, `[]`},
+		{marker, "play", "", `{"game":"no-such-game"}`, `[]`}, // not the open game's
 		{`{"type":"ref/resource","uri":"jm://docs/{topic}"}`, "topic", "agen", `{}`, `["agents"]`},
 		{`{"type":"ref/prompt","name":"new_game_interview"}`, "x", "", `{}`, `[]`},
 	} {

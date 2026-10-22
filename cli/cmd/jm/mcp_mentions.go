@@ -44,7 +44,7 @@ func (s *mcpServer) mentionTools() []mcpTool {
 			var lines []string
 			for _, m := range found {
 				items = append(items, m.resourceLink(root))
-				lines = append(lines, m.name+" ("+m.kind+"): "+m.link)
+				lines = append(lines, m.name+" ("+m.kind+"): "+m.link) // the link the model writes in a task
 			}
 			return toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"items": items}}
 		}}}

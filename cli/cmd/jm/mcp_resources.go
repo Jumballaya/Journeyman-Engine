@@ -234,32 +234,28 @@ func (s *mcpServer) completeArgument(params json.RawMessage) (any, *rpcError) {
 		"total": len(matches), "hasMore": len(matches) > most}}, nil
 }
 
-// argumentValues are what a template's argument can be: games, a game's
-// files, the open game's plays, a play's markers, scenes, entity names, topics.
+// argumentValues are what a template's argument can be: games, docs topics,
+// and the parts of the game given (else the open one): files, plays, markers, scenes, entity names.
 func (s *mcpServer) argumentValues(name string, given map[string]string) []string {
+	switch name {
+	case "game":
+		return s.gameValues()
+	case "topic":
+		var out []string
+		for _, t := range docs.Topics() {
+			out = append(out, t.Name)
+		}
+		return out
+	}
 	root := s.opened()
 	if game := given["game"]; game != "" {
 		root, _ = findGame(s.home, game)
 	}
+	if root == "" { // no game, or one there isn't: nothing of one
+		return nil
+	}
 	var out []string
 	switch name {
-	case "game":
-		home := s.home
-		listed := false
-		for _, p := range projects.List(home) {
-			if p.Missing {
-				continue
-			}
-			listed = listed || evalOrSelf(p.Path) == evalOrSelf(root)
-			if filepath.Dir(p.Path) == evalOrSelf(home) {
-				out = append(out, filepath.Base(p.Path)) // what findGame takes by name
-			} else {
-				out = append(out, p.Path)
-			}
-		}
-		if root != "" && !listed {
-			out = append(out, root) // the open game (from a root, say) though it isn't in the list
-		}
 	case "path":
 		out = filesOf(root, "")
 	case "play":
@@ -268,9 +264,6 @@ func (s *mcpServer) argumentValues(name string, given map[string]string) []strin
 			out = append(out, p.ID)
 		}
 	case "marker":
-		if root == "" {
-			break
-		}
 		if p, err := plays.Find(root, given["play"]); err == nil {
 			for _, m := range p.Meta.Markers {
 				out = append(out, fmt.Sprintf("m%d", m.N))
@@ -292,24 +285,40 @@ func (s *mcpServer) argumentValues(name string, given map[string]string) []strin
 				})
 			}
 		}
-	case "topic":
-		for _, t := range docs.Topics() {
-			out = append(out, t.Name)
-		}
 	}
 	return out
 }
 
-// filesOf is the game at root's files ending in suffix, from its folder ("" root: none).
+// gameValues are the games a URI can name: the person's, by name when in the
+// games folder (as findGame takes them), and the open game though it isn't listed.
+func (s *mcpServer) gameValues() []string {
+	open, listed := s.opened(), false
+	var out []string
+	for _, p := range projects.List(s.home) {
+		if p.Missing {
+			continue
+		}
+		listed = listed || evalOrSelf(p.Path) == evalOrSelf(open)
+		if filepath.Dir(p.Path) == evalOrSelf(s.home) {
+			out = append(out, filepath.Base(p.Path))
+		} else {
+			out = append(out, p.Path)
+		}
+	}
+	if open != "" && !listed {
+		out = append(out, open) // from a root, say
+	}
+	return out
+}
+
+// filesOf is the game at root's files ending in suffix, from its folder.
 func filesOf(root, suffix string) []string {
 	var out []string
-	if root != "" {
-		_ = walkProject(root, func(rel string, _ fs.FileInfo) {
-			if strings.HasSuffix(rel, suffix) {
-				out = append(out, rel)
-			}
-		})
-	}
+	_ = walkProject(root, func(rel string, _ fs.FileInfo) {
+		if strings.HasSuffix(rel, suffix) {
+			out = append(out, rel)
+		}
+	})
 	return out
 }
 
