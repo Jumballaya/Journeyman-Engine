@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"image/color"
 	"io"
 	"os"
@@ -300,5 +301,51 @@ func TestTheOpenGameIsTheFolderOpened(t *testing.T) {
 	os.Remove(filepath.Join(home, "a", ".jm.json"))
 	if got := read(); !got.Failed {
 		t.Errorf("a game no more, still open: %+v", got)
+	}
+}
+
+// A call naming its game keeps it across a form's round, whatever opens meanwhile.
+func TestANamedGamesFormRoundSurvivesAnotherGameOpening(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"a", "b"} {
+		filesGame(t, filepath.Join(home, g))
+	}
+	t.Chdir(filepath.Join(home, "b"))
+	s := newMCPServer()
+	named := map[string]any{"game": "a"}
+	first := modernCall(t, s, 1, "project_export", named, chatGPTCaps, nil, "")["result"].(map[string]any)
+	if first["resultType"] != "input_required" {
+		t.Fatalf("no form: %v", first)
+	}
+	s.openGame(filepath.Join(home, "b"))
+	declined := map[string]any{"form1": map[string]any{"action": "decline"}}
+	done := modernCall(t, s, 2, "project_export", named, chatGPTCaps, declined, first["requestState"].(string))
+	if done["error"] != nil || done["result"].(map[string]any)["resultType"] != "complete" {
+		t.Errorf("its retry: %v", done)
+	}
+}
+
+// A server started in a game that stops being one works on the game opened last.
+func TestACallFallsBackToTheRecentGameWhenTheOpenOneIsGone(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"a", "b"} {
+		filesGame(t, filepath.Join(home, g))
+		os.WriteFile(filepath.Join(home, g, "which.txt"), []byte(g), 0o644)
+	}
+	if err := projects.Remember(filepath.Join(home, "b")); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(filepath.Join(home, "a"))
+	s := newMCPServer()
+	os.Remove(filepath.Join(home, "a", ".jm.json"))
+	data, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+		"params": map[string]any{"name": "file_read", "arguments": map[string]any{"path": "which.txt"}}})
+	reply, _ := s.respond(data)
+	if out, _ := json.Marshal(reply); !strings.Contains(string(out), `"text":"b`) {
+		t.Errorf("read: %s", out)
 	}
 }
