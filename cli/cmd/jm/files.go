@@ -131,6 +131,9 @@ func walkProject(root string, visit func(rel string, info fs.FileInfo)) error {
 		if d.Name() == ".git" { // a worktree's link to its repository: git's, not the game's
 			return nil
 		}
+		if lower := strings.ToLower(d.Name()); lower == ".ds_store" || lower == "thumbs.db" || lower == "desktop.ini" { // the OS's, not the game's
+			return nil
+		}
 		if info, err := d.Info(); err == nil && info.Mode().IsRegular() {
 			visit(filepath.ToSlash(rel), info)
 		}

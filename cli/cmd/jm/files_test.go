@@ -75,6 +75,9 @@ func TestFilesListMarksWhatGitSaysChanged(t *testing.T) {
 
 func TestFilesListOutsideARepositoryHasNoMarks(t *testing.T) {
 	game := filesGame(t, t.TempDir())
+	for _, clutter := range []string{".DS_Store", "assets/.DS_Store", "assets/Thumbs.db"} { // the OS's, left out
+		os.WriteFile(filepath.Join(game, clutter), nil, 0o644)
+	}
 	list, _ := listFiles(game)
 	if got := paths(list); got != ":.jm.json :assets/scripts/player.ts :scenes/main.scene.json" {
 		t.Errorf("files: %s", got)

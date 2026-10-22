@@ -62,6 +62,17 @@ test('merge and drop ask first; a new variant is made from its name', async () =
   assert.deepEqual(s.calls().find((c) => c.name === 'variant_new').arguments, { name: 'big-player', game: '/g/pip' });
 });
 
+test("after an action the tab stays on its game, though the server's open one moved", async () => {
+  const elsewhere = { structuredContent: { open: '/g/other', games: [...listing.structuredContent.games, { name: 'Other', path: '/g/other', opened: 2, scenes: [] }] } };
+  const s = await open_({ games: elsewhere });
+  key(s, 'var-new').fire('input', { target: { value: 'big-player' } });
+  s.find((e) => e.tag === 'form')[0].fire('submit');
+  await settle(8);
+  const after = s.calls().slice(s.calls().findIndex((c) => c.name === 'variant_new') + 1).filter((c) => c.name !== 'games');
+  assert.ok(after.length, 'the lists are read again');
+  assert.deepEqual([...new Set(after.map((c) => c.arguments.game))], ['/g/pip']);
+});
+
 test('a sandbox builds and tests in place: what jm said shows beside it, a failure marked', async () => {
   const s = await open({ 'openai/deepLink': { url: '/variants?sandbox=sb1' } },
     { sandbox_run: (args) => args.args[0] === 'build' ? { content: [{ type: 'text', text: 'built\n3 scripts, 7 scenes' }] }

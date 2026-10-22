@@ -116,6 +116,9 @@
   .nothumb svg { width: 16px; height: 16px; opacity: .8; }
   .tree .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tree .meta { margin-left: auto; padding-left: 8px; font-size: 11px; white-space: nowrap; }
+  /* A tree of sentences (notes): each label whole, its meta on the line under it. */
+  .tree.wrap .row { flex-wrap: wrap; } .tree.wrap .label { white-space: normal; flex: 1 1 100%; }
+  .tree.wrap .meta { margin-left: 0; padding-left: 0; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
   .card { background: var(--bg); border: 1px solid var(--line); box-shadow: 0 0 0 1px transparent; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
   .card:hover { border-color: var(--muted); } .card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); } .badge.warn { color: var(--warn); }
@@ -206,10 +209,16 @@ const studioTabs = [];
   };
   const said = (r) => (r && Array.isArray(r.content) ? r.content : []).filter((c) => c && c.type === "text").map((c) => c.text).join(" ");
 
-  const refresh = async () => {
-    const over = host.result;
-    const listed = await host.callTool("games", {});
-    if (listed && listed.structuredContent && Array.isArray(listed.structuredContent.games)) state.listed = { result: listed, over };
+  // The games listed again. The tab stays on its game (the server's open one
+  // may be another chat's) unless what ran opened one (moved: true).
+  const opens = new Set(["open_game", "new_game"]);
+  const refresh = async (moved = false) => {
+    const over = host.result, was = games();
+    let listed = await host.callTool("games", {});
+    const s = listed && listed.structuredContent;
+    if (!s || !Array.isArray(s.games)) return;
+    if (!moved && was && was.open && !was.cached) listed = { ...listed, structuredContent: { ...s, open: was.open } };
+    state.listed = { result: listed, over };
   };
 
   // Runs a tool for the person (the pages wait while it does), then lists the
@@ -221,7 +230,7 @@ const studioTabs = [];
       const r = await host.callTool(name, args);
       ok = !(r && r.isError);
       state.notice = ok ? done(said(r)) : `Couldn't: ${said(r) || "the call failed"}`;
-      await refresh();
+      await refresh(ok && opens.has(name));
     } catch (e) { state.notice = "Couldn't: " + (e && e.message || e); }
     state.pending = null;
     state.visit++;
