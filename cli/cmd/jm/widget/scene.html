@@ -111,7 +111,8 @@
   const relayout = async () => {
     const over = host.result;
     const laid = await host.callTool("scene_view", { file: host.input.file });
-    if (laid && laid.structuredContent) state.laid = { result: laid, over };
+    if (!laid || laid.isError || !laid.structuredContent) throw new Error(laid && laid.content && laid.content[0] && laid.content[0].text || "no scene");
+    state.laid = { result: laid, over };
     state.shared = "";
   };
 

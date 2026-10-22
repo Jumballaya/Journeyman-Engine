@@ -83,6 +83,20 @@ test('a save that ends before the newly opened file reads changes nothing, nor r
   assert.equal(said.at(-1), 'Saving…');
 });
 
+test('a conflict whose reading again is overtaken by another file stops there', async () => {
+  const host = fakeHost(), { f } = opened(host);
+  f.open('a');
+  host.pending[0].resolve({ text: text({ n: 1 }), etag: 'v1', writable: true }); await settle();
+  let followed = false;
+  const saving = f.save((d) => { d.n = 2; }, () => { followed = true; });
+  host.pending[1].resolve({ outcome: 'conflict' }); await settle();
+  f.open('b');
+  host.pending[2].resolve({ text: text({ n: 9 }), etag: 'v2', writable: true });
+  assert.equal(await saving, null);
+  assert.equal(followed, false);
+  assert.equal(f.saving, false);
+});
+
 test("the page's follow-up runs while still saving; its failure is said", async () => {
   const host = fakeHost(), { f, said } = opened(host);
   f.open('a');

@@ -174,6 +174,7 @@ const kit = (() => {
   const jsonFile = (host, { say, changed }) => {
     let reads = 0, wanted = "";
     const f = { file: null, saving: false };  // file: { uri, doc, etag, writable, why }
+    // read: false when another read began meanwhile (this one then changes nothing).
     f.read = async (uri) => {
       const n = ++reads;
       wanted = uri;
@@ -184,9 +185,10 @@ const kit = (() => {
         file = { uri, doc, etag: r.etag, writable: r.writable && !!r.etag && jsonText(doc) + "\n" === r.text,
                  why: !r.writable || !r.etag ? "the host won't save it" : "it isn't as jm fmt writes it (jm fmt it)" };
       } catch (e) { notice = "Couldn't read the file: " + (e && e.message || e); }
-      if (n !== reads) return;
+      if (n !== reads) return false;
       if (file) f.file = file; else say(notice);
       changed();
+      return true;
     };
     // open reads uri once (again only after another file).
     f.open = (uri) => { if (uri && uri !== wanted) f.read(uri); };
@@ -207,9 +209,10 @@ const kit = (() => {
         else if (r && r.outcome === "conflict") { outcome = "conflict"; notice = "The file changed since: read it again, make the change again."; }
         else if (r && r.outcome === "too-large") notice = `Too large to save (at most ${r.maxBytes} bytes).`;
       } catch (e) { notice = "Couldn't save: " + (e && e.message || e); }
-      if (n !== reads) { f.saving = false; changed(); return null; }
+      const stale = () => { f.saving = false; changed(); return null; };
+      if (n !== reads) return stale();
       say(notice);
-      if (outcome === "conflict") await f.read(s.uri);
+      if (outcome === "conflict" && !(await f.read(s.uri))) return stale();
       try { if (after) await after(outcome); } catch (e) { say(notice + " Couldn't show it again: " + (e && e.message || e)); }
       f.saving = false;
       changed();
