@@ -12,7 +12,7 @@ import (
 
 // fakeAsc is a toolchain whose compiler logs each script it compiles and
 // writes "wasm" (and a source map for mapped*.ts); say*.ts warns, fail*.ts
-// doesn't compile.
+// doesn't compile; two at once log "overlap".
 func fakeAsc(t *testing.T) (toolchain.Toolchain, func() []string) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the fake compiler is a sh script")
@@ -23,6 +23,8 @@ func fakeAsc(t *testing.T) (toolchain.Toolchain, func() []string) {
 	os.WriteFile(node, []byte(`#!/bin/sh
 while [ $# -gt 0 ]; do [ "$1" = --outFile ] && out=$2; shift; done
 echo "$out" >> "`+log+`"
+mkdir "`+dir+`/busy" 2>/dev/null || echo overlap >> "`+log+`" # another compile is running
+sleep 0.05; rmdir "`+dir+`/busy" 2>/dev/null
 case "$out" in *fail*) echo "ERROR TS1005"; exit 1;; *say*) echo "WARNING AS201" >&2;; esac
 mkdir -p "$(dirname "$out")" && printf wasm > "$out"
 case "$out" in *mapped*) printf map > "${out%.ts}.wasm.map";; esac
@@ -107,9 +109,10 @@ func TestAScriptCompilesOnceUntilWhatCompilingReadsChanges(t *testing.T) {
 	if count("a.ts") != 8 {
 		t.Errorf("the chain's last base changed: compiled %v", compiled())
 	}
-	// What the cache can't follow it doesn't keep: a package's config, a file asc writes but the map.
+	// What the cache can't follow it doesn't keep: a package's config, an option but codegen's (a file
+	// written but the map, a library read).
 	for _, config := range []string{`{"extends": "@studio/asconfig/base.json"}`, `{"options": {"sourceMap": "custom.map"}}`,
-		`{"targets": {"release": {"bindings": "esm"}}}`} {
+		`{"targets": {"release": {"bindings": "esm"}}}`, `{"options": {"lib": ["/shared"]}}`, `{"entries": ["x.ts"]}`} {
 		os.WriteFile(base, []byte(config), 0o644)
 		before := count("a.ts")
 		build()
@@ -117,6 +120,12 @@ func TestAScriptCompilesOnceUntilWhatCompilingReadsChanges(t *testing.T) {
 		if count("a.ts") != before+2 {
 			t.Errorf("%s: compiled %d times in two builds", config, count("a.ts")-before)
 		}
+	}
+	overlaps := count("overlap")
+	os.WriteFile(base, []byte(`{"options": {"textFile": "/shared/out.wat"}}`), 0o644) // every compile's file: one at a time
+	build()
+	if count("overlap") != overlaps {
+		t.Errorf("compiles writing one file ran at once")
 	}
 	if kept, _ := os.ReadDir(filepath.Join(root, ".jm", scriptCacheDir)); len(kept) != 1 {
 		t.Errorf("kept %d sources' compiles: the last's alone", len(kept))

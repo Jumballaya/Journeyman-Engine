@@ -41,7 +41,11 @@ func compileScripts(r *report, tc toolchain.Toolchain, projectRoot string, cache
 	results := make([]result, len(compiles))
 	jobs := make(chan int)
 	var wg sync.WaitGroup
-	for range min(runtime.NumCPU(), 8, len(compiles)) {
+	workers := 1 // a config's own output file (textFile) is every compile's
+	if cache.plain {
+		workers = min(runtime.NumCPU(), 8, len(compiles))
+	}
+	for range workers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -77,8 +81,13 @@ func compileScripts(r *report, tc toolchain.Toolchain, projectRoot string, cache
 }
 
 // scriptCache is where a game's compiled scripts are kept, by the print of
-// what compiling may read (dir "": none kept).
-type scriptCache struct{ dir string }
+// what compiling may read (dir "": none kept). plain: its config is
+// (ascConfigs), so compiles read and write only their own files and may run
+// at once; else one at a time, none kept.
+type scriptCache struct {
+	dir   string
+	plain bool
+}
 
 const scriptCacheDir = "cache/scripts" // in the game's .jm/
 
@@ -95,14 +104,14 @@ func openScriptCache(root string, sources map[string]string, tc toolchain.Toolch
 	}
 	configs, known := ascConfigs(scriptsPath(root, "asconfig.json")) // a base it extends may be anywhere
 	if !known {
-		return scriptCache{}
+		return scriptCache{plain: false}
 	}
 	for file, text := range configs {
 		read["asconfig "+file] = text
 	}
 	top, err := jmfolder.Make(root, scriptCacheDir)
 	if err != nil {
-		return scriptCache{}
+		return scriptCache{plain: true}
 	}
 	key := sourcesPrint(read)
 	if kept, err := os.ReadDir(top); err == nil {
@@ -112,12 +121,12 @@ func openScriptCache(root string, sources map[string]string, tc toolchain.Toolch
 			}
 		}
 	}
-	return scriptCache{filepath.Join(top, key)}
+	return scriptCache{filepath.Join(top, key), true}
 }
 
 // ascConfigs are the asconfig at file and each it extends, by their paths;
-// false when what a compile reads or writes is more than the cache knows: a
-// config from a package, or a file asc writes but the wasm and its map.
+// false when a compile may read or write more than the cache knows: a
+// config from a package, or one that isn't plain.
 func ascConfigs(file string) (map[string]string, bool) {
 	out := map[string]string{}
 	for out[file] == "" {
@@ -131,7 +140,7 @@ func ascConfigs(file string) (map[string]string, bool) {
 		if json.Unmarshal(data, &config) != nil {
 			return out, true // asc says why
 		}
-		if writesMore(config) {
+		if !plainConfig(config) {
 			return nil, false
 		}
 		next, _ := config["extends"].(string)
@@ -149,27 +158,44 @@ func ascConfigs(file string) (map[string]string, bool) {
 	return out, true // a loop: asc's to report
 }
 
-// writesMore says whether a config (its options, or a target's) has asc
-// write a file but the wasm and its out.wasm.map.
-func writesMore(config map[string]any) bool {
+// codegenOptions are asc's options that shape the one wasm a compile writes
+// (and its map), and read nothing but the script and its imports.
+var codegenOptions = map[string]bool{"exportRuntime": true, "noAssert": true, "optimize": true, "optimizeLevel": true,
+	"shrinkLevel": true, "converge": true, "debug": true, "runtime": true, "initialMemory": true, "maximumMemory": true,
+	"memoryBase": true, "tableBase": true, "noExportMemory": true, "importMemory": true, "sharedMemory": true,
+	"zeroFilledMemory": true, "importTable": true, "exportTable": true, "exportStart": true, "lowMemoryLimit": true,
+	"enable": true, "disable": true, "noUnsafe": true, "pedantic": true, "stackSize": true, "uncheckedBehavior": true,
+	"trapMode": true, "noValidate": true, "use": true, "sourceMap": true}
+
+// plainConfig says whether a config has asc read and write no more than a
+// script, its imports, its wasm and its map: only codegen options (its own,
+// or a target's), a source map by its default name.
+func plainConfig(config map[string]any) bool {
 	sets := []any{config["options"]}
-	if targets, ok := config["targets"].(map[string]any); ok {
-		for _, t := range targets {
-			sets = append(sets, t)
+	for key, v := range config {
+		switch key {
+		case "targets":
+			targets, _ := v.(map[string]any)
+			for _, t := range targets {
+				sets = append(sets, t)
+			}
+		case "options", "extends", "$schema":
+		default:
+			return false // entries, …: more to read
 		}
 	}
 	for _, set := range sets {
-		options, _ := set.(map[string]any)
-		for _, key := range []string{"textFile", "jsFile", "tsdFile", "idlFile", "bindings", "outFile"} {
-			if options[key] != nil && options[key] != false {
-				return true
+		options, ok := set.(map[string]any)
+		if set != nil && !ok {
+			return false
+		}
+		for key, v := range options {
+			if _, named := v.(string); !codegenOptions[key] || key == "sourceMap" && named {
+				return false
 			}
 		}
-		if named, ok := options["sourceMap"].(string); ok && named != "" {
-			return true
-		}
 	}
-	return false
+	return true
 }
 
 // sourceMap is where asc writes a source map for a compile to out: its name
