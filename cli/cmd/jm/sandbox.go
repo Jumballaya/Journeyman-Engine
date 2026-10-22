@@ -11,11 +11,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 	"github.com/Jumballaya/Journeyman-Engine/internal/vcs"
 
 	"github.com/spf13/cobra"
@@ -341,8 +341,7 @@ func runInSandbox(c *toolCall, root, name string, args []string, timeout time.Du
 	for _, arg := range args { // the copy's files only: nothing outside it, links followed
 		_, value, _ := strings.Cut(arg, "=")
 		for _, p := range []string{arg, value} {
-			up := slices.Contains(strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' }), "..") // "link/.." is the link's parent
-			if p != "" && (filepath.IsAbs(p) || up || !inside(s.Dir, realOrNearest(filepath.Join(s.Dir, p)))) {
+			if p != "" && (filepath.IsAbs(p) || !realpath.In(s.Dir, p)) {
 				return "", fmt.Errorf("%s leads out of the sandbox: give paths inside it", arg)
 			}
 		}
@@ -426,47 +425,17 @@ func ownFolder(dir string) bool {
 // linksStayIn refuses a sandbox holding a link that leads out of it or to
 // nothing (a write through it would land elsewhere); its folder is the game's own.
 func linksStayIn(root, dir string) error {
-	if real, err := filepath.EvalSymlinks(dir); err != nil || !ownFolder(dir) || !inside(root, real) {
+	if !ownFolder(dir) || !realpath.In(root, dir) {
 		return fmt.Errorf("sandbox %s isn't a folder of the game's own: drop it", filepath.Base(dir))
 	}
 	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.Type()&fs.ModeSymlink == 0 {
 			return err
 		}
-		if real, err := filepath.EvalSymlinks(path); err != nil || !inside(dir, real) {
+		if !realpath.In(dir, path) {
 			rel, _ := filepath.Rel(dir, path)
 			return fmt.Errorf("%s in the sandbox is a link out of it (or to nothing): remove it first", filepath.ToSlash(rel))
 		}
 		return nil
 	})
-}
-
-// inside says whether path (real) is dir (real, once resolved) or in it.
-func inside(dir, path string) bool {
-	real, err := filepath.EvalSymlinks(dir)
-	if err != nil {
-		return false
-	}
-	rel, err := filepath.Rel(real, path)
-	return err == nil && (rel == "." || filepath.IsLocal(rel))
-}
-
-// realOrNearest is path with links resolved: through its nearest part that
-// exists, the rest as written (an output not made yet); "" through a dangling link.
-func realOrNearest(path string) string {
-	path = filepath.Clean(path)
-	rest := ""
-	for {
-		if real, err := filepath.EvalSymlinks(path); err == nil {
-			return filepath.Join(real, rest)
-		}
-		if _, err := os.Lstat(path); err == nil {
-			return "" // a link to nothing: where a write through it lands is anyone's guess
-		}
-		parent := filepath.Dir(path)
-		if parent == path {
-			return filepath.Join(path, rest)
-		}
-		path, rest = parent, filepath.Join(filepath.Base(path), rest)
-	}
 }

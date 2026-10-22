@@ -20,6 +20,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
+	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 )
 
 // Dir is the notes' folder in a game.
@@ -90,11 +91,8 @@ func notes(root string) ([]Note, error) {
 	var unread error
 	root, _ = filepath.Abs(root)
 	dir := filepath.Join(root, Dir) // design/ may link to a folder in the game; one leading out isn't read
-	realRoot, err := filepath.EvalSymlinks(root)
-	if real, err2 := filepath.EvalSymlinks(dir); err == nil && err2 == nil {
-		if within, err := filepath.Rel(realRoot, real); err == nil && filepath.IsLocal(within) {
-			dir = real
-		}
+	if rel, ok := realpath.Rel(root, Dir); ok && rel != "." {
+		dir = realpath.Of(dir)
 	}
 	walked := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -508,28 +506,15 @@ func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 // could lead out of the game.
 func write(root, rel, text string) error {
 	path := filepath.Join(root, filepath.FromSlash(rel))
-	realRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		return err
-	}
-	existing := filepath.Dir(path) // checked before folders are made in it: MkdirAll follows links
-	for _, err := os.Lstat(existing); err != nil && existing != root; _, err = os.Lstat(existing) {
-		existing = filepath.Dir(existing)
-	}
-	if realExisting, err := filepath.EvalSymlinks(existing); err != nil {
-		return err
-	} else if within, err := filepath.Rel(realRoot, realExisting); err != nil || !filepath.IsLocal(within) && within != "." {
-		return fmt.Errorf("%s is outside the game", rel)
+	outside := fmt.Errorf("%s is outside the game", rel)
+	if !realpath.In(root, path) { // checked before folders are made in it: MkdirAll follows links
+		return outside
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	realDir, err := filepath.EvalSymlinks(filepath.Dir(path))
-	if err != nil {
-		return err
-	}
-	if within, err := filepath.Rel(realRoot, realDir); err != nil || !filepath.IsLocal(within) {
-		return fmt.Errorf("%s is outside the game", rel)
+	if !realpath.In(root, path) { // a folder on the way made a link meanwhile
+		return outside
 	}
 	if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("%s is a link: not written through", rel)

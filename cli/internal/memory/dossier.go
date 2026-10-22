@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
+	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 	"gopkg.in/yaml.v3"
 )
 
@@ -78,7 +79,7 @@ func kindFiles(root string) ([]kindFile, error) {
 	entries, failed := os.ReadDir(dir)
 	if errors.Is(failed, os.ErrNotExist) {
 		failed = nil
-	} else if failed == nil && !inside(root, dir) {
+	} else if failed == nil && !realpath.In(root, dir) {
 		entries, failed = nil, fmt.Errorf("%s/%s leads out of the game", Dir, Templates)
 	}
 	for _, e := range entries {
@@ -100,20 +101,6 @@ func kindFiles(root string) ([]kindFile, error) {
 		}
 	}
 	return out, failed
-}
-
-// inside says whether path is in the game, links followed.
-func inside(root, path string) bool {
-	realRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		return false
-	}
-	real, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return false
-	}
-	within, err := filepath.Rel(realRoot, real)
-	return err == nil && filepath.IsLocal(within)
 }
 
 func kindOf(folder, text string) Kind {

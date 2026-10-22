@@ -25,6 +25,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/download"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 )
 
 // An Example is one example game, in the cache.
@@ -174,7 +175,7 @@ func Copy(ctx context.Context, version, name, to string, log io.Writer) error {
 		libraries[name] = local
 	}
 	for _, c := range copies {
-		if inside(c.from, to) {
+		if realpath.In(c.from, to) {
 			return fmt.Errorf("a copy can't go inside %s, which it copies", c.from)
 		}
 	}
@@ -191,38 +192,6 @@ func Copy(ctx context.Context, version, name, to string, log io.Writer) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(to, archive.ManifestEntryKey), edited, 0o644)
-}
-
-// inside says whether path is dir or under it, by the filesystem's identity
-// of folders: symlinks and case-insensitive names can't hide it.
-func inside(dir, path string) bool {
-	want, err := os.Stat(dir)
-	if err != nil {
-		return false
-	}
-	for p := realPath(path); ; p = filepath.Dir(p) {
-		if got, err := os.Stat(p); err == nil && os.SameFile(want, got) {
-			return true
-		}
-		if filepath.Dir(p) == p {
-			return false
-		}
-	}
-}
-
-// realPath is path with the symlinks in its nearest existing ancestor
-// resolved, so a link into a folder counts as that folder.
-func realPath(path string) string {
-	rest := ""
-	for dir := path; ; dir = filepath.Dir(dir) {
-		if real, err := filepath.EvalSymlinks(dir); err == nil {
-			return filepath.Join(real, rest)
-		}
-		if filepath.Dir(dir) == dir {
-			return path
-		}
-		rest = filepath.Join(filepath.Base(dir), rest)
-	}
 }
 
 func copySources(from, to string) error {

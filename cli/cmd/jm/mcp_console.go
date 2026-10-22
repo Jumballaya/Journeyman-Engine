@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 )
 
 // The game's log (the engine's logs/engine.log, where its last run wrote it),
@@ -25,13 +27,12 @@ func (s *mcpServer) consoleTools() []mcpTool {
 			}
 			lines, counts := readLog(log, int(a.num("lines", 200, 1, 2000)), a.flag("errors"))
 			var b strings.Builder
-			real, _ := realPath(root) // log is resolved too
-			rel, _ := filepath.Rel(real, log)
-			fmt.Fprintf(&b, "%s: %d errors, %d warnings in all.\n", filepath.ToSlash(rel), counts["error"], counts["warning"])
+			rel, _ := realpath.Rel(root, log)
+			fmt.Fprintf(&b, "%s: %d errors, %d warnings in all.\n", rel, counts["error"], counts["warning"])
 			for _, l := range lines {
 				fmt.Fprintf(&b, "%s %s\n", l.Level, l.Text)
 			}
-			return toolResult{Text: b.String(), Structured: map[string]any{"log": filepath.ToSlash(rel), "lines": lines, "counts": counts, "game": game}}
+			return toolResult{Text: b.String(), Structured: map[string]any{"log": rel, "lines": lines, "counts": counts, "game": game}}
 		}}}
 }
 
@@ -39,17 +40,14 @@ func (s *mcpServer) consoleTools() []mcpTool {
 // or a built one's (build/), "" for none. Only a regular file in the game
 // counts: a link out of it, or a folder or pipe, isn't its log.
 func latestLog(root string) string {
-	game, err := realPath(root)
-	if err != nil {
-		return ""
-	}
 	best := ""
 	var bestInfo os.FileInfo
-	for _, p := range []string{filepath.Join(root, "logs", "engine.log"), filepath.Join(root, "build", "logs", "engine.log")} {
-		real, err := realPath(p)
-		if err != nil || !strings.HasPrefix(real, game+string(filepath.Separator)) {
+	for _, p := range []string{"logs/engine.log", "build/logs/engine.log"} {
+		rel, ok := realpath.Rel(root, filepath.FromSlash(p))
+		if !ok || rel == "." {
 			continue
 		}
+		real := filepath.Join(realpath.Of(root), filepath.FromSlash(rel))
 		if info, err := os.Stat(real); err == nil && info.Mode().IsRegular() && (bestInfo == nil || info.ModTime().After(bestInfo.ModTime())) {
 			best, bestInfo = real, info
 		}

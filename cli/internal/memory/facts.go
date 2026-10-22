@@ -12,6 +12,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
+	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 	"github.com/blevesearch/bleve/v2"
 )
 
@@ -169,15 +170,7 @@ func (f Facts) read() (string, error) {
 		} else if err != nil {
 			return "", err
 		}
-		realRoot, err := filepath.EvalSymlinks(f.root)
-		if err != nil {
-			return "", err
-		}
-		realDir, err := filepath.EvalSymlinks(filepath.Dir(f.path()))
-		if err != nil {
-			return "", err
-		}
-		if within, err := filepath.Rel(realRoot, realDir); info.Mode()&os.ModeSymlink != 0 || err != nil || !filepath.IsLocal(within) {
+		if info.Mode()&os.ModeSymlink != 0 || !realpath.In(f.root, f.path()) {
 			return "", fmt.Errorf("%s leads out of the game: not read", f.rel)
 		}
 	}

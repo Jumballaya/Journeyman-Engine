@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
+	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 )
 
 // The recorded plays over MCP: the person plays (jm run records), and the
@@ -167,16 +168,10 @@ func thumbsToShow(all []plays.Thumb, n int) []plays.Thumb {
 // markerImage is the picture taken at m, "" when it isn't a file of the
 // play's own (only those are read).
 func markerImage(p *plays.Play, m plays.Marker) string {
-	path := filepath.Join(p.Dir, m.Image)
-	dir, err := realPath(p.Dir)
-	if err != nil || !filepath.IsLocal(m.Image) {
+	if !filepath.IsLocal(m.Image) || !realpath.In(p.Dir, m.Image) {
 		return ""
 	}
-	real, err := realPath(path)
-	if rel, relErr := filepath.Rel(dir, real); err != nil || relErr != nil || !filepath.IsLocal(rel) {
-		return ""
-	}
-	return path
+	return filepath.Join(p.Dir, m.Image)
 }
 
 func playFrame(root string, a toolArgs) toolResult {

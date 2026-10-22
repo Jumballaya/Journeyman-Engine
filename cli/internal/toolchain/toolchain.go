@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/download"
+	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 )
 
 // MinNodeMajor is the oldest Node a machine's own may be: AssemblyScript
@@ -170,13 +171,8 @@ func linkedToCache(path string) bool {
 	if err != nil {
 		return false
 	}
-	real, err1 := filepath.EvalSymlinks(path)
-	cache, err2 := filepath.EvalSymlinks(dir)
-	if err1 != nil || err2 != nil {
-		return false
-	}
-	rel, err := filepath.Rel(cache, real)
-	return err == nil && filepath.IsLocal(rel)
+	rel, ok := realpath.Rel(dir, path)
+	return ok && rel != "."
 }
 
 // NodeMajor runs `node --version` ("v20.10.0") with a timeout, so a hung shim
