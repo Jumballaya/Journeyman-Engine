@@ -25,8 +25,10 @@
   #apps { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
   .frame { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); margin-bottom: 16px; }
   .frame .bar { font-size: 11px; color: var(--mute); padding: 4px 10px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
-  .frame .bar .exit { margin-left: auto; font-size: 11px; padding: 0 6px; display: none; }
-  .frame.full .bar .exit { display: inline-block; }
+  .frame .bar .modes { margin-left: auto; display: flex; gap: 4px; }
+  .frame .bar .modes button { font-size: 11px; padding: 0 6px; }
+  .frame.pip { position: fixed; right: 16px; bottom: 16px; width: min(460px, 48vw); z-index: 5; margin: 0; box-shadow: 0 8px 28px rgb(0 0 0 / .25); }
+  .frame.pip iframe { height: 380px; }
   .frame iframe { border: 0; width: 100%; height: 480px; display: block; background: var(--panel); }
   #stage.fullscreen #apps, #stage.fullscreen .frame:not(.full) { display: none; }
   #stage.fullscreen .frame.full { border: 0; border-radius: 0; margin: 0; }
@@ -158,14 +160,15 @@ async function show(tool, args, result, uri) {
   if (new URLSearchParams(location.search).get("seen")) {
     iframe.addEventListener("load", () => Object.defineProperty(iframe.contentDocument, "visibilityState", { get: () => "visible" }));
   }
-  const exit = el("button", { textContent: "Exit fullscreen", className: "exit", onclick: () => setMode(f, "inline") });
-  const box = el("div", { className: "frame" }, el("div", { className: "bar" }, tool.name, el("span", { textContent: uri }), exit), iframe);
+  // The host's own controls: a person moves a widget between modes, as in a chat app.
+  const modes = el("span", { className: "modes" }, ...["inline", "fullscreen", "pip"].map((m) => el("button", { textContent: m, onclick: () => setMode(f, m) })));
+  const box = el("div", { className: "frame" }, el("div", { className: "bar" }, tool.name, el("span", { textContent: uri }), modes), iframe);
   for (const f of frames) if (f.mode === "fullscreen") setMode(f, "inline");  // the new one shows, as a host's does
   $("stage").insertBefore(box, $("apps").nextSibling);
   const f = { iframe, tool, args, result, mode: "inline", box };
   frames.add(f);
   // Escape leaves fullscreen though the widget has the keyboard (its keys never reach this page).
-  iframe.addEventListener("load", () => iframe.contentWindow.addEventListener("keydown", (e) => { if (e.key === "Escape" && f.mode === "fullscreen") setMode(f, "inline"); }));
+  iframe.addEventListener("load", () => iframe.contentWindow.addEventListener("keydown", (e) => { if (e.key === "Escape" && f.mode !== "inline") setMode(f, "inline"); }));
 }
 const frameOf = (source) => [...frames].find((f) => f.iframe.contentWindow === source);
 const post = (f, msg) => f.iframe.contentWindow.postMessage({ jsonrpc: "2.0", ...msg }, "*");
@@ -209,26 +212,29 @@ window.addEventListener("message", async (e) => {
       log("open link", p.url);
       return answer({});
     case "ui/request-display-mode":
-      setMode(f, p.mode === "fullscreen" ? "fullscreen" : "inline");
+      setMode(f, ["fullscreen", "pip"].includes(p.mode) ? p.mode : "inline");
       return answer({ mode: f.mode });
     case "ping": return answer({});
     default: return refuse("not handled: " + m.method);
   }
 });
+// A frame's display mode: inline in the stage, fullscreen over it, or pip (floating beside the chat).
+// One frame at most is fullscreen and one pip, as in a host.
 function setMode(f, mode) {
-  for (const g of frames) g.box.classList.remove("full");
+  for (const g of frames) if (g !== f && mode !== "inline" && g.mode === mode) setMode(g, "inline");
+  if (f.mode === "inline" && mode !== "inline") f.inlineHeight = f.iframe.style.height;
   f.mode = mode;
-  if (mode === "fullscreen") f.inlineHeight = f.iframe.style.height, f.iframe.style.height = "";
-  else f.iframe.style.height = f.inlineHeight || "";
-  $("stage").scrollTop = 0;
-  $("stage").classList.toggle("fullscreen", mode === "fullscreen");
+  f.iframe.style.height = mode === "inline" ? f.inlineHeight || "" : "";
   f.box.classList.toggle("full", mode === "fullscreen");
+  f.box.classList.toggle("pip", mode === "pip");
+  $("stage").classList.toggle("fullscreen", [...frames].some((g) => g.mode === "fullscreen"));
+  $("stage").scrollTop = 0;
   log("display mode", mode);
   post(f, { method: "ui/notifications/host-context-changed", params: { displayMode: mode } });
 }
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  for (const f of frames) if (f.mode === "fullscreen") setMode(f, "inline");
+  for (const f of frames) if (f.mode !== "inline") setMode(f, "inline");
 });
 $("theme").onclick = () => {
   theme = theme === "light" ? "dark" : "light";
