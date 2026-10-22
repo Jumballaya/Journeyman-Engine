@@ -6,20 +6,20 @@ studioTabs.push((() => {
   // picked: a file's path ("/index?path=…" picks it too). previews: pictures by game, visit and path.
   const state = { index: null, picked: null, linked: undefined, query: "", folded: new Set(), previews: {} };
 
+  const loading = kit.latest(() => state);  // a visit's answer arriving after a later visit's is dropped
   const load = async (ctx) => {
     const key = { game: ctx.game.path, visit: ctx.visit };
     state.index = { ...key, entries: (state.index && state.index.game === key.game && state.index.entries) || null };
-    try {
-      const r = await ctx.call("game_index", {});
-      const entries = r && r.structuredContent && r.structuredContent.entries;
-      if (Array.isArray(entries) && !state.index.entries) {  // long kinds start folded, but the picked file's
-        const picked = entries.find((e) => e.path === state.picked);
-        for (const k of new Set(entries.map((e) => e.kind))) {
-          if (entries.filter((e) => e.kind === k).length > 25 && !(picked && picked.kind === k)) state.folded.add("kind:" + k);
-        }
+    const r = await loading(() => ctx.call("game_index", {}));
+    if (!r) return;
+    const entries = !r.isError && r.structuredContent && r.structuredContent.entries;
+    if (Array.isArray(entries) && !state.index.entries) {  // long kinds start folded, but the picked file's
+      const picked = entries.find((e) => e.path === state.picked);
+      for (const k of new Set(entries.map((e) => e.kind))) {
+        if (entries.filter((e) => e.kind === k).length > 25 && !(picked && picked.kind === k)) state.folded.add("kind:" + k);
       }
-      state.index = Array.isArray(entries) ? { ...key, entries } : { ...key, error: (r && r.content && r.content[0] && r.content[0].text) || "No index." };
-    } catch (e) { state.index = { ...key, error: String(e && e.message || e) }; }
+    }
+    state.index = Array.isArray(entries) ? { ...key, entries } : { ...key, error: kit.said(r) || "No index." };
     ctx.rerender();
   };
 

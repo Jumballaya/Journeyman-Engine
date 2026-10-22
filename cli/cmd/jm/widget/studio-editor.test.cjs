@@ -124,3 +124,32 @@ test('a note pointed out is shown whole, not cut to a line', async () => {
   assert.equal(tree.attributes.class, 'tree wrap');
   assert.match(tree.text, /walks up/);
 });
+
+test('a scene\'s newest view and picture show, though earlier ones answer after', async () => {
+  const views = [], renders = [];
+  const view = (who) => ({ structuredContent: { scene: 'scenes/level.scene.json', entities: [{ where: 'entities[0]', name: who + ' Door' }] } });
+  const picture = (who) => ({ content: [], _meta: { 'jm/image': 'data:image/jpeg;base64,' + who } });
+  const s = await studio(games, { widgetState: { route: '/editor' }, answers: {
+    editor_state: editing([]),
+    scene_view: () => new Promise((resolve) => views.push(resolve)),
+    scene_render: () => new Promise((resolve) => renders.push(resolve)) } });
+  await settle(6);
+  s.tab('Files').fire('click');
+  s.tab('Editor').fire('click');
+  await settle(6);
+  s.button('Render').fire('click');
+  await settle(3);
+  s.button('Render').fire('click');
+  await settle(3);
+  assert.equal(views.length, 2);
+  assert.equal(renders.length, 2);
+  views[1](view('New')); renders[1](picture('New'));
+  await settle(6);
+  views[0](view('Old')); renders[0](picture('Old'));
+  await settle(6);
+  assert.match(s.app.text, /New Door/);
+  assert.doesNotMatch(s.app.text, /Old Door/);
+  const srcs = s.find((e) => e.tag === 'img').map((img) => img.attributes.src);
+  assert.ok(srcs.some((src) => /New/.test(src)) && !srcs.some((src) => /Old/.test(src)), srcs.join(' '));
+  assert.equal(views.length, 2, 'the late answer starts no reload');
+});

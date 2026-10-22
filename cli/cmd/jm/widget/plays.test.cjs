@@ -440,6 +440,7 @@ test('while a frame replays, the viewer says so and how long it should take', as
   const overlay = child(child(app, 'viewer'), 'replaying');
   assert.ok(overlay, 'a replaying overlay');
   assert.match(overlay.text, /Replaying to frame 60… about 0:01/);
+  await settle();  // the host is asked a moment later
   answer(replayed({ kind: 'replay', drift: 'same' }));
   await settle();
   assert.equal(child(child(app, 'viewer'), 'replaying'), undefined);

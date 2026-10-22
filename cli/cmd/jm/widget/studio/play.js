@@ -31,7 +31,7 @@ studioTabs.push((() => {
   };
   const lose = () => { state.live = null; state.speedAsked = undefined; if (state.run) { state.run = ""; state.gen++; } };  // gone: the next run is found anew
 
-  const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
+  const { said } = kit;
 
   let pollSeq = 0;
   // Asks the game while its tab is shown: its status, the watched values, a picture.

@@ -221,6 +221,24 @@ const kit = (() => {
     return f;
   };
 
+  // said is what a tool's answer says (its text parts, joined).
+  const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
+
+  // answer is what call() came to: its answer, or a throw (now or later) as an isError one.
+  const answer = (call) => Promise.resolve().then(call).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
+
+  // latest(owner) is a channel of calls of which only the newest counts:
+  // ask(call) is what call() came to (answer), or null once another ask began
+  // or owner() is no longer what it was (another game shown).
+  const latest = (owner) => {
+    let asked = 0;
+    return async (call) => {
+      const n = ++asked, mine = owner();
+      const r = await answer(call);
+      return n === asked && owner() === mine ? r : null;
+    };
+  };
+
   // A 16px line icon from an SVG path (in a 16 by 16 box).
   const icon = (d) => el("svg:svg", { viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", "stroke-width": "1.4", "stroke-linejoin": "round",
     "stroke-linecap": "round", "aria-hidden": "true" }, el("svg:path", { d }));
@@ -231,5 +249,5 @@ const kit = (() => {
   const empty = (text, ...kids) => el("div", { class: "empty" }, el("div", {}, text), kids);
   const section = (title, ...kids) => el("section", { class: "section" }, el("h2", {}, title), kids);
 
-  return { el, theme, ago, tree, grid, split, empty, section, focusKey, jsonText, jsonFile, icon, nothumb, plural };
+  return { el, theme, ago, tree, grid, split, empty, section, focusKey, jsonText, jsonFile, said, answer, latest, icon, nothumb, plural };
 })();

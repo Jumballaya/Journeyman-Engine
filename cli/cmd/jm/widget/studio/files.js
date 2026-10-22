@@ -6,45 +6,41 @@ studioTabs.push((() => {
   // listed: the files answer ({ path, root, files } or { path, error }), asked each visit.
   // picked: { path, file: file_read's answer | null }. found: { text, hits } of a search.
   // draft: { kind: "new" | "rename", value } while that form is open. folded: per game.
-  // game: whose these are (another game's start over). seq: the latest request (an older answer is dropped).
-  const fresh = (game) => ({ game, listed: null, asking: "", picked: null, found: null, query: "", draft: null, folded: null, line: 0, routed: "", seq: 0, searchSeq: 0 });
+  // game: whose these are (another game's start over).
+  const fresh = (game) => ({ game, listed: null, asking: "", picked: null, found: null, query: "", draft: null, folded: null, line: 0, routed: "" });
   let state = fresh(null);
   const marks = { M: "changed", A: "added", "?": "new", D: "deleted", U: "conflict" };
 
-  // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
-  const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
+  const { said } = kit;
+  const listing = kit.latest(() => state), searching = kit.latest(() => state);  // an older answer, or another game's, is dropped
 
   const list = async (ctx, path) => {
-    const n = ++state.seq, mine = state;
-    try {
-      const r = await ctx.call("files", {});
-      if (n !== mine.seq || mine !== state) return;
-      const s = r && r.structuredContent;
-      state.listed = s && Array.isArray(s.files) ? { path, game: s.game, files: s.files } : { path, error: said(r) || "No files." };
-    } catch (e) { if (n !== mine.seq || mine !== state) return; state.listed = { path, error: String(e && e.message || e) }; }
+    const r = await listing(() => ctx.call("files", {}));
+    if (!r) return;
+    const s = r.structuredContent;
+    state.listed = !r.isError && s && Array.isArray(s.files) ? { path, game: s.game, files: s.files } : { path, error: said(r) || "No files." };
     if (state.picked && !state.listed.error && !state.listed.files.some((f) => f.path === state.picked.path)) state.picked = null;
     ctx.rerender();
   };
 
+  const reading = kit.latest(() => state.picked);
   const pick = async (ctx, path, line = 0) => {
     const picked = state.picked = { path, file: null };
     state.line = line;
     state.draft = null;
     ctx.rerender();
-    const r = await ctx.call("file_read", { path }).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
-    if (state.picked === picked) {
-      picked.file = r && !r.isError ? { ...(r.structuredContent || {}), image: r._meta && r._meta["jm/image"] } : { error: said(r) || "Couldn't read it." };
-      ctx.rerender();
-    }
+    const r = await reading(() => ctx.call("file_read", { path }));
+    if (!r) return;  // another file was picked meanwhile
+    picked.file = !r.isError ? { ...(r.structuredContent || {}), image: r._meta && r._meta["jm/image"] } : { error: said(r) || "Couldn't read it." };
+    ctx.rerender();
   };
 
   const search = async (ctx, text) => {
     state.query = text;
-    if (!text.trim()) { state.searchSeq++; state.found = null; ctx.rerender(); return; }
-    const n = ++state.searchSeq, mine = state;
-    const r = await ctx.call("files_search", { text }).catch(() => null);
-    if (mine !== state || n !== state.searchSeq) return;  // another game's, or an older search
-    state.found = { text, ...(r && r.structuredContent ? r.structuredContent : { hits: [] }) };
+    if (!text.trim()) { searching(() => null); state.found = null; ctx.rerender(); return; }  // an answer still coming is dropped
+    const r = await searching(() => ctx.call("files_search", { text }));
+    if (!r) return;
+    state.found = { text, ...(r.structuredContent || { hits: [] }) };
     ctx.rerender();
   };
 
