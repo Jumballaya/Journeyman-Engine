@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -92,6 +93,9 @@ func openScriptCache(root string, sources map[string]string, tc toolchain.Toolch
 			read[key] = stamp
 		}
 	}
+	for file, text := range ascConfigs(scriptsPath(root, "asconfig.json")) { // a base it extends may be anywhere
+		read["asconfig "+file] = text
+	}
 	top, err := jmfolder.Make(root, scriptCacheDir)
 	if err != nil {
 		return scriptCache{}
@@ -107,6 +111,28 @@ func openScriptCache(root string, sources map[string]string, tc toolchain.Toolch
 	return scriptCache{filepath.Join(top, key)}
 }
 
+// ascConfigs are the asconfig at file and each it extends, by their paths.
+func ascConfigs(file string) map[string]string {
+	out := map[string]string{}
+	for range 8 { // a loop of extends ends
+		data, err := os.ReadFile(file)
+		out[file] = string(data)
+		var config struct{ Extends string }
+		if err != nil || json.Unmarshal(data, &config) != nil || config.Extends == "" {
+			break
+		}
+		if !filepath.IsAbs(config.Extends) {
+			config.Extends = filepath.Join(filepath.Dir(file), config.Extends)
+		}
+		file = config.Extends
+	}
+	return out
+}
+
+// sourceMap is where asc writes a source map for a compile to out: its name
+// without the .ts, .wasm.map.
+func sourceMap(out string) string { return strings.TrimSuffix(out, filepath.Ext(out)) + ".wasm.map" }
+
 // kept is the folder a script's compile is kept in: "wasm", and "wasm.map"
 // when asc wrote a source map beside it (the wasm names it).
 func (c scriptCache) kept(script string) string {
@@ -120,7 +146,7 @@ func (c scriptCache) restore(job compile) bool {
 		return false
 	}
 	if exists(filepath.Join(dir, "wasm.map")) {
-		return copyFile(filepath.Join(dir, "wasm.map"), job.out+".map") == nil
+		return copyFile(filepath.Join(dir, "wasm.map"), sourceMap(job.out)) == nil
 	}
 	return true
 }
@@ -132,7 +158,7 @@ func (c scriptCache) keep(job compile) {
 	if c.dir == "" || os.RemoveAll(dir) != nil || os.MkdirAll(dir, 0o755) != nil {
 		return
 	}
-	if exists(job.out+".map") && !keepFile(job.out+".map", filepath.Join(dir, "wasm.map")) {
+	if exists(sourceMap(job.out)) && !keepFile(sourceMap(job.out), filepath.Join(dir, "wasm.map")) {
 		return
 	}
 	keepFile(job.out, filepath.Join(dir, "wasm"))

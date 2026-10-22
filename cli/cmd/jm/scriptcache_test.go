@@ -25,7 +25,7 @@ while [ $# -gt 0 ]; do [ "$1" = --outFile ] && out=$2; shift; done
 echo "$out" >> "`+log+`"
 case "$out" in *fail*) echo "ERROR TS1005"; exit 1;; *say*) echo "WARNING AS201" >&2;; esac
 mkdir -p "$(dirname "$out")" && printf wasm > "$out"
-case "$out" in *mapped*) printf map > "$out.map";; esac
+case "$out" in *mapped*) printf map > "${out%.ts}.wasm.map";; esac
 `), 0o755)
 	return toolchain.Toolchain{Node: node, ASC: dir}, func() []string {
 		data, _ := os.ReadFile(log)
@@ -34,8 +34,9 @@ case "$out" in *mapped*) printf map > "$out.map";; esac
 }
 
 // A script compiled cleanly is compiled once while nothing compiling may read
-// changes (a scene edited); a script, a config, the manifest (its libraries)
-// changed, or one that warned, again. Its source map comes back with it.
+// changes (a scene edited); a script, a config (or the asconfig's base, even
+// outside the game), the manifest (its libraries) changed, or one that
+// warned, again. Its source map comes back with it.
 func TestAScriptCompilesOnceUntilWhatCompilingReadsChanges(t *testing.T) {
 	tc, compiled := fakeAsc(t)
 	root := t.TempDir()
@@ -71,7 +72,7 @@ func TestAScriptCompilesOnceUntilWhatCompilingReadsChanges(t *testing.T) {
 	if count("a.ts") != 1 || count("say.ts") != 2 || count("fail.ts") != 2 {
 		t.Errorf("a scene and an image edited compiled %v", compiled())
 	}
-	for file, want := range map[string]string{"a.ts": "wasm", "mapped.ts": "wasm", "mapped.ts.map": "map"} {
+	for file, want := range map[string]string{"a.ts": "wasm", "mapped.ts": "wasm", "mapped.wasm.map": "map"} {
 		if data, _ := os.ReadFile(filepath.Join(out, file)); string(data) != want {
 			t.Errorf("kept %s is %q", file, data)
 		}
@@ -82,6 +83,16 @@ func TestAScriptCompilesOnceUntilWhatCompilingReadsChanges(t *testing.T) {
 		if count("a.ts") != i+2 {
 			t.Errorf("%s changed: compiled %v", changed, compiled())
 		}
+	}
+	base := filepath.Join(t.TempDir(), "shared.json") // beside the game: no source of it
+	os.MkdirAll(filepath.Join(root, "assets", "scripts"), 0o755)
+	os.WriteFile(filepath.Join(root, "assets", "scripts", "asconfig.json"), []byte(`{"extends": "`+filepath.ToSlash(base)+`"}`), 0o644)
+	os.WriteFile(base, []byte(`{"options": {"noAssert": true}}`), 0o644)
+	build()
+	os.WriteFile(base, []byte(`{"options": {"noAssert": false}}`), 0o644)
+	build()
+	if count("a.ts") != 6 {
+		t.Errorf("the asconfig's base changed: compiled %v", compiled())
 	}
 	if kept, _ := os.ReadDir(filepath.Join(root, ".jm", scriptCacheDir)); len(kept) != 1 {
 		t.Errorf("kept %d sources' compiles: the last's alone", len(kept))
