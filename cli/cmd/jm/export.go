@@ -63,7 +63,9 @@ Manifest settings under config.export: "icon" (a PNG, macOS) and "bundleId".`,
 			return fmt.Errorf("export: %w", err)
 		}
 		if !exportSkipBuildFlag {
-			buildCmd.Run(buildCmd, nil)
+			if err := build(); err != nil {
+				return err
+			}
 		}
 		return runExport(opts, cmd.OutOrStdout())
 	},

@@ -434,8 +434,8 @@ func TestMigrateAbortsOnDirtyGitWithoutForce(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected dirty-tree error")
 	}
-	var me *migrateError
-	if !errors.As(err, &me) || me.code != migrateDirtyTree {
+	var exit exitCode
+	if !errors.As(err, &exit) || exit.code != migrateDirtyTree {
 		t.Fatalf("expected migrateDirtyTree, got %v", err)
 	}
 }

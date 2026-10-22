@@ -212,15 +212,10 @@ func readCheck(name, text string, failed bool) healthCheck {
 		c.Problems = append(c.Problems, doc.Problems...)
 	}
 	for _, line := range strings.Split(text, "\n") { // problems, then the result line
-		var m map[string]any
-		if json.Unmarshal([]byte(line), &m) != nil {
-			continue
-		}
-		var d Diagnostic
-		if m["level"] != nil && json.Unmarshal([]byte(line), &d) == nil {
-			c.Problems = append(c.Problems, d)
-		} else if m["result"] != nil {
-			last = m
+		if problem, result := readReportLine(line); problem != nil {
+			c.Problems = append(c.Problems, *problem)
+		} else if result != nil {
+			last = result
 		}
 	}
 	switch {

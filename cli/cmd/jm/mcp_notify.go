@@ -254,11 +254,11 @@ func (w *childOutput) line(raw []byte) {
 		return
 	}
 	w.kept.Write(raw)
-	var d Diagnostic
-	switch {
-	case strings.HasPrefix(text, "{") && json.Unmarshal([]byte(text), &d) == nil && (d.Level == "warning" || d.Level == "error"):
-		w.call.log(d.Level, "jm", d)
-	case strings.HasPrefix(text, "warning: "):
+	if d, _ := readReportLine(text); d != nil {
+		w.call.log(d.Level, "jm", *d)
+		return
+	}
+	if strings.HasPrefix(text, "warning: ") { // add's, without --json
 		w.call.log("warning", "jm", strings.TrimPrefix(text, "warning: "))
 	}
 }

@@ -42,14 +42,6 @@ func init() {
 // migrateDirtyTree is jm migrate's exit code for a dirty git tree without --force.
 const migrateDirtyTree = 2
 
-// migrateError carries a process exit code other than 1.
-type migrateError struct {
-	code int
-	msg  string
-}
-
-func (e *migrateError) Error() string { return e.msg }
-
 // runMigrate runs the migration in projectDir, printing to out. dryRun prints
 // the planned changes without writing; force skips the git-clean check.
 func runMigrate(projectDir string, out io.Writer, dryRun, force bool) error {
@@ -310,7 +302,7 @@ func checkCleanGitTree(projectDir string, out io.Writer) error {
 		return nil
 	}
 	if len(bytes.TrimSpace(stdout)) > 0 {
-		return &migrateError{migrateDirtyTree, "uncommitted changes in working tree; commit or pass --force"}
+		return exitCode{migrateDirtyTree, "uncommitted changes in working tree; commit or pass --force"}
 	}
 	return nil
 }

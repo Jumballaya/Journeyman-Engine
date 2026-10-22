@@ -58,20 +58,16 @@ sandbox blocking the window server hangs it.
 
   printf 'step 60\npress Enter\nstep 60\nstate session\nquit\n' | JM_DRIVE=1 JM_RENDERER=none jm run`,
 	Args: cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		target := "build"
 		if len(args) == 1 {
 			target = args[0]
 		}
-		if err := runWith(target, runFlags); err != nil {
-			// The game's own exit code (JM_STRICT's 1) passes through as is.
-			var exit *exec.ExitError
-			if errors.As(err, &exit) {
-				os.Exit(exit.ExitCode())
-			}
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+		err := runWith(target, runFlags)
+		if exit := (*exec.ExitError)(nil); errors.As(err, &exit) {
+			return exitCode{code: exit.ExitCode()} // the game's own (JM_STRICT's 1), as is
 		}
+		return err
 	},
 }
 
