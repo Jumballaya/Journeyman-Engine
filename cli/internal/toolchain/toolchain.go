@@ -168,10 +168,11 @@ func (tc Toolchain) LinkInto(scriptsDir string) {
 // linkedToCache says whether path resolves into the toolchain cache.
 func linkedToCache(path string) bool {
 	dir, err := Dir()
-	if err != nil {
+	abs, absErr := filepath.Abs(path)
+	if err != nil || absErr != nil {
 		return false
 	}
-	rel, ok := realpath.Rel(dir, path)
+	_, rel, ok := realpath.Rel(dir, abs)
 	return ok && rel != "."
 }
 

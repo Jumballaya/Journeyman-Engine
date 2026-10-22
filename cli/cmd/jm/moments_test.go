@@ -250,3 +250,27 @@ func TestTheGameAreaIsThePixelsSaved(t *testing.T) {
 		t.Errorf("an older moment's game area: %v", game)
 	}
 }
+
+// A marker's picture is a file of the play's own, as it really is: never one a
+// link leads out to, nor a ".." spelling Clean would read otherwise.
+func TestAMarkersPictureIsThePlaysOwn(t *testing.T) {
+	dir, outside := t.TempDir(), t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "deep", "sub"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "deep", "out"), 0o755)
+	os.WriteFile(filepath.Join(dir, "deep", "out", "secret.png"), nil, 0o644)
+	os.WriteFile(filepath.Join(outside, "secret.png"), nil, 0o644)
+	if os.Symlink(filepath.Join(dir, "deep", "sub"), filepath.Join(dir, "in")) != nil {
+		t.Skip("no symlinks here")
+	}
+	os.Symlink(outside, filepath.Join(dir, "out"))
+	p := &plays.Play{Dir: dir}
+	for _, image := range []string{"in/../out/secret.png", "out/secret.png", "../secret.png", filepath.Join(outside, "secret.png")} {
+		if got := markerImage(p, plays.Marker{Image: image}); got != "" {
+			t.Errorf("%s: %s", image, got)
+		}
+	}
+	real, _ := filepath.EvalSymlinks(filepath.Join(dir, "deep", "out", "secret.png"))
+	if got := markerImage(p, plays.Marker{Image: "deep/out/secret.png"}); got != real {
+		t.Errorf("the play's own picture: %q, want %q", got, real)
+	}
+}

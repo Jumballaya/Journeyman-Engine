@@ -145,7 +145,7 @@ func TestFilePathsStayInTheGame(t *testing.T) {
 	os.MkdirAll(filepath.Join(outside, "sub"), 0o755)
 	os.Symlink(filepath.Join(outside, "sub"), filepath.Join(game, "deep"))
 	for _, path := range []string{"../x.txt", "/etc/hosts", "link/x.txt", ".git/config", "build/out.txt", ".jm/plays/p1.txt", "",
-		"dangling.txt", "alias/plays/p1.txt", game + "/deep/../.jm.json"} {
+		"dangling.txt", "dangling.txt/", "alias/plays/p1.txt", game + "/deep/../.jm.json"} {
 		if _, err := writeGameFile(game, path, "x", nil); err == nil {
 			t.Errorf("wrote %q", path)
 		}

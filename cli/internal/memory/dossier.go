@@ -79,7 +79,7 @@ func kindFiles(root string) ([]kindFile, error) {
 	entries, failed := os.ReadDir(dir)
 	if errors.Is(failed, os.ErrNotExist) {
 		failed = nil
-	} else if failed == nil && !realpath.In(root, dir) {
+	} else if failed == nil && !realpath.In(root, filepath.Join(Dir, Templates)) {
 		entries, failed = nil, fmt.Errorf("%s/%s leads out of the game", Dir, Templates)
 	}
 	for _, e := range entries {

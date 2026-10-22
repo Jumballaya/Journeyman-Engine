@@ -27,7 +27,7 @@ func (s *mcpServer) consoleTools() []mcpTool {
 			}
 			lines, counts := readLog(log, int(a.num("lines", 200, 1, 2000)), a.flag("errors"))
 			var b strings.Builder
-			rel, _ := realpath.Rel(root, log)
+			_, rel, _ := realpath.Rel(root, log)
 			fmt.Fprintf(&b, "%s: %d errors, %d warnings in all.\n", rel, counts["error"], counts["warning"])
 			for _, l := range lines {
 				fmt.Fprintf(&b, "%s %s\n", l.Level, l.Text)
@@ -43,11 +43,10 @@ func latestLog(root string) string {
 	best := ""
 	var bestInfo os.FileInfo
 	for _, p := range []string{"logs/engine.log", "build/logs/engine.log"} {
-		rel, ok := realpath.Rel(root, filepath.FromSlash(p))
-		if !ok || rel == "." {
+		real, _, ok := realpath.Rel(root, filepath.FromSlash(p))
+		if !ok {
 			continue
 		}
-		real := filepath.Join(realpath.Of(root), filepath.FromSlash(rel))
 		if info, err := os.Stat(real); err == nil && info.Mode().IsRegular() && (bestInfo == nil || info.ModTime().After(bestInfo.ModTime())) {
 			best, bestInfo = real, info
 		}

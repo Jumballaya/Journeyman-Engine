@@ -174,8 +174,12 @@ func Copy(ctx context.Context, version, name, to string, log io.Writer) error {
 		copies = append(copies, copying{filepath.Join(ex.Path, filepath.FromSlash(rel)), filepath.Join(to, filepath.FromSlash(local))})
 		libraries[name] = local
 	}
+	target, err := filepath.Abs(to) // a relative one is from here, not from the example
+	if err != nil {
+		return err
+	}
 	for _, c := range copies {
-		if realpath.In(c.from, to) {
+		if realpath.In(c.from, target) {
 			return fmt.Errorf("a copy can't go inside %s, which it copies", c.from)
 		}
 	}

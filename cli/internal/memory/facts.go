@@ -170,7 +170,7 @@ func (f Facts) read() (string, error) {
 		} else if err != nil {
 			return "", err
 		}
-		if info.Mode()&os.ModeSymlink != 0 || !realpath.In(f.root, f.path()) {
+		if info.Mode()&os.ModeSymlink != 0 || !realpath.In(f.root, filepath.FromSlash(f.rel)) {
 			return "", fmt.Errorf("%s leads out of the game: not read", f.rel)
 		}
 	}

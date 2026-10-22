@@ -91,8 +91,8 @@ func notes(root string) ([]Note, error) {
 	var unread error
 	root, _ = filepath.Abs(root)
 	dir := filepath.Join(root, Dir) // design/ may link to a folder in the game; one leading out isn't read
-	if rel, ok := realpath.Rel(root, Dir); ok && rel != "." {
-		dir = realpath.Of(dir)
+	if real, rel, ok := realpath.Rel(root, Dir); ok && rel != "." {
+		dir = real
 	}
 	walked := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -507,13 +507,13 @@ func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 func write(root, rel, text string) error {
 	path := filepath.Join(root, filepath.FromSlash(rel))
 	outside := fmt.Errorf("%s is outside the game", rel)
-	if !realpath.In(root, path) { // checked before folders are made in it: MkdirAll follows links
+	if !realpath.In(root, filepath.FromSlash(rel)) { // checked before folders are made in it: MkdirAll follows links
 		return outside
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	if !realpath.In(root, path) { // a folder on the way made a link meanwhile
+	if !realpath.In(root, filepath.FromSlash(rel)) { // a folder on the way made a link meanwhile
 		return outside
 	}
 	if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {

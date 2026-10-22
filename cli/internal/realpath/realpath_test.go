@@ -3,6 +3,7 @@ package realpath
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -35,11 +36,14 @@ func TestRelSaysWherePathsReallyLead(t *testing.T) {
 		{"scenes/new/later.json", "scenes/new/later.json", true}, // not made yet
 		{filepath.Join(game, "scenes"), "scenes", true},
 		{"in/a.json", "scenes/a.json", true},
-		{"scenes/deep/../a.json", "scenes/a.json", true},
-		{"deep/../a.json", "scenes/a.json", true}, // ".." after a link: from where it leads
+		{"scenes/./a.json", "scenes/a.json", true},
+		{"scenes/deep/../a.json", "", false}, // "..": refused, though it'd stay in
+		{"deep/../a.json", "", false},        // after a link, Clean and the disk disagree
 		{"out/a.json", "", false},
 		{"dangling", "", false},
 		{"dangling/a.json", "", false},
+		{"dangling/", "", false}, // a trailing slash follows the link: still the link
+		{"", "", false},
 		{"../outside", "", false},
 		{"scenes/missing/../../../outside", "", false}, // ".." past what exists
 		{"in/../../outside", "", false},
@@ -47,10 +51,16 @@ func TestRelSaysWherePathsReallyLead(t *testing.T) {
 		{outside, "", false},
 		{top, "", false},
 	} {
-		rel, ok := Rel(game, filepath.FromSlash(c.path))
+		real, rel, ok := Rel(game, filepath.FromSlash(c.path))
 		if rel != c.rel || ok != c.ok {
 			t.Errorf("Rel(game, %q) = %q, %v; want %q, %v", c.path, rel, ok, c.rel, c.ok)
 		}
+		if realGame, _ := filepath.EvalSymlinks(game); ok && real != filepath.Join(realGame, filepath.FromSlash(rel)) {
+			t.Errorf("Rel(game, %q) is at %s, not where its path says", c.path, real)
+		}
+	}
+	if runtime.GOOS == "windows" && In(game, "C:secret.json") {
+		t.Error(`"C:secret.json" is from drive C's working folder, not the game's`)
 	}
 	if In(filepath.Join(game, "out"), filepath.Join(outside, "x")) != true {
 		t.Error("a link to a folder holds what that folder does")
@@ -69,29 +79,11 @@ func TestRelSeesACaseBlindDisksOtherSpelling(t *testing.T) {
 	if _, err := os.Stat(other); err != nil {
 		t.Skip("this disk tells Game from game")
 	}
-	rel, ok := Rel(game, filepath.Join(other, "scenes", "a.json"))
+	_, rel, ok := Rel(game, filepath.Join(other, "scenes", "a.json"))
 	if !ok || !strings.EqualFold(rel, "scenes/a.json") {
 		t.Errorf("Rel through the other spelling = %q, %v", rel, ok)
 	}
 	if !In(other, game) {
 		t.Error("game holds Game")
-	}
-}
-
-func TestParentCutsAsWritten(t *testing.T) {
-	sep := string(filepath.Separator)
-	root := filepath.VolumeName(os.TempDir()) + sep
-	for _, c := range []struct{ p, dir, base string }{
-		{root + "a", root, "a"},
-		{root + "a" + sep + ".." + sep + "b", root + "a" + sep + "..", "b"},
-		{root + "a" + sep + "b" + sep, root + "a", "b"},
-	} {
-		dir, base, ok := parent(c.p)
-		if !ok || dir != c.dir || base != c.base {
-			t.Errorf("parent(%q) = %q, %q, %v", c.p, dir, base, ok)
-		}
-	}
-	if _, _, ok := parent(root); ok {
-		t.Error("the root has no parent")
 	}
 }

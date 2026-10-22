@@ -132,15 +132,8 @@ func readGame(root, rel string) ([]byte, error) {
 // gamePath is a game file's path on disk; one leading out of the game (by
 // .. or a link) is none.
 func gamePath(root, rel string) string {
-	rel = filepath.Clean(filepath.FromSlash(rel))
-	if !filepath.IsLocal(rel) {
-		return ""
-	}
-	path := filepath.Join(root, rel)
-	if !realpath.In(root, path) {
-		return ""
-	}
-	return realpath.Of(path)
+	real, _, _ := realpath.Rel(root, filepath.Clean(filepath.FromSlash(rel)))
+	return real
 }
 
 // once is check's findings for key, checked the first time it's asked.

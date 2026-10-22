@@ -168,10 +168,11 @@ func thumbsToShow(all []plays.Thumb, n int) []plays.Thumb {
 // markerImage is the picture taken at m, "" when it isn't a file of the
 // play's own (only those are read).
 func markerImage(p *plays.Play, m plays.Marker) string {
-	if !filepath.IsLocal(m.Image) || !realpath.In(p.Dir, m.Image) {
+	if filepath.IsAbs(m.Image) {
 		return ""
 	}
-	return filepath.Join(p.Dir, m.Image)
+	real, _, _ := realpath.Rel(p.Dir, m.Image)
+	return real
 }
 
 func playFrame(root string, a toolArgs) toolResult {

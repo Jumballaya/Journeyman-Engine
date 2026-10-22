@@ -169,8 +169,7 @@ func gamePath(root, path string) (string, string, error) {
 	if path == "" {
 		return "", "", fmt.Errorf("give a file's path, e.g. scenes/main.scene.json")
 	}
-	rel, ok := realpath.Rel(root, filepath.FromSlash(path))
-	real := filepath.Join(realpath.Of(root), filepath.FromSlash(rel))
+	real, rel, ok := realpath.Rel(root, filepath.FromSlash(path))
 	if !ok || hiddenFromAgents(filepath.Dir(rel)) || hiddenFromAgents(rel) && isDir(real) {
 		return "", "", fmt.Errorf("%s isn't one of the game's files", path)
 	}
