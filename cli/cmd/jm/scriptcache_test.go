@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -12,6 +13,9 @@ import (
 // fakeAsc is a toolchain whose compiler logs each script it compiles and
 // writes "wasm"; a script named say*.ts warns, fail*.ts doesn't compile.
 func fakeAsc(t *testing.T) (toolchain.Toolchain, func() []string) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake compiler is a sh script")
+	}
 	dir := t.TempDir()
 	log := filepath.Join(dir, "log")
 	node := filepath.Join(dir, "node")
