@@ -228,7 +228,7 @@ func newMCPServer() *mcpServer {
 			server.tools[i].Icons = serverIcons()
 		}
 		if tool.onGame != nil {
-			server.tools[i].run = server.onGame(tool.onGame)
+			server.tools[i].run = func(a toolArgs) toolResult { _, run := server.prepare(tool, a); return run() }
 			props, _ := tool.InputSchema["properties"].(map[string]any)
 			if props == nil {
 				props = map[string]any{}
@@ -238,7 +238,7 @@ func newMCPServer() *mcpServer {
 		}
 	}
 	if cwd, err := os.Getwd(); err == nil && exists(archive.ManifestEntryKey) { // started in a game (or --dir)
-		server.open = cwd
+		server.open = evalOrSelf(cwd)
 	}
 	return server
 }
@@ -543,7 +543,7 @@ func (s *mcpServer) callTool(ctx context.Context, params json.RawMessage, round 
 			s.calls.Lock()
 			defer s.calls.Unlock()
 			s.openRecentIfNone()
-			game := s.callGame(tool, call.Arguments)
+			game, run := s.prepare(tool, call.Arguments)
 			if round != nil { // the game it runs in, now it's settled
 				if err := round.bind(game); err != nil {
 					return nil, &rpcError{Code: -32602, Message: err.Error()}
@@ -558,20 +558,24 @@ func (s *mcpServer) callTool(ctx context.Context, params json.RawMessage, round 
 			s.round, s.call = round, c
 			defer func() { s.round, s.call = nil, outer }() // before the unlock
 			defer c.followEngineLog(game)()
-			return tool.run(call.Arguments).reply(), nil
+			return run().reply(), nil
 		}
 	}
 	return nil, &rpcError{Code: -32602, Message: "unknown tool " + call.Name}
 }
 
-// callGame is the game a call runs in: the one it names when it works on a
-// game, else the open game ("" for none, or a game it names that isn't one).
-func (s *mcpServer) callGame(tool mcpTool, args toolArgs) string {
+// prepare readies a call: the game it runs in ("" for none) and how it runs.
+// A tool on a game gets the game the call names, else the open one; it's
+// resolved here, once, so the call's forms, log and work all agree on it.
+func (s *mcpServer) prepare(tool mcpTool, args toolArgs) (game string, run func() toolResult) {
 	if tool.onGame == nil {
-		return s.open
+		return s.opened(), func() toolResult { return tool.run(args) }
 	}
-	root, _ := s.gameRoot(args)
-	return root
+	root, err := s.gameRoot(args)
+	if err != nil {
+		return s.opened(), func() toolResult { return textResult(err.Error(), true) }
+	}
+	return root, func() toolResult { return tool.onGame(root, args) }
 }
 
 // mcpCapabilities: extensions (MCP Apps, OpenAI's) both where current

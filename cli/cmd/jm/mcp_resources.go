@@ -530,7 +530,7 @@ func (s *mcpServer) askRoots() {
 // open is only the last opened (openRecentIfNone, while the roots were slow
 // to come): a game opened by name stays. The caller holds the calls lock.
 func (s *mcpServer) openRootIfDefault(game string) {
-	if s.open != "" && !s.byRecent {
+	if s.opened() != "" && !s.byRecent {
 		return
 	}
 	s.byRecent = false

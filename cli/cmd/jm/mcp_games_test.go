@@ -274,3 +274,31 @@ func TestAToolWorksOnTheGameTheCallNames(t *testing.T) {
 		t.Error("a tool on a game doesn't say it takes game")
 	}
 }
+
+// The open game is the folder opened, not a link's name for it: retargeting
+// the link later doesn't move it. A folder that stops being a game isn't open.
+func TestTheOpenGameIsTheFolderOpened(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"a", "b"} {
+		filesGame(t, filepath.Join(home, g))
+		os.WriteFile(filepath.Join(home, g, "which.txt"), []byte(g), 0o644)
+	}
+	link := filepath.Join(t.TempDir(), "current")
+	if err := os.Symlink(filepath.Join(home, "a"), link); err != nil {
+		t.Skip("no symlinks here")
+	}
+	t.Chdir(home)
+	s := newMCPServer()
+	s.openGame(link)
+	os.Remove(link)
+	os.Symlink(filepath.Join(home, "b"), link)
+	read := func() toolResult { return toolOf(t, s, "file_read").run(toolArgs{"path": "which.txt"}) }
+	if got := read(); got.Failed || !strings.Contains(got.Text, "a") {
+		t.Errorf("after the link moved to b: %+v", got)
+	}
+	os.Remove(filepath.Join(home, "a", ".jm.json"))
+	if got := read(); !got.Failed {
+		t.Errorf("a game no more, still open: %+v", got)
+	}
+}

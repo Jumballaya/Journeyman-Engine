@@ -126,22 +126,13 @@ var gameOfTool = strArg("a name or path from `games` (default: the open game)")
 func (s *mcpServer) gameRoot(a toolArgs) (string, error) {
 	if v, named := a["game"]; named && v != "" {
 		game, _ := v.(string) // mistyped: findGame says there's no such game
-		return findGame(s.home, game)
+		root, err := findGame(s.home, game)
+		return evalOrSelf(root), err
 	}
-	if s.open == "" {
-		return "", errors.New("No game open: games, then open_game.")
+	if root := s.opened(); root != "" {
+		return root, nil
 	}
-	return s.open, nil
-}
-
-func (s *mcpServer) onGame(run func(root string, a toolArgs) toolResult) func(toolArgs) toolResult {
-	return func(a toolArgs) toolResult {
-		root, err := s.gameRoot(a)
-		if err != nil {
-			return textResult(err.Error(), true)
-		}
-		return run(root, a)
-	}
+	return "", errors.New("No game open: games, then open_game.")
 }
 
 // filesText is the list for the model: what changed, then every path while there are few.

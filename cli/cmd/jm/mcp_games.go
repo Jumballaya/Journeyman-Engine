@@ -135,7 +135,7 @@ func gamesHome() string {
 // chat) works on the client's root that's a game, else the game opened last
 // (the shared list), as if opened here.
 func (s *mcpServer) openRecentIfNone() {
-	if s.open != "" {
+	if s.opened() != "" {
 		return
 	}
 	if game := s.rootGame(); game != "" {
@@ -161,15 +161,25 @@ func (s *mcpServer) openGame(dir string) string {
 
 // setOpen makes dir the game calls work on when they name none, stopping the
 // driven game if it's another game's. Also the working folder, while some tools still read it.
+// It's kept as the folder's real path: a link to it retargeted later doesn't move it.
 func (s *mcpServer) setOpen(dir string) error {
-	if evalOrSelf(s.open) != evalOrSelf(dir) {
+	real := evalOrSelf(dir)
+	if real != s.open {
 		s.stopDriver()
 	}
-	if err := os.Chdir(dir); err != nil {
+	if err := os.Chdir(real); err != nil {
 		return err
 	}
-	s.open = dir
+	s.open = real
 	return nil
+}
+
+// opened is the open game: "" when none is, or its folder isn't a game any more.
+func (s *mcpServer) opened() string {
+	if s.open == "" || !exists(filepath.Join(s.open, archive.ManifestEntryKey)) {
+		return ""
+	}
+	return s.open
 }
 
 // newGame makes the game c names in home: an empty one (jm init) or a copy of
@@ -237,9 +247,8 @@ func findGame(home, game string) (string, error) {
 func (s *mcpServer) listGames(home string) toolResult {
 	var b strings.Builder
 	open := ""
-	if s.open != "" {
-		open = evalOrSelf(s.open)
-		fmt.Fprintf(&b, "Open: %s (%s)%s%s\n", gameName(s.open), open, keepInMind(s.open), planned(s.open)) // opened without open_game (MCP started in it): its context here
+	if open = s.opened(); open != "" {
+		fmt.Fprintf(&b, "Open: %s (%s)%s%s\n", gameName(open), open, keepInMind(open), planned(open)) // opened without open_game (MCP started in it): its context here
 	} else {
 		b.WriteString("No game open: new_game or open_game.\n")
 	}
