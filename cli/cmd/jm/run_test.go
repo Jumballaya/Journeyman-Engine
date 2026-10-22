@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -228,10 +229,18 @@ func TestAPersonsPlayIsRecordedAndSteerable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.WriteFile(filepath.Join(p, "session.json"), []byte(`{"frames": 60, "seconds": 1}`), 0o644) // a second of play
-	os.WriteFile(filepath.Join(p, "frames.bin"), make([]byte, 4*60), 0o644)                       // its frames' times (dt 0)
+	os.WriteFile(filepath.Join(p, "session.json"), []byte(`{"frames": 60, "seconds": 1, "started": "2000-01-01T00:00:00Z"}`), 0o644) // a second of play
+	os.WriteFile(filepath.Join(p, "frames.bin"), make([]byte, 4*60), 0o644)                                                          // its frames' times (dt 0)
+	for i := range keptPlays {                                                                                                       // newer plays: the resumed one is the oldest, first to be pruned
+		later := filepath.Join(plays.Root(root), fmt.Sprintf("2999-01-01_%06d", i))
+		os.MkdirAll(later, 0o755)
+		os.WriteFile(filepath.Join(later, "session.json"), []byte(`{"format":1,"frames":1,"markers":[],"started":"2999-01-01T00:00:00Z"}`), 0o644)
+	}
 	if err := resumePlay(root, filepath.Base(p), "0"); err != nil {
 		t.Fatal(err)
 	}
 	launched("a resumed play")
+	if _, err := os.Stat(filepath.Join(p, "frames.bin")); err != nil {
+		t.Error("the play a resume replays went with older plays:", err)
+	}
 }
