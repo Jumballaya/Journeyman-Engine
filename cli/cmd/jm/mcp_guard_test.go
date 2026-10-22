@@ -124,8 +124,7 @@ func TestMCPToolCallsTakeTurns(t *testing.T) {
 func TestDriveStartFromAPlayTakesNothingElse(t *testing.T) {
 	t.Chdir(t.TempDir())
 	os.WriteFile(".jm.json", []byte(`{}`), 0o644)
-	os.MkdirAll("build", 0o755)
-	os.WriteFile("build/.jm.json", []byte(`{}`), 0o644)
+	builtFrom(t, ".")
 	s := newMCPServer()
 	r := toolOf(t, s, "drive_start").run(toolArgs{"play": "latest", "scene": "scenes/x.scene.json"})
 	if !r.Failed || !strings.Contains(r.Text, "brings its own") {

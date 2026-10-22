@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,6 +15,12 @@ import (
 // home and settings (their agent apps', their list of games, which a server
 // outside a game opens the last of) stay out of every test.
 func TestMain(m *testing.M) {
+	// Run as jm (the server runs os.Executable() build, say), this binary would run every test again,
+	// and one of them jm again: a test reaching a real jm command fails here instead.
+	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
+		fmt.Fprintf(os.Stderr, "jm.test was run as `jm %s`: a test reached a real jm command\n", strings.Join(os.Args[1:], " "))
+		os.Exit(3)
+	}
 	systemApps = filepath.Join(os.TempDir(), "jm-tests-no-apps")
 	os.Setenv("LOCALAPPDATA", systemApps)
 	home, _ := os.MkdirTemp("", "jm-tests-home")

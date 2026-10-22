@@ -61,6 +61,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 
 		man, err := manifest.LoadManifest(archive.ManifestEntryKey)
 		exitOnError("Error loading manifest", err)
+		sources := buildSources(projectRoot) // before reading them: one changed meanwhile makes this build stale
 
 		// npm install prunes @jm/runtime and libraries (they aren't in package.json), so re-extract them.
 		exitOnError("Failed to sync script packages", syncScriptPackages(projectRoot, man, tc))
@@ -173,6 +174,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 			finish(false) // build/ keeps the last good build
 		}
 
+		exitOnError("Failed to record the build's sources", recordSources(outDir, sources))
 		exitOnError("Failed to replace build/", swapBuild())
 		say("Build complete!")
 		finish(true)
@@ -878,44 +880,6 @@ func exitOnError(msg string, err error) {
 	if err != nil {
 		fail(Diagnostic{Category: "build", Message: fmt.Sprintf("%s: %s", msg, err)})
 	}
-}
-
-// buildIsStale says whether the project's build is missing or older than any
-// of its sources (the manifest, scenes, assets, its script libraries' folders).
-func buildIsStale(root string) bool {
-	built, err := os.Stat(filepath.Join(root, "build", archive.ManifestEntryKey))
-	if err != nil {
-		return true
-	}
-	sources := []string{archive.ManifestEntryKey, "scenes", "assets"}
-	for i := range sources {
-		sources[i] = filepath.Join(root, sources[i])
-	}
-	if man, err := manifest.LoadManifest(sources[0]); err == nil {
-		for _, dir := range man.ScriptLibraries {
-			src := librarySource(root, dir)
-			sources = append(sources, src) // a link: when it was pointed (WalkDir doesn't follow it)
-			if real, err := filepath.EvalSymlinks(src); err == nil && real != src {
-				sources = append(sources, real) // and what it points at
-			}
-		}
-	}
-	stale := false
-	for _, top := range sources {
-		_ = filepath.WalkDir(top, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || stale {
-				return filepath.SkipAll
-			}
-			if d.IsDir() && (d.Name() == "node_modules" || (strings.HasPrefix(d.Name(), ".") && path != top)) {
-				return filepath.SkipDir
-			}
-			if info, err := d.Info(); err == nil && !d.IsDir() && info.ModTime().After(built.ModTime()) {
-				stale = true
-			}
-			return nil
-		})
-	}
-	return stale
 }
 
 // copyOf gives the game a sandbox's or variant's folder copies

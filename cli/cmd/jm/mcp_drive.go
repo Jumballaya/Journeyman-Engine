@@ -15,7 +15,7 @@ import (
 func (s *mcpServer) driveTools() []mcpTool {
 	return []mcpTool{
 		{Name: "drive_start", Description: "For the person's own plays use play_show first. Start the built game under the stepped driver (headless; no window or GL unless gl is true). " +
-			"It builds the game first when the build is missing or older than the sources. " +
+			"It builds the game first when there is no build of its sources as they are (a file added, changed or gone). " +
 			"It waits at frame 0 until told to step, or with play, at that moment of the person's recorded play. One game at a time; starting again restarts it. " +
 			"With record, what you play is recorded as a play like the person's (drive_stop gives its id; play_show, play_frame and the timeline then work on it).",
 			Annotations: writes(), InputSchema: object(map[string]any{
