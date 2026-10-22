@@ -24,6 +24,7 @@
 #include "../core/app/Registration.hpp"
 #include "../core/logger/logging.hpp"
 #include "../core/app/WindowEvents.hpp"
+#include "../core/ecs/component/Color.hpp"
 #include "Particles.hpp"
 #include "AnimatorSystem.hpp"
 #include "Cameras.hpp"
@@ -51,6 +52,11 @@ std::string canonical(std::string_view path) {
 }
 
 std::optional<glm::vec4> readColor(const nlohmann::json& json, const char* key) {
+  return json.contains(key) ? colorOf(json[key]) : std::nullopt;
+}
+
+// [u0, v0, u1, v1]
+std::optional<glm::vec4> readQuad(const nlohmann::json& json, const char* key) {
   if (!json.contains(key) || !json[key].is_array() || json[key].size() != 4) return std::nullopt;
   const auto c = json[key].get<std::array<float, 4>>();
   return glm::vec4(c[0], c[1], c[2], c[3]);
@@ -228,7 +234,7 @@ void Renderer2DModule::registerComponents(Engine& app) {
           setSpriteImage(c, texture);
         }
         c.color = readColor(json, "color").value_or(c.color);
-        c.texRect = readColor(json, "texRect").value_or(c.texRect);
+        c.texRect = readQuad(json, "texRect").value_or(c.texRect);
         if (json.contains("shadow")) {
           const auto& shadow = json["shadow"];
           c.shadow.offset.x = shadow.value("x", c.shadow.offset.x);

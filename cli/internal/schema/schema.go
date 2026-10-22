@@ -10,10 +10,14 @@ import (
 	"fmt"
 	"math"
 	"os/exec"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
 )
+
+// hexColor is a color as the engine reads one from text (core Color.hpp).
+var hexColor = regexp.MustCompile(`^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$`)
 
 // Field is one key of a component's scene JSON.
 type Field struct {
@@ -347,7 +351,7 @@ func (f Field) mismatch(v any) string {
 			want = "[x, y, z]"
 		}
 	case "color":
-		if s, ok := v.(string); !(ok && strings.HasPrefix(s, "#")) && !numbers(3, 4) {
+		if s, ok := v.(string); !(ok && hexColor.MatchString(s)) && !numbers(3, 4) {
 			want = `[r, g, b, a] (0..1) or "#rrggbb"`
 		}
 	case "choice":

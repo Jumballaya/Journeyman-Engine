@@ -6,6 +6,7 @@ add_executable(test_engine_core
     ecs/ViewTest.cpp
     ecs/archetype/ArchetypeTest.cpp
     ecs/archetype/ArchetypeSetTest.cpp
+    ecs/component/ColorTest.cpp
     ecs/component/ComponentRegistryTest.cpp
     ecs/component/ComponentVtableTest.cpp
     ecs/component/SchemaJsonTest.cpp

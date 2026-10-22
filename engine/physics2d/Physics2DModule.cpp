@@ -7,6 +7,7 @@
 
 #include "../core/app/Engine.hpp"
 #include "../core/app/Registration.hpp"
+#include "../core/ecs/component/Color.hpp"
 #include "../core/logger/logging.hpp"
 #include "Blocking.hpp"
 #include "BoxColliderComponent.hpp"
@@ -167,8 +168,7 @@ void Physics2DModule::registerComponents(Engine& app) {
         }
         c.collisionLayer = readMask(json, "collisionLayer", c.collisionLayer);
         if (const nlohmann::json stroke = json.value("stroke", nlohmann::json()); stroke.is_object()) {
-          std::array<float, 4> color;
-          if (readArray(stroke, "color", color)) c.strokeColor = {color[0], color[1], color[2], color[3]};
+          if (auto color = colorOf(stroke.value("color", nlohmann::json()))) c.strokeColor = *color;
           if (stroke.contains("width") && stroke["width"].is_number()) c.strokeWidth = std::max(0.0f, stroke["width"].get<float>());
         }
       },

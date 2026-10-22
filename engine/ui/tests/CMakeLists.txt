@@ -10,6 +10,7 @@ add_executable(test_engine_ui
     ../Style.cpp
     ../Layout.cpp
     ../UIDocument.cpp
+    ../../core/ecs/component/Color.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
 )
 target_include_directories(test_engine_ui PRIVATE ..)
