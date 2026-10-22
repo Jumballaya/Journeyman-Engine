@@ -224,7 +224,6 @@ func TestEveryToolSaysWhichGameItWorksOn(t *testing.T) {
 	// Design debt: these still find their game themselves (their own "game", or the
 	// working folder). Each moves to onGame (todos: Design debt, G2–G6), then off this list.
 	ownWay := map[string]bool{
-		"build": true, "test": true, "golden": true, "generate": true, "fmt": true, "export": true, "session": true,
 		"drive_start": true, "drive": true, "drive_frame": true, "drive_profile": true, "drive_stop": true,
 		"play_show": true, "play_frame": true, "play_state": true, "play_inputs": true, "play_verify": true, "play_resume": true,
 		"play_live": true, "game_log": true, "scene_view": true, "scene_render": true, "file_view": true,

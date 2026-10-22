@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -219,12 +220,17 @@ func TestDriveNeedsACommand(t *testing.T) {
 }
 
 func TestMCPFmtAndExportRunJM(t *testing.T) {
-	t.Chdir(t.TempDir())
+	game := t.TempDir()
+	t.Chdir(game)
+	os.WriteFile(".jm.json", []byte(`{}`), 0o644)
 	os.MkdirAll("scenes", 0o755)
 	os.WriteFile("scenes/a.scene.json", []byte(`{}`), 0o644)
 	var ran []string
 	saved := runJM
-	runJM = func(_ *toolCall, a ...string) (string, bool) {
+	runJM = func(_ *toolCall, dir string, a ...string) (string, bool) {
+		if dir != evalOrSelf(game) {
+			t.Errorf("%v ran in %q, not the game", a, dir)
+		}
 		ran = append(ran, strings.Join(a, " "))
 		return "", false
 	}
@@ -576,5 +582,27 @@ func TestPromptErrorsAndPathLinks(t *testing.T) {
 	p, _ := findPlaybook("canon_check")
 	if text, _ := p.fill(map[string]string{"note": "design/South/Harbor.md"}); !strings.Contains(text, "Check [[South/Harbor]] against") || !strings.Contains(text, "design/South/Harbor.md") && strings.Contains(text, "{note}") {
 		t.Errorf("by path: %s", text)
+	}
+}
+
+// A jm command a call aims at another game runs there, not in the open game.
+func TestAJMCommandRunsInTheGameTheCallNames(t *testing.T) {
+	open, other := t.TempDir(), t.TempDir()
+	for _, g := range []string{open, other} {
+		os.WriteFile(filepath.Join(g, ".jm.json"), []byte(`{}`), 0o644)
+	}
+	t.Chdir(open)
+	var dirs []string
+	saved := runJM
+	runJM = func(_ *toolCall, dir string, _ ...string) (string, bool) {
+		dirs = append(dirs, dir)
+		return "", false
+	}
+	defer func() { runJM = saved }()
+	mcpSession(t,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"build","arguments":{"game":"`+other+`"}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"build","arguments":{}}}`)
+	if want := []string{evalOrSelf(other), evalOrSelf(open)}; !slices.Equal(dirs, want) {
+		t.Errorf("ran in %q; want %q", dirs, want)
 	}
 }

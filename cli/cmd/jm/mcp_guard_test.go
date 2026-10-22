@@ -37,9 +37,10 @@ func TestMCPToolArgumentsArentFlagsOrOutsidePaths(t *testing.T) {
 	outside := t.TempDir()
 	os.WriteFile(filepath.Join(outside, "o.json"), []byte(`{}`), 0o644)
 	t.Chdir(t.TempDir())
+	os.WriteFile(".jm.json", []byte(`{}`), 0o644) // a game: its paths are what's refused
 	var ran []string
 	saved := runJM
-	runJM = func(_ *toolCall, a ...string) (string, bool) {
+	runJM = func(_ *toolCall, _ string, a ...string) (string, bool) {
 		ran = append(ran, strings.Join(a, " "))
 		return "", false
 	}
