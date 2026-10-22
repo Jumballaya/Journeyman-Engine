@@ -10,8 +10,9 @@ const texts = {
   Design: '---\ntitle: "Design"\ntype: index\n---\n\n# Design\n\nWhat it is.\n\n## Relations\n- includes [[Levels]]\n',
   Levels: '---\ntitle: "Levels"\n---\n\n# Levels\n\nSee `scenes/main.scene.json` and `assets/data/x.json`.\n\n## Observations\n- [feel] the pit is unfair\n',
 };
-// memory as jm answers it: a note by its path or its title.
-const read = ({ note: t }) => {
+// memory as jm answers it: a note by its path or its title (a ref, or a [[link]]'s name).
+const read = ({ note, link }) => {
+  const t = note || link;
   if (!t) return notes;
   const n = notes.structuredContent.notes.find((o) => o.path === t || o.title === t) || { title: t, path: `design/${t}.md` };
   return { structuredContent: { note: { title: n.title, path: n.path, type: 'note' }, text: texts[n.title] || '',
@@ -33,6 +34,9 @@ test('the notes are listed, Design read first; [[links]] open notes, backlinks s
   assert.match(s.app.text, /feel\s+the pit is unfair/);
   assert.match(s.app.text, /Linked from\s+Design/);
   assert.equal(s.contexts().at(-1).structuredContent.note, 'Levels');
+  // A [[link]] is read as links read (link rules), its world by the path that answered.
+  assert.deepEqual(s.calls().filter((c) => c.name === 'memory').at(-1).arguments.link, 'Levels');
+  assert.equal(s.calls().filter((c) => c.name === 'world_context').at(-1).arguments.note, 'design/Levels.md');
 });
 
 test('a game file named in a note opens in Files', async () => {

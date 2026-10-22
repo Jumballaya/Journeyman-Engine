@@ -142,6 +142,15 @@ func Find(root, ref string) (Note, error) {
 	}
 }
 
+// FindLink is the note [[link]] names, read as the world reads a note's links
+// (link rules: a path doesn't win; of several, the first, which health reports).
+func FindLink(root, link string) (Note, error) {
+	if found := linked(Notes(root), link); len(found) > 0 {
+		return found[0], nil
+	}
+	return Note{}, fmt.Errorf("%w [[%s]] (memory lists them)", ErrNoNote, strings.TrimSpace(link))
+}
+
 // named are the notes ref may mean: the one at its path (.md optional) alone,
 // else those at it in any case (one, on a case-blind disk), else each a
 // [[ref]] names (title, file name or folder/title).

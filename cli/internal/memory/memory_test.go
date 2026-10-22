@@ -534,6 +534,24 @@ func TestANotesNameFindsIt(t *testing.T) {
 	}
 }
 
+// A [[link]] is read by link rules, a tool's ref by its own: [[design/Z]] is
+// the note titled so, the ref design/Z the note at design/Z.md.
+func TestALinkAndARefOfOneTextAreTwoNotes(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	os.WriteFile(filepath.Join(root, Dir, "A.md"), []byte("---\ntitle: \"design/Z\"\n---\n\n# design/Z\n"), 0o644)
+	os.WriteFile(filepath.Join(root, Dir, "Z.md"), []byte("# Z\n"), 0o644)
+	if n, err := FindLink(root, "design/Z"); err != nil || n.Path != "design/A.md" {
+		t.Errorf("the link: %+v %v", n, err)
+	}
+	if n, err := Find(root, "design/Z"); err != nil || n.Path != "design/Z.md" {
+		t.Errorf("the ref: %+v %v", n, err)
+	}
+	if _, err := FindLink(root, "Nowhere"); !errors.Is(err, ErrNoNote) {
+		t.Errorf("no note: %v", err)
+	}
+}
+
 // A ref's .md is taken off once: Foo.md.md is that file, not Foo.md.
 func TestARefsExtensionIsTakenOffOnce(t *testing.T) {
 	all := []Note{{Title: "Foo", Path: "design/Foo.md"}, {Title: "Foo.md", Path: "design/Foo.md.md"}}

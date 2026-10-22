@@ -36,14 +36,17 @@ studioTabs.push((() => {
     ctx.rerender();
   };
 
-  const open = async (ctx, ref) => {
+  // open reads a note by ref (its path, or a tool's name for it), or as a [[link]] in text names it
+  // (asLink: link rules); then what it connects to, by the path that answered.
+  const open = async (ctx, ref, asLink) => {
     const read = state.read = { ref, note: null, world: null };
     state.form = null;
     ctx.rerender();
-    const [r, w] = await Promise.all([ctx.call("memory", { note: ref }).catch(() => null),
-      ctx.call("world_context", { note: ref, steps: 1 }).catch(() => null)]);
+    const r = await ctx.call("memory", asLink ? { link: ref } : { note: ref }).catch(() => null);
+    const note = r && !r.isError && r.structuredContent ? r.structuredContent : null;
+    const w = await ctx.call("world_context", { note: (note && note.note && note.note.path) || ref, steps: 1 }).catch(() => null);
     if (state.read === read) {
-      read.note = r && !r.isError && r.structuredContent ? r.structuredContent : { error: said(r) || `No note ${ref}.` };
+      read.note = note || { error: said(r) || `No note ${ref}.` };
       read.world = w && !w.isError && w.structuredContent ? w.structuredContent : null;
       ctx.rerender();
     }
@@ -113,7 +116,7 @@ studioTabs.push((() => {
     while ((m = re.exec(text))) {
       out.push(text.slice(at, m.index));
       const target = m[1] && m[1].trim();
-      if (target) out.push(el("button", { class: "mem-link", onclick: () => open(ctx, target) }, m[2] || target));
+      if (target) out.push(el("button", { class: "mem-link", onclick: () => open(ctx, target, true) }, m[2] || target));
       else if (/\.\w+$/.test(m[3]) && /^[\w./ -]+$/.test(m[3])) {
         const file = m[3], scene = /\.scene\.json$/.test(file) && ctx.has("scene");
         out.push(el("button", { class: "mem-link mem-file", title: file, onclick: () => ctx.go(scene ? ctx.link("scene", { scene: file }) : ctx.link("files", { file })) }, file));

@@ -18,10 +18,16 @@ func (s *mcpServer) memoryTools() []mcpTool {
 		{Name: "memory", Meta: callableMeta("", ""), Title: "The game's design notes", Description: "Read before you change how the game plays: the game's design notes (design/: Pitch, Pillars, Levels, Systems, Decisions, Notes), " +
 			"or one note with what it links and what links it. [[Note]] links a note; game files are named in backticks.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"note": strArg(`one note to read, by title or path, e.g. "Pillars" (default: the list)`),
+				"link": strArg(`one note to read as a [[link]] in a note names it (link rules: a path doesn't come first)`),
 				"kind": strArg(`only the dossiers of a kind, e.g. "character", with their properties`)}),
 			onGame: func(root string, a toolArgs) toolResult {
-				if a.str("note") != "" {
-					n, err := memory.Find(root, a.str("note"))
+				if a.str("note") != "" || a.str("link") != "" {
+					find := memory.Find
+					ref := a.str("note")
+					if ref == "" {
+						find, ref = memory.FindLink, a.str("link")
+					}
+					n, err := find(root, ref)
 					if err != nil {
 						return textResult(err.Error(), true)
 					}
