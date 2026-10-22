@@ -467,26 +467,25 @@ func TestScriptLibrariesCantReplaceJmsPackages(t *testing.T) {
 
 // Two builds of a game take turns: they share its staging folder and build/.
 func TestBuildsOfAGameTakeTurns(t *testing.T) {
-	root := t.TempDir()
+	root := t.TempDir() // no manifest: a build stops at once, once it may begin
+	t.Chdir(root)
 	release, err := holdBuild(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second := make(chan struct{})
-	go func() {
-		if release, err := holdBuild(root); err == nil {
-			release()
-		}
-		close(second)
-	}()
+	done := make(chan error)
+	go func() { done <- buildGame(&report{category: "build"}) }()
 	select {
-	case <-second:
-		t.Fatal("a second build began while the first held the game")
+	case <-done:
+		t.Fatal("a build began while another held the game")
 	case <-time.After(200 * time.Millisecond):
 	}
 	release()
 	select {
-	case <-second:
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "manifest") {
+			t.Errorf("the build went on to its manifest: %v", err)
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("the second build never began")
 	}

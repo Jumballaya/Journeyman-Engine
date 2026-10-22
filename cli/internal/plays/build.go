@@ -15,6 +15,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/formats"
+	"github.com/Jumballaya/Journeyman-Engine/internal/jmfolder"
 )
 
 // Build is a project's build as plays see it: Game fingerprints what decides
@@ -145,14 +146,10 @@ func (p *Play) DriftFrom(b Build) Drift {
 }
 
 // Create makes a new play's folder, named for when it starts, noting b as its
-// build. .jm/ ignores itself: plays never get committed, even in a project
-// whose .gitignore predates them.
+// build (in .jm/, never committed).
 func Create(projectRoot string, b Build, jmVersion string) (string, error) {
-	if err := os.MkdirAll(Root(projectRoot), 0o755); err != nil {
+	if _, err := jmfolder.Make(projectRoot, "plays"); err != nil {
 		return "", err
-	}
-	if ignore := filepath.Join(projectRoot, ".jm", ".gitignore"); !exists(ignore) {
-		_ = atomicfile.WriteFile(ignore, []byte("*\n"), 0o644)
 	}
 	base := filepath.Join(Root(projectRoot), time.Now().Format("2006-01-02_150405"))
 	dir := base

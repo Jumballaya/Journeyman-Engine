@@ -23,6 +23,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/filelock"
 	"github.com/Jumballaya/Journeyman-Engine/internal/formats"
+	"github.com/Jumballaya/Journeyman-Engine/internal/jmfolder"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/schema"
@@ -57,10 +58,11 @@ func init() {
 // --watch, the build tool and drive_start each run jm build), then gives back
 // the release: builds share the staging folder, script packages and build/.
 func holdBuild(root string) (release func(), err error) {
-	if err := os.MkdirAll(filepath.Join(root, ".jm"), 0o755); err != nil {
+	dir, err := jmfolder.Make(root)
+	if err != nil {
 		return nil, err
 	}
-	return filelock.Hold(filepath.Join(root, ".jm", "build"))
+	return filelock.Hold(filepath.Join(dir, "build"))
 }
 
 // swapBuild makes the finished staging folder the build; the last build
@@ -702,16 +704,16 @@ func buildGame(r *report) error {
 	defer release()
 	warnAboutEditorEdits(r, projectRoot)
 
-	// Toolchain errors are already actionable; print them as-is.
-	tc, err := scriptToolchain(projectRoot)
-	if err != nil {
-		return Diagnostic{Category: "toolchain", Message: err.Error()}
-	}
-
 	sources := buildSources(projectRoot) // before reading any: one changed meanwhile makes this build stale
 	man, err := manifest.LoadManifest(archive.ManifestEntryKey)
 	if err != nil {
 		return fmt.Errorf("Error loading manifest: %w", err)
+	}
+
+	// Toolchain errors are already actionable; print them as-is.
+	tc, err := scriptToolchain(projectRoot)
+	if err != nil {
+		return Diagnostic{Category: "toolchain", Message: err.Error()}
 	}
 
 	// npm install prunes @jm/runtime and libraries (they aren't in package.json), so re-extract them.
