@@ -222,11 +222,6 @@ func bakeAtlas(path string) error {
 	if len(cfg.Sources) == 0 {
 		return fmt.Errorf("missing or empty 'sources'")
 	}
-	for _, p := range cfg.Sources {
-		if err := validateRelativePath(p); err != nil {
-			return fmt.Errorf("atlas source: %w", err)
-		}
-	}
 	sources, clips, err := cfg.Read(func(p string) ([]byte, error) { return os.ReadFile(filepath.FromSlash(p)) }, 0)
 	if err != nil {
 		return err

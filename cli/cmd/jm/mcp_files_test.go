@@ -73,7 +73,7 @@ func TestFileViewShowsAnAtlasFromTheGameOnly(t *testing.T) {
 	for _, i := range images {
 		regions = append(regions, i.(map[string]any)["region"].(string)+" "+i.(map[string]any)["size"].(string))
 	}
-	if got := strings.Join(regions, ", "); got != "orb 4×2, secret read \"../secret.png\": ../secret.png isn't one of the game's files, kage_0 2×2, kage_1 2×2" {
+	if got := strings.Join(regions, ", "); got != "orb 4×2, secret source \"../secret.png\" isn't a path in the game, kage_0 2×2, kage_1 2×2" {
 		t.Errorf("images: %s", got)
 	}
 	thumbs := r["_meta"].(map[string]any)["jm/files"].(map[string]any)

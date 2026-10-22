@@ -85,3 +85,15 @@ func TestASourceIsFoundWhereverItWasWritten(t *testing.T) {
 		t.Errorf("a frame outside its sheet names the sheet: %v", err)
 	}
 }
+
+func TestASourceOutsideTheGameIsntRead(t *testing.T) {
+	game := files{"../outside.png": pngOf(2, 2), "art/out.json": sheetOf("../../outside.png", 1), "C:x.png": pngOf(2, 2)}
+	for _, p := range []string{`..\outside.png`, "../outside.png", "/outside.png", "C:x.png", "", "art/out.json"} {
+		if _, _, err := (AtlasConfig{Sources: []string{p}}).Read(game.read, 0); err == nil || !strings.Contains(err.Error(), "in the game") {
+			t.Errorf("%q: %v", p, err)
+		}
+	}
+	if _, ok := (AtlasConfig{Sources: []string{`..\outside.png`}}).Region(game.read, "outside", 16); ok {
+		t.Error("a region from outside the game")
+	}
+}

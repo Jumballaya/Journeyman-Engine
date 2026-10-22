@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"io/fs"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -65,6 +66,9 @@ func (c AtlasConfig) Read(read ReadFunc, side int) ([]SourceImage, map[string]ma
 // map (x.normal.png beside its picture) when there is one, and a sheet's
 // clips (nil for a PNG). side bounds a picture's sides (0: any size).
 func (s Source) Read(read ReadFunc, side int) ([]SourceImage, map[string]Clip, error) {
+	if !local(s.Path) {
+		return nil, nil, fmt.Errorf("source %q isn't a path in the game", s.Path)
+	}
 	if IsNormalMap(s.Path) {
 		return nil, nil, fmt.Errorf("source %q is a normal map: list the image it belongs to", s.Path)
 	}
@@ -105,7 +109,7 @@ func (c AtlasConfig) Region(read ReadFunc, region string, side int) (image.Image
 // sheet hero.json is another source's) or can't.
 func (s Source) region(read ReadFunc, region string, side int) image.Image {
 	frame, ok := s.frame(region)
-	if !ok {
+	if !ok || !local(s.Path) {
 		return nil
 	}
 	if !s.Sheet {
@@ -144,7 +148,18 @@ func (s Source) sheet(read ReadFunc) (Sheet, string, error) {
 	if err != nil {
 		return Sheet{}, "", fmt.Errorf("%q: %w", s.Path, err)
 	}
-	return sheet, path.Join(path.Dir(s.Path), sheet.Image), nil
+	picture := path.Join(path.Dir(s.Path), sheet.Image)
+	if !local(picture) {
+		return Sheet{}, "", fmt.Errorf("%q: its image %q isn't in the game", s.Path, sheet.Image)
+	}
+	return sheet, picture, nil
+}
+
+// local says whether the slash path p is in the folder it's read from: not
+// empty, absolute, on a drive ("C:x") or led out of by "..".
+func local(p string) bool {
+	first, _, _ := strings.Cut(p, "/")
+	return p != "" && !path.IsAbs(p) && !strings.Contains(first, ":") && !slices.Contains(strings.Split(path.Clean(p), "/"), "..")
 }
 
 // readPicture decodes the PNG at p, bounded by side (0: any), and (withNormal)
