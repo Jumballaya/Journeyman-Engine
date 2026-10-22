@@ -57,11 +57,13 @@ func TestFilesListMarksWhatGitSaysChanged(t *testing.T) {
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	repo := t.TempDir()
 	game := filesGame(t, filepath.Join(repo, "games", "pip"))
+	os.WriteFile(filepath.Join(game, "assets/.DS_Store"), []byte{0}, 0o644) // committed once, then gone: still the OS's
 	git(t, repo, "init", "-q")
 	git(t, repo, "add", ".")
 	git(t, repo, "commit", "-qm", "start")
 	os.WriteFile(filepath.Join(game, "scenes/main.scene.json"), []byte("{}\n"), 0o644)
 	os.Remove(filepath.Join(game, "assets/scripts/player.ts"))
+	os.Remove(filepath.Join(game, "assets/.DS_Store"))
 	os.WriteFile(filepath.Join(game, "notes.md"), []byte("hi"), 0o644)
 	list, err := listFiles(game)
 	if err != nil {

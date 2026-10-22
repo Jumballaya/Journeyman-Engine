@@ -213,11 +213,14 @@ const studioTabs = [];
   // may be another chat's) unless what ran opened one (moved: true).
   const opens = new Set(["open_game", "new_game"]);
   const refresh = async (moved = false) => {
-    const over = host.result, was = games();
+    const over = host.result;
     let listed = await host.callTool("games", {});
-    const s = listed && listed.structuredContent;
+    const s = listed && listed.structuredContent, was = games();  // the tab's game as it is now: one opened meanwhile stays
     if (!s || !Array.isArray(s.games)) return;
-    if (!moved && was && was.open && !was.cached) listed = { ...listed, structuredContent: { ...s, open: was.open } };
+    if (!moved && was && was.open && !was.cached) {
+      const kept = s.games.some((g) => g && g.path === was.open) ? [] : was.games.filter((g) => g.path === was.open);  // a copy listed only while open
+      listed = { ...listed, structuredContent: { ...s, open: was.open, games: [...s.games, ...kept] } };
+    }
     state.listed = { result: listed, over };
   };
 
