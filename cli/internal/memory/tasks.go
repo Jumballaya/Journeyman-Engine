@@ -215,6 +215,9 @@ func withLastTask(text string, last int) (string, error) {
 		for value > 1 && (strings.TrimSpace(lines[value-1]) == "" || strings.HasPrefix(strings.TrimSpace(lines[value-1]), "#")) {
 			value--
 		}
+		if c := front[at].node.LineComment; c != "" { // its comment on its line too
+			mark += " " + c
+		}
 		out = strings.Replace(text, "\n"+front[at].raw+"\n", "\n"+strings.Join(append([]string{mark}, lines[value:]...), "\n")+"\n", 1)
 	} else if strings.HasPrefix(text, "---\n") && strings.Contains(text[3:], "\n---\n") {
 		out = "---\n" + mark + "\n" + text[4:]

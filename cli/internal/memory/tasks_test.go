@@ -202,7 +202,7 @@ func TestLastTaskIsReadAsYAML(t *testing.T) {
 		if a, _ := AddTask(root, "A", "", nil); a.ID != "t8" {
 			t.Errorf("%s: added %s", front, a.ID)
 		}
-		if got := boardFile(t, root); strings.Count(got, "lastTask") != 1 || !strings.Contains(got, "lastTask: t8\n") {
+		if got := boardFile(t, root); strings.Count(got, "lastTask") != 1 || !strings.Contains(got, "lastTask: t8") {
 			t.Errorf("%s: written\n%s", front, got)
 		}
 	}
@@ -232,6 +232,7 @@ func TestLastTaskKeepsTheFrontmattersShape(t *testing.T) {
 		"  title: Tasks":                             "---\n  lastTask: t8\n  title: Tasks\n",
 		"lastTask: |-\n  t7\ntitle: Tasks":           "\nlastTask: t8\ntitle: Tasks\n",
 		"lastTask: t7\n# kept by hand\ntitle: Tasks": "\nlastTask: t8\n# kept by hand\ntitle: Tasks\n",
+		"lastTask: t7 # do not reset\ntitle: Tasks":  "\nlastTask: t8 # do not reset\ntitle: Tasks\n",
 	} {
 		root := t.TempDir()
 		os.MkdirAll(filepath.Join(root, "design"), 0o755)
