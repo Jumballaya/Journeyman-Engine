@@ -12,8 +12,8 @@ func TestTheLongestEndingNamesTheFormat(t *testing.T) {
 			t.Errorf("%s ships as %q, want %q", name, f.Archive, want)
 		}
 	}
-	if _, ok := Of("notes.txt"); ok {
-		t.Error("a .txt is no format of a game's")
+	if _, ok := Of("notes.rtf"); ok {
+		t.Error("a .rtf is no format of a game's")
 	}
 }
 
@@ -40,7 +40,7 @@ func TestTextFormatsAreServedAsTheirType(t *testing.T) {
 	for name, want := range map[string]string{
 		"scenes/a.scene.json": "application/json", "assets/maps/m.tmj": "application/json", "assets/scripts/hero.ts": "text/x-typescript",
 		"assets/shaders/glow.vert": "text/plain", "assets/shaders/glow.frag": "text/plain", "assets/ui/hud.ui.html": "text/html",
-		"design/notes.md": "text/markdown", "assets/maps/m.tmx": "application/xml", "assets/hero.png": "", "assets/hero.aseprite": "",
+		"design/notes.md": "text/markdown", "design/notes.txt": "text/plain", "assets/maps/m.tmx": "application/xml", "assets/hero.png": "", "assets/hero.aseprite": "",
 	} {
 		if f, _ := Of(name); f.TextMIME != want {
 			t.Errorf("%s is served as %q, want %q", name, f.TextMIME, want)

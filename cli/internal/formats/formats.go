@@ -63,6 +63,7 @@ var table = []Format{
 	{Suffix: ".vert", Kind: "shader", TextMIME: plain},
 	{Suffix: ".glsl", Kind: "shader", TextMIME: plain},
 	{Suffix: ".md", Kind: "doc", TextMIME: "text/markdown"},
+	{Suffix: ".txt", Kind: "doc", TextMIME: plain},
 }
 
 func init() { // longest suffix first: .scene.json before .json
