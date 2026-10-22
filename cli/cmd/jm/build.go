@@ -26,7 +26,6 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/schema"
 	"github.com/Jumballaya/Journeyman-Engine/internal/stdlib"
 	"github.com/Jumballaya/Journeyman-Engine/internal/toolchain"
-
 	"github.com/spf13/cobra"
 )
 
@@ -594,128 +593,32 @@ func runAsc(tc toolchain.Toolchain, scriptPath, projectRoot, outFile string) err
 	return err
 }
 
-// Literal names scripts pass to spawn() and Scene.load(), which the engine
-// resolves at run time ("brick" is assets/prefabs/brick.prefab.json); a name
-// built at run time ("pickup_" + kind) isn't one.
-var scriptNameUses = []struct {
-	call   *regexp.Regexp
-	suffix string
-	what   string
-}{
-	{regexp.MustCompile(`\bspawn\(\s*"([^"]+)"\s*[,)]`), ".prefab.json", "prefab"},
-	{regexp.MustCompile(`\bScene\.load\(\s*"([^"]+)"\s*[,)]`), ".scene.json", "scene"},
-}
-
-// scriptSource is a script's text with its comments blanked out, and its code:
-// that with string literals' insides blanked too (all the same length, so offsets
-// line up and give lines and columns). Checks find calls in code and read their
-// literal arguments from text.
-type scriptSource struct{ file, text, code string }
-
-// inCode is whether offset is in code, not inside a string literal.
-func (s scriptSource) inCode(offset int) bool { return s.code[offset] == s.text[offset] }
-
-func scriptSources(man manifest.GameManifest) []scriptSource {
-	var out []scriptSource
-	for _, file := range man.Assets {
-		if !strings.HasSuffix(file, ".ts") {
-			continue
-		}
-		if data, err := os.ReadFile(file); err == nil {
-			text, code := blankComments(string(data))
-			out = append(out, scriptSource{file, text, code})
-		}
-	}
-	return out
-}
-
-// blankComments turns // and /* */ comments outside string literals into
-// spaces, keeping newlines; code also blanks what's inside string literals
-// (but not a template's ${...}, which is code).
-func blankComments(text string) (string, string) {
-	b, c := []byte(text), []byte(text)
-	blank := func(i int) {
-		if b[i] != '\n' {
-			c[i] = ' '
-		}
-	}
-	var open []byte // what's open, innermost last: a string's quote, or '{' in a template's ${...}
-	for i := 0; i < len(b); i++ {
-		inString := len(open) > 0 && open[len(open)-1] != '{'
-		switch {
-		case inString && b[i] == open[len(open)-1]:
-			open = open[:len(open)-1]
-		case inString && open[len(open)-1] == '`' && b[i] == '$' && i+1 < len(b) && b[i+1] == '{':
-			open = append(open, '{')
-			i++
-		case inString:
-			if b[i] == '\\' && i+1 < len(b) {
-				blank(i)
-				i++
-			}
-			blank(i)
-		case b[i] == '"' || b[i] == '\'' || b[i] == '`':
-			open = append(open, b[i])
-		case len(open) > 0 && (b[i] == '{' || b[i] == '}'): // braces in a ${...}: its end is the one that closes it
-			if b[i] == '{' {
-				open = append(open, '{')
-			} else {
-				open = open[:len(open)-1]
-			}
-		case b[i] == '/' && i+1 < len(b) && (b[i+1] == '/' || b[i+1] == '*'):
-			block := b[i+1] == '*'
-			for ; i < len(b); i++ {
-				if !block && b[i] == '\n' {
-					break
-				}
-				if block && b[i] == '*' && i+1 < len(b) && b[i+1] == '/' {
-					b[i], b[i+1], c[i], c[i+1] = ' ', ' ', ' ', ' '
-					i++
-					break
-				}
-				blank(i)
-				if b[i] != '\n' {
-					b[i] = ' '
-				}
-			}
-		}
-	}
-	return string(b), string(c)
-}
-
-// at gives a diagnostic's line and column (1-based) for an offset in s.text.
-func (s scriptSource) at(offset int) (int, int) {
-	line := strings.Count(s.text[:offset], "\n") + 1
-	return line, offset - strings.LastIndex(s.text[:offset], "\n")
-}
-
 // scriptNameProblems are warnings for literal prefab and scene names in
 // scripts that no listed file answers to: a typo found at build, not at spawn.
 func scriptNameProblems(man manifest.GameManifest) []Diagnostic {
+	suffixes := map[string]string{"prefab": ".prefab.json", "scene": ".scene.json"}
 	var problems []Diagnostic
 	listed := slices.Concat(man.Scenes, man.Assets)
 	for _, src := range scriptSources(man) {
-		for _, use := range scriptNameUses {
-			for _, m := range use.call.FindAllStringSubmatchIndex(src.text, -1) {
-				if !src.inCode(m[0]) {
-					continue // a call written inside a string
+		for _, ref := range src.refs() {
+			suffix := suffixes[ref.kind]
+			if suffix == "" || !ref.exact {
+				continue // "pickup_" + kind: a name made at run time
+			}
+			var names []string
+			found := false
+			for _, p := range listed {
+				if !strings.HasSuffix(p, suffix) {
+					continue
 				}
-				name := src.text[m[2]:m[3]]
-				var names []string
-				found := false
-				for _, p := range listed {
-					if !strings.HasSuffix(p, use.suffix) {
-						continue
-					}
-					short := strings.TrimSuffix(path.Base(p), use.suffix)
-					names = append(names, short)
-					found = found || p == name || short == name
-				}
-				if !found {
-					line, col := src.at(m[2])
-					problems = append(problems, Diagnostic{Level: "warning", Category: "script", File: src.file, Line: line, Column: col,
-						Message: fmt.Sprintf("no %s named %q in .jm.json%s", use.what, name, schema.Suggest(name, names))})
-				}
+				short := strings.TrimSuffix(path.Base(p), suffix)
+				names = append(names, short)
+				found = found || p == ref.name || short == ref.name
+			}
+			if !found {
+				line, col := src.at(ref.offset)
+				problems = append(problems, Diagnostic{Level: "warning", Category: "script", File: src.file, Line: line, Column: col,
+					Message: fmt.Sprintf("no %s named %q in .jm.json%s", ref.kind, ref.name, schema.Suggest(ref.name, names))})
 			}
 		}
 	}
@@ -803,7 +706,7 @@ var scriptPathLiteral = regexp.MustCompile(`["'\x60]([^"'\x60\s]+\.ts)["'\x60]`)
 
 // referencedScripts collects the scripts something attaches: every string
 // ending in .ts in the JSON content files among paths (scenes, prefabs, maps,
-// data) and every quoted .ts path in the scripts among them.
+// data) and every .ts path literal in the scripts' code among them.
 func referencedScripts(paths []string) map[string]bool {
 	found := map[string]bool{}
 	var walk func(v any)
@@ -826,8 +729,11 @@ func referencedScripts(paths []string) map[string]bool {
 	for _, p := range paths {
 		if strings.HasSuffix(p, ".ts") {
 			if data, err := os.ReadFile(p); err == nil {
-				for _, m := range scriptPathLiteral.FindAllStringSubmatch(string(data), -1) {
-					walk(m[1])
+				src := newScriptSource(p, string(data))
+				for _, m := range scriptPathLiteral.FindAllStringSubmatchIndex(src.text, -1) {
+					if src.inCode(m[0]) { // a literal, not a comment's or another string's words
+						walk(src.text[m[2]:m[3]])
+					}
 				}
 			}
 			continue
