@@ -144,7 +144,7 @@ func TestFileViewAndLogNameTheirGame(t *testing.T) {
 	b := evalOrSelf(filepath.Join(home, "B"))
 	r := sceneCall(t, `{"name":"file_view","arguments":{"path":"assets/input.bindings.json","game":`+fmt.Sprintf("%q", b)+`}}`)
 	file := r["structuredContent"].(map[string]any)["file"].(map[string]any)
-	if file["root"] != b || !strings.Contains(fmt.Sprint(file["actions"]), "B") {
+	if file["game"] != b || !strings.Contains(fmt.Sprint(file["actions"]), "B") {
 		t.Errorf("B's file: %v", file)
 	}
 	r = sceneCall(t, `{"name":"game_log","arguments":{"game":`+fmt.Sprintf("%q", b)+`}}`)

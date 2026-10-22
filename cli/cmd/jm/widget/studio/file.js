@@ -41,20 +41,20 @@ studioTabs.push((() => {
     // A new host answer about another game's file: go there, once (an old one doesn't override the person's way here).
     const fresh = ctx.host.result !== state.seen;
     state.seen = ctx.host.result;
-    if (own && fresh && game && own.root !== game) {
+    if (own && fresh && game && own.game !== game) {
       Promise.resolve().then(async () => {
-        if (await ctx.act("Opening the game", "open_game", { game: own.root }, () => "")) ctx.go(ctx.link("file", {}));
+        if (await ctx.act("Opening the game", "open_game", { game: own.game }, () => "")) ctx.go(ctx.link("file", {}));
       });
       return { error: "Opening the game…" };
     }
-    if (own && named && (!game || own.root === game) && (!path || own.path === path)) return { file: own, own: true, thumbs: (ctx.host.result._meta && ctx.host.result._meta["jm/files"]) || {} };
+    if (own && named && (!game || own.game === game) && (!path || own.path === path)) return { file: own, own: true, thumbs: (ctx.host.result._meta && ctx.host.result._meta["jm/files"]) || {} };
     if (!path) return null;
     const key = `${target}|${path}|${ctx.visit}`;
     if (!state.viewed[key]) {
       state.viewed[key] = { loading: true };
       ctx.call("file_view", target ? { path, game: target } : { path }).then((r) => {
         const file = r && r.structuredContent && r.structuredContent.file;
-        state.viewed[key] = file && (!named || !game || file.root === game) ? { file, thumbs: (r._meta && r._meta["jm/files"]) || {} }
+        state.viewed[key] = file && (!named || !game || file.game === game) ? { file, thumbs: (r._meta && r._meta["jm/files"]) || {} }
           : { error: (r && r.content && r.content[0] && r.content[0].text) || "Couldn't open it." };
         ctx.rerender();
       }, (e) => { state.viewed[key] = { error: String(e && e.message || e) }; ctx.rerender(); });
@@ -167,7 +167,7 @@ studioTabs.push((() => {
       ? (uri && shown.own ? (state.saved ? `Read only: ${state.saved.why}.` : "Reading the file…") : "Read only here: open the file from your files in ChatGPT to change it.") : "";
     return el("div", {},
       el("div", { class: "head" }, el("h1", {}, file.path.split("/").pop()), el("span", { class: "badge" }, file.kind),
-        el("span", { class: "meta" }, `${file.path} · ${file.game}`), el("span", { class: "spacer" }), el("span", { class: "meta" }, state.notice || readOnly),
+        el("span", { class: "meta" }, `${file.path} · ${file.gameName}`), el("span", { class: "spacer" }), el("span", { class: "meta" }, state.notice || readOnly),
         el("button", { onclick: () => ctx.host.message(`About ${file.path}: `, { send: false }) }, "Ask about it")),
       file.kind === "bindings" ? bindings(ctx, file, shown.own) : file.kind === "prefab" ? prefab(ctx, file) : atlas(ctx, file, shown.thumbs));
   };

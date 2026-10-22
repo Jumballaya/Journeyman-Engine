@@ -22,7 +22,7 @@ const plain = (v) => JSON.parse(JSON.stringify(v));
 
 const file = { name: 'level.scene.json', resourceUri: 'host-resource://level' };
 const raw = '{\n  "name": "Level",\n  "entities": [\n    {\n      "name": "Kage",\n      "components": {\n        "TransformComponent": {\n          "position": [10, 20, 0]\n        }\n      }\n    }\n  ]\n}\n';
-const laid = (x) => ({ content: [], structuredContent: { scene: 'scenes/level.scene.json', game: 'Pip', root: '/g/pip', name: 'Level', entities: [
+const laid = (x) => ({ content: [], structuredContent: { scene: 'scenes/level.scene.json', game: '/g/pip', gameName: 'Pip', name: 'Level', entities: [
   { where: 'entities[0]', name: 'Kage', x, y: 20, w: 0, h: 0, components: { TransformComponent: { position: [x, 20, 0] } } }] } });
 
 // The page in ChatGPT desktop's file entrypoint: answers are what the host says

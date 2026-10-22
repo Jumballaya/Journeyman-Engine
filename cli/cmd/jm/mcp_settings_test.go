@@ -18,13 +18,7 @@ import (
 
 func settingsCall(t *testing.T, name string, args map[string]any) toolResult {
 	t.Helper()
-	for _, tool := range settingsTools() {
-		if tool.Name == name {
-			return tool.run(args)
-		}
-	}
-	t.Fatalf("no tool %s", name)
-	return toolResult{}
+	return toolOf(t, newMCPServer(), name).run(args) // a server started here, as hosts start one
 }
 
 // ChatGPT finds the settings tools in the capability, and the read tool's
@@ -329,7 +323,7 @@ func TestSkillsNameRealToolsAndSettings(t *testing.T) {
 			tools[arg] = true
 		}
 	}
-	st, err := loadSettings()
+	st, err := loadSettings("")
 	if err != nil {
 		t.Fatal(err)
 	}

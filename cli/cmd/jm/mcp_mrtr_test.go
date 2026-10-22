@@ -52,7 +52,7 @@ func TestPickAsksOverMRTR(t *testing.T) {
 	if _, ok := params["_meta"].(map[string]any)["openai/elicitation"].(map[string]any)["requestedSchema"].(map[string]any)["properties"].(map[string]any)["picked"]; !ok {
 		t.Errorf("ChatGPT's form isn't in _meta: %v", params)
 	}
-	abs, _ := filepath.Abs("a.scene.json")
+	abs := filepath.Join(evalOrSelf(here(t)), "a.scene.json") // as offered
 	done := modernCall(t, s, 2, "pick", map[string]any{"kind": "scene"}, chatGPTCaps,
 		map[string]any{"form1": accept(map[string]any{"picked": fileURI(abs)})}, first["requestState"].(string))["result"].(map[string]any)
 	if done["resultType"] != "complete" || !strings.Contains(jsonOf(done["structuredContent"]), `"picked":["a.scene.json"]`) {
@@ -340,7 +340,7 @@ func TestMRTRAsksAgainForAnIncompleteAnswer(t *testing.T) {
 			t.Errorf("%v: %v", reply, r)
 		}
 	}
-	abs, _ := filepath.Abs("a.scene.json")
+	abs := filepath.Join(evalOrSelf(here(t)), "a.scene.json") // as offered
 	if r := modernCall(t, s, 10, "pick", map[string]any{"kind": "scene"}, chatGPTCaps, map[string]any{"form1": accept(map[string]any{"picked": fileURI(abs)})}, state)["result"].(map[string]any); !strings.Contains(jsonOf(r["structuredContent"]), `"picked":["a.scene.json"]`) {
 		t.Errorf("a real answer: %v", r)
 	}
@@ -356,7 +356,7 @@ func TestMRTRChecksThePlainFormItShowed(t *testing.T) {
 	s := newMCPServer()
 	plain := map[string]any{"elicitation": map[string]any{"form": map[string]any{}}}
 	first := modernCall(t, s, 1, "pick", map[string]any{"kind": "scene", "many": true}, plain, nil, "")["result"].(map[string]any)
-	abs, _ := filepath.Abs("a.scene.json")
+	abs := filepath.Join(evalOrSelf(here(t)), "a.scene.json") // as offered
 	r := modernCall(t, s, 2, "pick", map[string]any{"kind": "scene", "many": true}, plain, map[string]any{"form1": accept(map[string]any{"picked": fileURI(abs)})}, first["requestState"].(string))["result"].(map[string]any)
 	if r["resultType"] != "complete" || !strings.Contains(jsonOf(r["structuredContent"]), `"picked":["a.scene.json"]`) {
 		t.Errorf("plain multi-pick: %v", r)

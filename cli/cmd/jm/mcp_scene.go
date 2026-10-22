@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
@@ -27,36 +28,29 @@ var sceneFileArg = map[string]any{"type": "object", "description": "the scene fi
 	"name": map[string]any{"type": "string"}, "resourceUri": map[string]any{"type": "string"}}}
 
 func (s *mcpServer) sceneTools() []mcpTool {
-	home := gamesHome()
 	return []mcpTool{{Name: "scene_view", Title: "Scene",
 		Description: "Shows the person a scene: its entities laid out where they are (prefabs applied), to pick one and change it. " +
 			"Gives you each entity's place, size and components.",
 		Annotations: readOnly(), InputSchema: object(map[string]any{
-			"game":  gameOfTool,
 			"scene": strArg("a scene file of the game, e.g. scenes/main.scene.json"),
 			"file":  sceneFileArg,
 		}),
-		Meta: sceneWidget.toolMeta("Opening the scene…", "The scene", fileEntrypoint(".scene.json")),
-		run:  func(a toolArgs) toolResult { return sceneView(home, a) }},
+		Meta:   sceneWidget.toolMeta("Opening the scene…", "The scene", fileEntrypoint(".scene.json")),
+		onGame: sceneView},
 		{Name: "scene_render", Title: "Render a scene",
-			Description: "A scene of the open game as the engine draws it, a moment after it starts (built first if the build is stale): " +
+			Description: "A scene of a game as the engine draws it, a moment after it starts (built first if the build is stale): " +
 				"to see a change without the person playing. Scripts run; nothing is recorded.",
 			Annotations: readOnly(), Meta: callableMeta("Rendering the scene…", "The scene"),
-			InputSchema: object(map[string]any{"game": gameOfTool, "scene": strArg("a scene file of the game, e.g. scenes/main.scene.json"),
+			InputSchema: object(map[string]any{"scene": strArg("a scene file of the game, e.g. scenes/main.scene.json"),
 				"frame": intArg("the frame to draw (default 2: the scene as it starts)"), "file": sceneFileArg}),
-			run: func(a toolArgs) toolResult { return sceneRender(home, a) }}}
+			onGame: sceneRender}}
 }
 
 // sceneRender draws a scene in the engine (headless) and gives it as an image,
 // and to a widget as a data URI (jm/image).
-// A scene a host opened (file) is drawn in its own game, open or not.
-func sceneRender(home string, a toolArgs) toolResult {
-	var root, scene, engine string
-	path, err := scenePath(home, a)
-	if err == nil {
-		root = gameRootOf(path)
-		scene, err = filepath.Rel(root, path)
-	}
+func sceneRender(root string, a toolArgs) toolResult {
+	var engine string
+	_, scene, err := scenePath(root, a)
 	if err == nil && buildIsStale(root) {
 		if out, failed := jmIn(a.call(), root, "build", "--json"); failed {
 			err = fmt.Errorf("the build failed:\n%s", out)
@@ -109,8 +103,8 @@ type placedEntity struct {
 	Components map[string]any `json:"components"`
 }
 
-func sceneView(home string, a toolArgs) toolResult {
-	path, err := scenePath(home, a)
+func sceneView(root string, a toolArgs) toolResult {
+	path, rel, err := scenePath(root, a)
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
@@ -125,8 +119,6 @@ func sceneView(home string, a toolArgs) toolResult {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return textResult(fmt.Sprintf("%s isn't a scene: %v", filepath.Base(path), err), true)
 	}
-	root := gameRootOf(path)
-	rel, _ := filepath.Rel(root, path)
 	placed := []placedEntity{}
 	place(root, doc.Entities, nil, func(i int, _ string) string { return fmt.Sprintf("entities[%d]", i) }, false, placement{}, &placed, 0)
 	names := []string{}
@@ -134,8 +126,8 @@ func sceneView(home string, a toolArgs) toolResult {
 		names = append(names, e.Name)
 	}
 	text := fmt.Sprintf("Scene %s of %s: %d entities (%s). The person sees it laid out and can change an entity; structuredContent has each one's place and components.",
-		filepath.ToSlash(rel), gameName(root), len(placed), strings.Join(names, ", "))
-	out := map[string]any{"scene": filepath.ToSlash(rel), "game": gameName(root), "root": root, "name": doc.Name, "entities": placed}
+		rel, gameName(root), len(placed), strings.Join(names, ", "))
+	out := map[string]any{"scene": rel, "game": root, "gameName": gameName(root), "name": doc.Name, "entities": placed}
 	if s, ok := screenOf(root, placed); ok {
 		out["screen"] = s
 	}
@@ -243,30 +235,21 @@ func keptInside(center, lo, hi, half float64) float64 {
 
 // scenePath is the scene a call means: the file a host opened, else a scene
 // of the game named (game), else of the open game.
-func scenePath(home string, a toolArgs) (string, error) {
-	path := a.resource()
-	if path == "" {
-		if a.str("scene") == "" {
-			return "", fmt.Errorf("which scene? give scene, e.g. scenes/main.scene.json")
-		}
-		root, err := projectRoot()
-		if game := a.str("game"); game != "" {
-			root, err = findGame(home, game)
-		}
-		if err != nil {
-			return "", err
-		}
-		if path, _, err = gamePath(root, a.str("scene")); err != nil {
-			return "", err
-		}
-		if !exists(path) {
-			return "", fmt.Errorf("%s: no such scene in the game", a.str("scene"))
-		}
+func scenePath(root string, a toolArgs) (path, rel string, err error) {
+	scene := cmp.Or(a.resource(), a.str("scene"))
+	if scene == "" {
+		return "", "", fmt.Errorf("which scene? give scene, e.g. scenes/main.scene.json")
 	}
-	if !strings.HasSuffix(path, ".scene.json") {
-		return "", fmt.Errorf("%s isn't a scene (.scene.json)", filepath.Base(path))
+	if path, rel, err = gamePath(root, scene); err != nil {
+		return "", "", err
 	}
-	return path, nil
+	if !strings.HasSuffix(rel, ".scene.json") {
+		return "", "", fmt.Errorf("%s isn't a scene (.scene.json)", filepath.Base(path))
+	}
+	if !exists(path) {
+		return "", "", fmt.Errorf("%s: no such scene in the game", rel)
+	}
+	return path, rel, nil
 }
 
 // gameRootOf is the game folder holding path (the nearest with a .jm.json),

@@ -114,7 +114,6 @@ func askLive(ctx context.Context, dir, command string) (map[string]any, error) {
 }
 
 func (s *mcpServer) liveTools() []mcpTool {
-	home := gamesHome() // now: the working folder moves with the open game
 	return []mcpTool{{Name: "play_live", Title: "The game the person is playing",
 		Description: "Steer the game the person is playing right now in its own window (project_play, jm run): " +
 			"pause, resume, step [n] (one frame at a time while paused), speed <0.1..1> (slow motion), status, " +
@@ -126,17 +125,9 @@ func (s *mcpServer) liveTools() []mcpTool {
 			"command":  strArg(`e.g. "pause", "get session.score", "marker the jump feels floaty"`),
 			"commands": listArg("several commands in order, instead of command"),
 			"frame":    boolArg("also a picture of the game as it is now"),
-			"game":     strArg("a name or path from `games` (default: the open game)"),
 			"run":      strArg("the run to steer, as an earlier answer named it (default: the latest started)"),
 		}),
-		run: func(a toolArgs) toolResult {
-			root, err := projectRoot()
-			if game := a.str("game"); game != "" {
-				root, err = findGame(home, game)
-			}
-			if err != nil {
-				return textResult(err.Error(), true)
-			}
+		onGame: func(root string, a toolArgs) toolResult {
 			dir := liveGame(root, a.str("run"))
 			if dir == "" {
 				return textResult("The game isn't running: project_play opens it for the person to play.", true)
@@ -157,7 +148,7 @@ func (s *mcpServer) liveTools() []mcpTool {
 				lines = append(lines, string(data))
 			}
 			// Whose answers: a page following one game's run can tell another's.
-			result := toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"answers": answers, "game": evalOrSelf(root), "run": filepath.Base(dir)}}
+			result := toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"answers": answers, "game": root, "run": filepath.Base(dir)}}
 			if a.flag("frame") {
 				if jpeg, err := liveFrame(a.call().context(), dir); err != nil {
 					result.Text = strings.TrimSpace(result.Text + "\nNo picture: " + err.Error())

@@ -47,7 +47,7 @@ func TestSceneViewLaysOutTheFileAHostOpened(t *testing.T) {
 	path, _ := json.Marshal(filepath.Join(dir, "scenes", "level.scene.json"))
 	result := sceneCall(t, `{"name":"scene_view","arguments":{"file":{"name":"level.scene.json","resourceUri":"h://1"}},"_meta":{"openai/resource":{"path":`+string(path)+`}}}`)
 	s := result["structuredContent"].(map[string]any)
-	if s["scene"] != "scenes/level.scene.json" || s["game"] != "Pip" {
+	if s["scene"] != "scenes/level.scene.json" || s["gameName"] != "Pip" {
 		t.Fatalf("scene: %v", result)
 	}
 	got := []string{}

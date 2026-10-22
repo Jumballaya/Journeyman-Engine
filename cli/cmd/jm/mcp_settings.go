@@ -158,8 +158,8 @@ type settingsState struct {
 }
 
 // holdSettings holds the files set changes against every other jm and the
-// editor's preference writes: preferences first, then .jm.json (all take that order).
-func holdSettings(set map[string]any) (release func(), err error) {
+// editor's preference writes: preferences first, then the game's .jm.json (all take that order).
+func holdSettings(game string, set map[string]any) (release func(), err error) {
 	var files []string
 	for key := range set {
 		if inPreferences(key) {
@@ -168,9 +168,8 @@ func holdSettings(set map[string]any) (release func(), err error) {
 		}
 	}
 	for key := range set {
-		if !inPreferences(key) && exists(archive.ManifestEntryKey) {
-			abs, _ := filepath.Abs(archive.ManifestEntryKey)
-			files = append(files, abs)
+		if !inPreferences(key) && game != "" {
+			files = append(files, filepath.Join(game, archive.ManifestEntryKey))
 			break
 		}
 	}
@@ -185,15 +184,15 @@ func holdSettings(set map[string]any) (release func(), err error) {
 	return release, err
 }
 
-func loadSettings() (*settingsState, error) {
+// loadSettings reads the settings of game (its .jm.json; "": no game) and beyond it.
+func loadSettings(game string) (*settingsState, error) {
 	st := &settingsState{turned: map[string]bool{}}
 	var err error
 	if st.prefs, err = loadSettingsFile(projects.PreferencesFile()); err != nil {
 		return nil, err
 	}
-	if exists(archive.ManifestEntryKey) {
-		abs, _ := filepath.Abs(archive.ManifestEntryKey)
-		if st.manifest, err = loadSettingsFile(abs); err != nil {
+	if game != "" {
+		if st.manifest, err = loadSettingsFile(filepath.Join(game, archive.ManifestEntryKey)); err != nil {
 			return nil, err
 		}
 		scenes := []string{}
@@ -467,14 +466,14 @@ func asList(v any) []any {
 
 func settingsTools() []mcpTool {
 	return []mcpTool{
-		{Name: settingsReadTool, Title: "Journeyman settings", Description: "The open game's settings (name, start scene, window, logical size: .jm.json), the editor's preferences " +
+		{Name: settingsReadTool, Title: "Journeyman settings", Description: "A game's settings (name, start scene, window, logical size: .jm.json), the editor's preferences " +
 			"and the person's preferences for how you work (agent.*: follow them), " +
 			"each with its key, type and current value. ChatGPT shows them on Journeyman's settings page.",
 			Annotations: readOnly(), InputSchema: map[string]any{"type": "object", "additionalProperties": false},
 			OutputSchema: object(map[string]any{"schema": map[string]any{"type": "object"}, "values": map[string]any{"type": "object"},
 				"layout": map[string]any{"type": "array", "items": map[string]any{"type": "object"}}}, "schema", "values"),
-			run: func(toolArgs) toolResult {
-				st, err := loadSettings()
+			orNone: true, onGame: func(game string, _ toolArgs) toolResult {
+				st, err := loadSettings(game)
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
@@ -484,14 +483,14 @@ func settingsTools() []mcpTool {
 			Annotations: writes(), InputSchema: map[string]any{"type": "object", "additionalProperties": false, "required": []string{"set"},
 				"properties": map[string]any{"set": map[string]any{"type": "object", "minProperties": 1, "description": "setting key -> new value"}}},
 			OutputSchema: object(map[string]any{"values": map[string]any{"type": "object"}}, "values"),
-			run: func(a toolArgs) toolResult {
+			orNone:       true, onGame: func(game string, a toolArgs) toolResult {
 				set, _ := a["set"].(map[string]any)
-				release, err := holdSettings(set)
+				release, err := holdSettings(game, set)
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
 				defer release()
-				st, err := loadSettings()
+				st, err := loadSettings(game)
 				if err != nil {
 					return textResult(err.Error(), true)
 				}

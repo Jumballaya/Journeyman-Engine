@@ -165,6 +165,9 @@ func fileEtag(data []byte) string {
 // outside the game or in a hidden folder. The file needn't exist yet.
 func gamePath(root, path string) (string, string, error) {
 	notOurs := fmt.Errorf("%s isn't one of the game's files", path)
+	if root == "" {
+		return "", "", errNoGame
+	}
 	if path == "" {
 		return "", "", fmt.Errorf("give a file's path, e.g. scenes/main.scene.json")
 	}

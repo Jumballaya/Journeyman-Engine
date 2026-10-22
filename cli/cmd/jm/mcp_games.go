@@ -167,16 +167,17 @@ func (s *mcpServer) setOpen(dir string) error {
 	if err := os.Chdir(real); err != nil {
 		return err
 	}
-	s.open = real
+	s.open.Store(real)
 	return nil
 }
 
 // opened is the open game: "" when none is, or its folder isn't a game any more.
 func (s *mcpServer) opened() string {
-	if s.open == "" || !exists(filepath.Join(s.open, archive.ManifestEntryKey)) {
+	open, _ := s.open.Load().(string)
+	if open == "" || !exists(filepath.Join(open, archive.ManifestEntryKey)) {
 		return ""
 	}
-	return s.open
+	return open
 }
 
 // newGame makes the game c names in home: an empty one (jm init) or a copy of

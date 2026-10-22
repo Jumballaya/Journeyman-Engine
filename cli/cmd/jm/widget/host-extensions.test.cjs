@@ -5,7 +5,7 @@ const { test } = require('node:test');
 const { studio, settle, plain } = require('./studio-host.cjs');
 
 const listing = { structuredContent: { open: '/g/pip', games: [{ name: 'Pip', path: '/g/pip', opened: 1, scenes: [] }] } };
-const files = { structuredContent: { root: '/g/pip', game: 'Pip', files: [{ path: 'scenes/main.scene.json', size: 120 }] } };
+const files = { structuredContent: { game: '/g/pip', gameName: 'Pip', files: [{ path: 'scenes/main.scene.json', size: 120 }] } };
 const status = { structuredContent: { changes: [{ path: 'assets/scripts/bat.ts', status: '?' }] } };
 const log = { structuredContent: { versions: [{ hash: 'a'.repeat(40), subject: 'New game', author: 'Pat', when: 1791000000, files: {} }] } };
 const answers = { files, vcs_status: status, vcs_log: log, vcs_diff: { structuredContent: { file: 'assets/scripts/bat.ts', diff: '' } },

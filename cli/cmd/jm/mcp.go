@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"io"
@@ -182,6 +183,7 @@ type mcpTool struct {
 	// A tool that works on a game gives onGame instead of run: it gets the game's
 	// root (the call's "game", else the open game) and the "game" argument is added.
 	onGame func(root string, a toolArgs) toolResult
+	orNone bool // onGame also runs with no game open (root ""): settings beyond the game's
 	// A tool on the driven game (one runs at a time) gives onDriven: its game is
 	// the run's, and a call that names another is refused (drivenArg is added).
 	onDriven func(a toolArgs) toolResult
@@ -244,7 +246,7 @@ func newMCPServer() *mcpServer {
 		}
 	}
 	if cwd, err := os.Getwd(); err == nil && exists(archive.ManifestEntryKey) { // started in a game (or --dir)
-		server.open = evalOrSelf(cwd)
+		server.open.Store(evalOrSelf(cwd))
 	}
 	return server
 }
@@ -313,7 +315,7 @@ type mcpServer struct {
 	home      string         // the games folder, absolute: as the tools have it (the working folder moves)
 	rootsWork sync.WaitGroup // roots answers being acted on
 	byRecent  bool           // the open game is only the one opened last: the client's root beats it
-	open      string         // the game calls work on when they name none ("": none); only setOpen changes it
+	open      atomic.Value   // string: the game calls work on when they name none; only setOpen changes it (resource polls read it unlocked)
 }
 
 func (s *mcpServer) answer(data []byte) {
@@ -483,9 +485,9 @@ func (s *mcpServer) handle(ctx context.Context, method string, params json.RawMe
 		defer s.calls.Unlock()
 		s.openRecentIfNone()
 		if s.peer != nil {
-			s.watch.listedNow()
+			s.watch.listedNow(s.opened())
 		}
-		return map[string]any{"resources": append(widgetResources(), projectResources()...)}, nil
+		return map[string]any{"resources": append(widgetResources(), projectResources(s.opened())...)}, nil
 	case "resources/templates/list":
 		return map[string]any{"resourceTemplates": resourceTemplates()}, nil
 	case "resources/subscribe", "resources/unsubscribe":
@@ -507,7 +509,7 @@ func (s *mcpServer) handle(ctx context.Context, method string, params json.RawMe
 		}
 		contents, ok, err := s.readGameResource(read.URI)
 		if !ok {
-			contents, ok, err = readMentioned(read.URI)
+			contents, ok, err = readMentioned(s.opened(), read.URI)
 		}
 		if ok {
 			if err != nil {
@@ -515,7 +517,7 @@ func (s *mcpServer) handle(ctx context.Context, method string, params json.RawMe
 			}
 			return map[string]any{"contents": contents}, nil
 		}
-		text, mime, err := readResource(read.URI)
+		text, mime, err := readResource(s.opened(), read.URI)
 		if err != nil {
 			return nil, &rpcError{Code: -32002, Message: err.Error()}
 		}
@@ -578,6 +580,9 @@ func (s *mcpServer) prepare(tool mcpTool, args toolArgs) (game string, run func(
 	switch {
 	case tool.onGame != nil:
 		root, err := s.gameRoot(args)
+		if errors.Is(err, errNoGame) && tool.orNone {
+			root, err = "", nil
+		}
 		if err != nil {
 			return s.opened(), failed(err)
 		}
@@ -734,24 +739,6 @@ func positional(command []string, args ...string) []string {
 		return command
 	}
 	return append(append(command, "--"), args...)
-}
-
-// projectFile is path (from the project's folder, or absolute) as a path from
-// the project's folder, symlinks resolved: one that leads out isn't the project's.
-func projectFile(path string) (string, error) {
-	root, err := realPath(".")
-	if err != nil {
-		return "", err
-	}
-	real, err := realPath(path)
-	if err != nil {
-		return "", fmt.Errorf("%s: no such file in the project", path)
-	}
-	rel, err := filepath.Rel(root, real)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("%s is outside the project", path)
-	}
-	return rel, nil
 }
 
 // realPath is path absolute, with every symlink on the way resolved.
@@ -1224,7 +1211,7 @@ func (s *mcpServer) driveProfile(toolArgs) toolResult {
 }
 
 // projectResources lists the files an agent reads and writes, and the schema.
-func projectResources() []map[string]any {
+func projectResources(root string) []map[string]any {
 	resources := []map[string]any{{"uri": "jm://schema", "name": "schema", "mimeType": "application/json",
 		"description": "every component's scene keys and script fields (jm schema)"},
 		{"uri": "jm://memory", "name": "memory", "mimeType": "application/json", "description": "the game's design notes (design/): each one's title, observations and links"}}
@@ -1232,22 +1219,11 @@ func projectResources() []map[string]any {
 		resources = append(resources, map[string]any{"uri": "jm://docs/" + t.Name, "name": "docs/" + t.Name,
 			"mimeType": "text/markdown", "description": t.Title})
 	}
-	// Only what resources/read gives back: no link out of the game or into build/.
-	for _, f := range gameFiles(func(path string) bool { _, err := agentFile(path); return mimeOf(path) != "" && err == nil }) {
-		abs, _ := filepath.Abs(f)
-		resources = append(resources, map[string]any{"uri": fileURI(abs), "name": f, "mimeType": mimeOf(f)})
+	// Only what resources/read gives back.
+	for _, f := range gameFiles(root, func(rel string) bool { return mimeOf(rel) != "" }) {
+		resources = append(resources, map[string]any{"uri": fileURI(filepath.Join(root, f)), "name": f, "mimeType": mimeOf(f)})
 	}
 	return resources
-}
-
-// agentFile is projectFile's path, unless it's in a folder hidden from agents:
-// a file listed or read for them, so a link into build/ is neither.
-func agentFile(path string) (string, error) {
-	rel, err := projectFile(path)
-	if err == nil && hiddenFromAgents(filepath.Dir(rel)) {
-		return "", fmt.Errorf("%s isn't one of the project's files", path)
-	}
-	return rel, err
 }
 
 // hiddenFromAgents says whether a folder of the project (a path from its
@@ -1263,31 +1239,44 @@ func hiddenFromAgents(dir string) bool {
 	return false
 }
 
-// fileURI is the file:// URI of an absolute path, each segment escaped
-// ("a b#2.ts": "a%20b%232.ts"); readResource unescapes it.
-// gameFiles are the open game's files that keep says to, as sorted slash
-// paths from its folder (not build outputs or what agents shouldn't see).
-func gameFiles(keep func(path string) bool) []string {
-	var files []string
-	_ = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
+// eachGameFile calls visit with each file of the game agents see: its slash
+// path from root and its real file (a link counts while it stays in the game).
+func eachGameFile(root string, visit func(rel, real string)) {
+	if root == "" { // no game open
+		return
+	}
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
+		rel, _ := filepath.Rel(root, path)
 		if d.IsDir() {
-			if path != "." && hiddenFromAgents(path) {
+			if rel != "." && hiddenFromAgents(rel) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if keep(path) {
-			files = append(files, filepath.ToSlash(path))
+		if real, _, err := gamePath(root, rel); err == nil && !isDir(real) { // a link keeps its own name
+			visit(filepath.ToSlash(rel), real)
 		}
 		return nil
+	})
+}
+
+// gameFiles are the paths of the game's files agents see that keep says to, sorted.
+func gameFiles(root string, keep func(rel string) bool) []string {
+	var files []string
+	eachGameFile(root, func(rel, _ string) {
+		if keep(rel) {
+			files = append(files, rel)
+		}
 	})
 	sort.Strings(files)
 	return files
 }
 
+// fileURI is the file:// URI of an absolute path, each segment escaped
+// ("a b#2.ts": "a%20b%232.ts"); readResource unescapes it.
 func fileURI(abs string) string {
 	segments := strings.Split(filepath.ToSlash(abs), "/")
 	for i, s := range segments {
@@ -1312,7 +1301,7 @@ func mimeOf(path string) string {
 	return ""
 }
 
-func readResource(uri string) (string, string, error) {
+func readResource(root, uri string) (string, string, error) {
 	if uri == "jm://schema" {
 		out, failed := runJM(nil, "", "schema")
 		if failed {
@@ -1321,7 +1310,7 @@ func readResource(uri string) (string, string, error) {
 		return out, "application/json", nil
 	}
 	if uri == "jm://memory" {
-		data, err := json.Marshal(map[string]any{"notes": memory.Notes(".")})
+		data, err := json.Marshal(map[string]any{"notes": memory.Notes(root)})
 		return string(data), "application/json", err
 	}
 	if topic, ok := strings.CutPrefix(uri, "jm://docs/"); ok {
@@ -1337,14 +1326,14 @@ func readResource(uri string) (string, string, error) {
 		return "", "", err
 	}
 	// The files projectResources lists, and no others.
-	rel, err := agentFile(path)
+	real, rel, err := gamePath(root, path)
 	if err != nil {
 		return "", "", err
 	}
 	if mimeOf(rel) == "" {
 		return "", "", fmt.Errorf("%s isn't one of the project's resources", uri)
 	}
-	data, err := os.ReadFile(rel)
+	data, err := os.ReadFile(real)
 	if err != nil {
 		return "", "", err
 	}

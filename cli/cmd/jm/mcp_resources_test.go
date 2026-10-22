@@ -193,7 +193,7 @@ func TestCompletionsSuggestWhatStartsSo(t *testing.T) {
 	if got := complete(entity, "scene", "scenes/z", `{}`); len(got["values"].([]string)) != 100 || got["total"] != 150 || got["hasMore"] != true {
 		t.Errorf("past 100: %v %v", got["total"], got["hasMore"])
 	}
-	open, _ := os.Getwd() // the open game, though it isn't in the games list (opened from a root, say)
+	open := evalOrSelf(here(t)) // the open game, though it isn't in the games list (opened from a root, say)
 	if got := complete(`{"type":"ref/resource","uri":"jm://game/{game}/file/{path}"}`, "game", "", `{}`)["values"].([]string); !slices.Contains(got, open) {
 		t.Errorf("games: %v, want the open %s among them", got, open)
 	}

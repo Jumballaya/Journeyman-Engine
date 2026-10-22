@@ -48,7 +48,7 @@ func mentionNames(found []mention) string {
 
 func TestMentionsOfferTheLatestPlayFirst(t *testing.T) {
 	mentionGame(t)
-	got := mentionNames(searchMentions(mentionables(), "", mentionLimit))
+	got := mentionNames(searchMentions(mentionables(here(t)), "", mentionLimit))
 	want := "play:play 2000-01-02_000000,marker:marker 1: too floaty,scene:level1,prefab:coin,script:player," +
 		"entity:Brick,entity:Player,play:play 2000-01-01_000000"
 	if got != want {
@@ -63,11 +63,11 @@ func TestMentionsMatchNamesFirst(t *testing.T) {
 		"FLOATY": "marker:marker 1: too floaty",
 		"zzz":    "",
 	} {
-		if got := mentionNames(searchMentions(mentionables(), query, mentionLimit)); got != want {
+		if got := mentionNames(searchMentions(mentionables(here(t)), query, mentionLimit)); got != want {
 			t.Errorf("%q: got %s, want %s", query, got, want)
 		}
 	}
-	if got := len(searchMentions(mentionables(), "", 3)); got != 3 {
+	if got := len(searchMentions(mentionables(here(t)), "", 3)); got != 3 {
 		t.Errorf("limit: %d", got)
 	}
 }
@@ -77,7 +77,7 @@ func TestMentionsMatchNamesFirst(t *testing.T) {
 func TestMentionedThingsRead(t *testing.T) {
 	mentionGame(t)
 	links := map[string]string{}
-	for _, m := range mentionables() {
+	for _, m := range mentionables(here(t)) {
 		links[m.kind+":"+m.name] = m.uri
 	}
 	replies := mcpSession(t,
@@ -138,7 +138,7 @@ func TestMentionsReachChildrenButNotOutOfTheProject(t *testing.T) {
 	os.WriteFile("scenes/boss #2.scene.json", []byte(`{"entities":[{"name":"Kage","children":[{"name":"KatanaLight"}]}]}`), 0o644)
 
 	found := map[string]mention{}
-	for _, m := range mentionables() {
+	for _, m := range mentionables(here(t)) {
 		found[m.kind+":"+m.name] = m
 	}
 	if _, ok := found["entity:Secret"]; ok {
@@ -146,16 +146,16 @@ func TestMentionsReachChildrenButNotOutOfTheProject(t *testing.T) {
 	}
 	light, ok := found["entity:KatanaLight"]
 	if !ok {
-		t.Fatalf("a child entity isn't offered: %v", mentionNames(mentionables()))
+		t.Fatalf("a child entity isn't offered: %v", mentionNames(mentionables(here(t))))
 	}
-	contents, _, err := readMentioned(light.uri)
+	contents, _, err := readMentioned(here(t), light.uri)
 	if err != nil || !strings.Contains(contents[0]["text"].(string), `"where": "entities[0].children[0]"`) {
 		t.Errorf("child: %v %v", contents, err)
 	}
-	if text, _, err := readResource(found["scene:boss #2"].uri); err != nil || !strings.Contains(text, "Kage") {
+	if text, _, err := readResource(here(t), found["scene:boss #2"].uri); err != nil || !strings.Contains(text, "Kage") {
 		t.Errorf("a scene named with # and a space reads back from its link %s: %v", found["scene:boss #2"].uri, err)
 	}
-	contents, _, err = readMentioned(found["marker:marker 1: too floaty"].uri)
+	contents, _, err = readMentioned(here(t), found["marker:marker 1: too floaty"].uri)
 	if err != nil || len(contents) != 1 {
 		t.Errorf("a marker image linked from outside the play was read: %d contents, %v", len(contents), err)
 	}
@@ -172,7 +172,7 @@ func TestMentionsLeaveOutLinksIntoHiddenFolders(t *testing.T) {
 		t.Skip("no symlinks here")
 	}
 	found := map[string]mention{}
-	for _, m := range mentionables() {
+	for _, m := range mentionables(here(t)) {
 		found[m.kind+":"+m.name] = m
 	}
 	if _, ok := found["entity:Stale"]; ok {
@@ -183,14 +183,14 @@ func TestMentionsLeaveOutLinksIntoHiddenFolders(t *testing.T) {
 	}
 	for _, name := range []string{"scene:raw", "entity:Raw", "script:raw"} {
 		if _, ok := found[name]; ok {
-			t.Errorf("%s is offered, but its link leads to another kind of file: %s", name, mentionNames(mentionables()))
+			t.Errorf("%s is offered, but its link leads to another kind of file: %s", name, mentionNames(mentionables(here(t))))
 		}
 	}
 	again, ok := found["scene:again"]
 	if !ok {
-		t.Fatalf("a link to a scene of the project isn't offered: %v", mentionNames(mentionables()))
+		t.Fatalf("a link to a scene of the project isn't offered: %v", mentionNames(mentionables(here(t))))
 	}
-	if text, _, err := readResource(again.uri); err != nil || !strings.Contains(text, "Player") {
+	if text, _, err := readResource(here(t), again.uri); err != nil || !strings.Contains(text, "Player") {
 		t.Errorf("a link to a scene of the project doesn't read back: %v", err)
 	}
 }
@@ -206,13 +206,23 @@ func TestNotesThroughADesignLinkAreMentionedAndRead(t *testing.T) {
 		t.Skip("no symlinks here")
 	}
 	found := map[string]mention{}
-	for _, m := range mentionables() {
+	for _, m := range mentionables(here(t)) {
 		found[m.kind+":"+m.name] = m
 	}
 	if _, ok := found["note:Pacing"]; !ok {
-		t.Errorf("no note mention: %s", mentionNames(mentionables()))
+		t.Errorf("no note mention: %s", mentionNames(mentionables(here(t))))
 	}
-	if text, _, err := readResource("jm://memory"); err != nil || !strings.Contains(text, "Pacing") {
+	if text, _, err := readResource(here(t), "jm://memory"); err != nil || !strings.Contains(text, "Pacing") {
 		t.Errorf("jm://memory: %v %s", err, text)
 	}
+}
+
+// here is the folder a test is in: the game it made there.
+func here(t *testing.T) string {
+	t.Helper()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return wd
 }

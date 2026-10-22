@@ -224,10 +224,7 @@ func TestEveryToolSaysWhichGameItWorksOn(t *testing.T) {
 	}
 	// Design debt: these still find their game themselves (their own "game", or the
 	// working folder). Each moves to onGame (todos: Design debt, G2–G6), then off this list.
-	ownWay := map[string]bool{
-		"play_live": true, "game_log": true, "scene_view": true, "scene_render": true, "file_view": true,
-		"mention_search": true, "settings_read": true, "settings_update": true, "pick": true,
-	}
+	ownWay := map[string]bool{}
 	for _, tool := range newMCPServer().tools {
 		listed := noGame[tool.Name] || ownWay[tool.Name]
 		switch {
@@ -344,5 +341,58 @@ func TestACallFallsBackToTheRecentGameWhenTheOpenOneIsGone(t *testing.T) {
 	reply, _ := s.respond(data)
 	if out, _ := json.Marshal(reply); !strings.Contains(string(out), `"text":"b`) {
 		t.Errorf("read: %s", out)
+	}
+}
+
+// A call from a file the host opened works on that file's game, whichever is open.
+func TestAnOpenedFileNamesItsGame(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"A", "B"} {
+		filesGame(t, filepath.Join(home, g))
+		os.WriteFile(filepath.Join(home, g, "level.scene.json"), []byte(`{"entities": [{"name": "From`+g+`"}]}`), 0o644)
+	}
+	s := newMCPServer()
+	s.openGame(filepath.Join(home, "B"))
+	opened := toolArgs{resourceKey: resourcePath(filepath.Join(home, "A", "level.scene.json"))}
+	if got := toolOf(t, s, "scene_view").run(opened); got.Failed || !strings.Contains(got.Text, "FromA") {
+		t.Errorf("A's scene, opened while B is: %s", got.Text)
+	}
+}
+
+// Settings are the named game's, else the open game's, else only those beyond a game.
+func TestSettingsAreTheCallsGameOrNone(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"A", "B"} {
+		filesGame(t, filepath.Join(home, g))
+		os.WriteFile(filepath.Join(home, g, ".jm.json"), []byte(`{"name": "`+g+`"}`), 0o644)
+	}
+	t.Chdir(t.TempDir())
+	s := newMCPServer()
+	name := func(a toolArgs) any {
+		r := toolOf(t, s, "settings_read").run(a)
+		if r.Failed {
+			t.Fatalf("settings_read %v: %s", a, r.Text)
+		}
+		return r.Structured.(map[string]any)["values"].(map[string]any)["name"]
+	}
+	if got := name(toolArgs{}); got != nil {
+		t.Errorf("no game open, yet a game's name: %v", got)
+	}
+	s.openGame(filepath.Join(home, "B"))
+	if got := name(toolArgs{"game": "A"}); got != "A" {
+		t.Errorf("named A while B is open: %v", got)
+	}
+	if r := toolOf(t, s, "settings_update").run(toolArgs{"game": "A", "set": map[string]any{"name": "A2"}}); r.Failed {
+		t.Fatal(r.Text)
+	}
+	if got := name(toolArgs{}); got != "B" {
+		t.Errorf("the open game's after A changed: %v", got)
+	}
+	if got := name(toolArgs{"game": "A"}); got != "A2" {
+		t.Errorf("A after its change: %v", got)
 	}
 }

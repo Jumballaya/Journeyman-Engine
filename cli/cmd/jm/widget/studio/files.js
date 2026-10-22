@@ -21,7 +21,7 @@ studioTabs.push((() => {
       const r = await ctx.call("files", on(ctx, {}));
       if (n !== mine.seq || mine !== state) return;
       const s = r && r.structuredContent;
-      state.listed = s && Array.isArray(s.files) ? { path, root: s.root, files: s.files } : { path, error: said(r) || "No files." };
+      state.listed = s && Array.isArray(s.files) ? { path, game: s.game, files: s.files } : { path, error: said(r) || "No files." };
     } catch (e) { if (n !== mine.seq || mine !== state) return; state.listed = { path, error: String(e && e.message || e) }; }
     if (state.picked && !state.listed.error && !state.listed.files.some((f) => f.path === state.picked.path)) state.picked = null;
     ctx.rerender();
@@ -257,7 +257,7 @@ studioTabs.push((() => {
           el("div", { class: "files-title" }, el("span", { class: "files-path", title: p.path }, p.path),
             entry && entry.status ? el("span", { class: "badge" }, marks[entry.status] || entry.status) : null,
             entry && entry.status !== "D" ? el("span", { class: "meta" }, size(entry.size)) : null),
-          el("div", { class: "files-actions" }, actions(ctx, listed.root)), look(ctx))
+          el("div", { class: "files-actions" }, actions(ctx, listed.game)), look(ctx))
       : kit.section("Quick look", el("div", { class: "meta" }, "Pick a file to see it, and what's wrong with it."));
     return el("div", { class: "files-view" }, head, draft, kit.split("files", left, right, { ratio: 0.38 }));
   };

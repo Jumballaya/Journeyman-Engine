@@ -206,7 +206,7 @@ func TestFileToolsOverMCP(t *testing.T) {
 	}
 	list := sceneCall(t, `{"name":"files","arguments":{}}`)
 	s := list["structuredContent"].(map[string]any)
-	if s["game"] != "Pip" || len(s["files"].([]any)) != 3 {
+	if s["gameName"] != "Pip" || len(s["files"].([]any)) != 3 {
 		t.Errorf("files: %v", list)
 	}
 }

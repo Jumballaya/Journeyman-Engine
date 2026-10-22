@@ -130,7 +130,7 @@ func (s *mcpServer) subscribe(params json.RawMessage, on bool) (any, *rpcError) 
 		w.mu.Unlock()
 		return map[string]any{}, nil
 	}
-	root, _ := os.Getwd()
+	root := s.opened()
 	stamp, err := s.stampOf(root, p.URI)
 	if err == nil {
 		err = there(root, p.URI)
@@ -172,9 +172,9 @@ func there(root, uri string) error {
 	return fmt.Errorf("play %s has no marker %s", id, marker)
 }
 
-// listedNow: the client has the list as it is now.
-func (w *resourceWatch) listedNow() {
-	stamp := listStamp()
+// listedNow: the client has the list of the game at root as it is now.
+func (w *resourceWatch) listedNow(root string) {
+	stamp := listStamp(root)
 	w.mu.Lock()
 	w.listed, w.list = true, stamp
 	w.mu.Unlock()
@@ -193,14 +193,14 @@ func (s *mcpServer) pollResources() {
 	listed := w.listed
 	w.mu.Unlock()
 
-	root, _ := os.Getwd()
+	root := s.opened()
 	now := map[string]string{}
 	for _, uri := range uris {
 		now[uri], _ = s.stampOf(root, uri) // gone: "", which changed too
 	}
 	list := ""
 	if listed {
-		list = listStamp()
+		list = listStamp(root)
 	}
 
 	var changed []string
@@ -227,11 +227,10 @@ func (s *mcpServer) pollResources() {
 	}
 }
 
-// listStamp names the resources list as it is (the open game's files) and
-// the plays and markers the templates reach.
-func listStamp() string {
-	data, _ := json.Marshal(projectResources())
-	root, _ := os.Getwd()
+// listStamp names the resources list of the game at root as it is (its files)
+// and the plays and markers the templates reach.
+func listStamp(root string) string {
+	data, _ := json.Marshal(projectResources(root))
 	all, _ := plays.List(root)
 	for _, p := range all {
 		data = fmt.Appendf(data, "\n%s %d", p.ID, len(p.Meta.Markers))
@@ -347,7 +346,7 @@ func (s *mcpServer) completeArgument(params json.RawMessage) (any, *rpcError) {
 		}
 		s.calls.Lock()
 		s.openRecentIfNone()
-		root, _ := projectRoot()
+		root := s.opened()
 		s.calls.Unlock()
 		values = knowledgeValues(root, p.Argument.Name)
 	case "ref/resource":
@@ -381,7 +380,7 @@ func (s *mcpServer) completeArgument(params json.RawMessage) (any, *rpcError) {
 // argumentValues are what a template's argument can be: games, a game's
 // files, the open game's plays, a play's markers, scenes, entity names, topics.
 func (s *mcpServer) argumentValues(name string, given map[string]string) []string {
-	root, _ := projectRoot()
+	root := s.opened()
 	var out []string
 	switch name {
 	case "game":
