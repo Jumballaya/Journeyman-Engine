@@ -164,20 +164,46 @@ func TestARemovedTasksIDIsntGivenAgain(t *testing.T) {
 	}
 }
 
-// The id a hand-written task is listed with is saved: what's done with it
-// later finds it, however the board changed between.
-func TestAListedTaskKeepsItsID(t *testing.T) {
+// Listing writes nothing: a hand-written task is listed by a draft id from
+// its text, which a change finds it by however the board changed between
+// (and which finds nothing once its text is changed).
+func TestAHandWrittenTaskIsFoundByItsDraftID(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, "design"), 0o755)
-	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte("## To do\n- [ ] Coins\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte("## To do\n- [ ] Coins\n- [ ] Coins\n"), 0o644)
 	_, tasks, err := Tasks(root)
-	if err != nil || len(tasks) != 1 || tasks[0].ID == "" {
+	if err != nil || len(tasks) != 2 || !strings.HasPrefix(tasks[0].ID, "new-") || tasks[0].ID == tasks[1].ID {
 		t.Fatalf("listed: %+v %v", tasks, err)
 	}
-	coins := tasks[0].ID
-	text := strings.Replace(boardFile(t, root), "## To do\n", "## To do\n- [ ] Pits\n", 1) // written above it by hand
+	if got := boardFile(t, root); got != "## To do\n- [ ] Coins\n- [ ] Coins\n" {
+		t.Errorf("listing wrote:\n%s", got)
+	}
+	first := tasks[0].ID
+	text := strings.Replace(boardFile(t, root), "## To do\n", "## To do\n- [ ] Pits\n", 1) // written above by hand
 	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte(text), 0o644)
-	if moved, err := MoveTask(root, coins, "Done"); err != nil || moved.Text != "Coins" {
-		t.Errorf("moving %s moved %+v (%v)", coins, moved, err)
+	moved, err := MoveTask(root, first, "Done")
+	if err != nil || moved.Text != "Coins" || !strings.HasPrefix(moved.ID, "t") {
+		t.Fatalf("moving %s moved %+v (%v)", first, moved, err)
+	}
+	if _, tasks, _ = Tasks(root); len(tasks) != 3 || tasks[2].ID != moved.ID || tasks[2].Column != "Done" {
+		t.Errorf("after: %+v", tasks)
+	}
+	if _, err := MoveTask(root, first, "Doing"); err == nil {
+		t.Error("a draft id outlived its task getting a real one")
+	}
+}
+
+// lastTask is read as YAML writes it, and kept once.
+func TestLastTaskIsReadAsYAML(t *testing.T) {
+	for _, front := range []string{"lastTask: 't7'", "lastTask: t7 # the highest", `lastTask: "t7"`} {
+		root := t.TempDir()
+		os.MkdirAll(filepath.Join(root, "design"), 0o755)
+		os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte("---\ntitle: Tasks\n"+front+"\n---\n\n## To do\n"), 0o644)
+		if a, _ := AddTask(root, "A", "", nil); a.ID != "t8" {
+			t.Errorf("%s: added %s", front, a.ID)
+		}
+		if got := boardFile(t, root); strings.Count(got, "lastTask") != 1 || !strings.Contains(got, "lastTask: t8\n") {
+			t.Errorf("%s: written\n%s", front, got)
+		}
 	}
 }
