@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/copies"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 	"github.com/Jumballaya/Journeyman-Engine/internal/vcs"
@@ -160,19 +161,18 @@ const variantPrefix = "variant/"
 
 var variantName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,39}$`)
 
-func variantsDir(root string) string { return filepath.Join(root, ".jm", "variants") }
-
 // variantsOf is the game's variants, by name.
 func variantsOf(root string) []variant {
 	out := []variant{}
-	entries, _ := os.ReadDir(variantsDir(root))
+	store, _ := copies.OpenStore(root, copies.Variant, false)
+	entries, _ := os.ReadDir(store) // "": none
 	for _, e := range entries {
-		dir := vcs.GameIn(root, filepath.Join(variantsDir(root), e.Name()))
+		dir := vcs.GameIn(root, filepath.Join(store, e.Name()))
 		branch := variantPrefix + e.Name()
 		if !e.IsDir() || vcs.Branch(dir) != branch {
 			continue // not one of ours (or half made)
 		}
-		v := variant{Name: e.Name(), Dir: dir, Branch: branch, Changed: len(vcs.Status(dir)), thumb: thumbOf(root, "variant", e.Name(), dir)}
+		v := variant{Name: e.Name(), Dir: dir, Branch: branch, Changed: len(vcs.Status(dir)), thumb: thumbOf(root, copies.Variant, e.Name(), dir)}
 		v.Ahead, v.Behind = vcs.Distance(root, branch)
 		if log, _ := vcs.Log(dir, 1); len(log) > 0 {
 			v.Subject = log[0].Subject
@@ -199,15 +199,16 @@ func newVariant(root, name, from string) (variant, error) {
 	if log, err := vcs.Log(root, 1); err != nil || len(log) == 0 {
 		return variant{}, fmt.Errorf("a variant starts from a commit, and the game has none yet: jm vcs commit first")
 	}
-	dir := filepath.Join(variantsDir(root), name)
+	store, err := copies.OpenStore(root, copies.Variant, true)
+	if err != nil {
+		return variant{}, err
+	}
+	dir := filepath.Join(store, name)
 	if exists(dir) {
 		return variant{}, fmt.Errorf("variant %s already exists", name)
 	}
-	if _, err := jmfolder.Make(root, "variants"); err != nil {
-		return variant{}, err
-	}
 	// Variants live in .jm: an older game that doesn't ignore it would commit them.
-	if !vcs.Ignored(root, ".jm/variants") {
+	if rel, _ := filepath.Rel(root, store); !vcs.Ignored(root, filepath.ToSlash(rel)) {
 		if _, err := ensureGitignoreLines(root, []string{".jm/"}); err != nil {
 			return variant{}, err
 		}
@@ -260,8 +261,8 @@ func dropVariant(root, name string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	_ = os.Remove(compareImage(root, "variant", name)) // a new one of that name isn't this
-	return vcs.RemoveWorktree(root, filepath.Join(variantsDir(root), name), v.Branch)
+	_ = os.Remove(compareImage(root, string(copies.Variant), name)) // a new one of that name isn't this
+	return vcs.RemoveWorktree(root, filepath.Join(copies.Store(root, copies.Variant), name), v.Branch)
 }
 
 func dropText(name string, kept bool) string {
@@ -327,7 +328,7 @@ func compareVariants(c *toolCall, root, a, b string, frame int, play string, san
 			if err != nil {
 				return cmp, err
 			}
-			sides[i].dir, sides[i].kind = sb.Dir, "sandbox"
+			sides[i].dir, sides[i].kind = sb.Dir, string(copies.Sandbox)
 			continue
 		}
 		if name == "game" {
@@ -338,7 +339,7 @@ func compareVariants(c *toolCall, root, a, b string, frame int, play string, san
 		if err != nil {
 			return cmp, err
 		}
-		sides[i].dir, sides[i].rev, sides[i].kind = v.Dir, "refs/heads/"+v.Branch, "variant"
+		sides[i].dir, sides[i].rev, sides[i].kind = v.Dir, "refs/heads/"+v.Branch, string(copies.Variant)
 	}
 	marks, before, after := map[string]string{}, func(string) []byte { return nil }, func(string) []byte { return nil }
 	if cmp.Sandbox {
@@ -402,11 +403,11 @@ func compareImage(root, kind, name string) string {
 // thumbOf is a variant's or sandbox's picture: its newest play's, else its
 // last compare's, else a golden frame (maybe the game's, copied with it),
 // else the game's own (a fresh one is the game).
-func thumbOf(root, kind, name, dir string) string {
+func thumbOf(root string, kind copies.Kind, name, dir string) string {
 	if thumb := projects.PlayThumb(dir); thumb != "" {
 		return thumb
 	}
-	if path := compareImage(root, kind, name); exists(path) {
+	if path := compareImage(root, string(kind), name); exists(path) {
 		return path
 	}
 	if thumb := projects.GoldenThumb(dir); thumb != "" {

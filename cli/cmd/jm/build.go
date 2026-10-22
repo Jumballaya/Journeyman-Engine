@@ -21,6 +21,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/art"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
+	"github.com/Jumballaya/Journeyman-Engine/internal/copies"
 	"github.com/Jumballaya/Journeyman-Engine/internal/filelock"
 	"github.com/Jumballaya/Journeyman-Engine/internal/formats"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jmfolder"
@@ -102,7 +103,7 @@ func scriptToolchain(projectRoot string) (toolchain.Toolchain, error) {
 // the scripts' node_modules, so scripts (and tests) can import them.
 func syncScriptPackages(projectRoot string, m manifest.GameManifest, tc toolchain.Toolchain) error {
 	// Not in a sandbox: the link (for editors only) would lead out of it.
-	if _, kind := copyOf(projectRoot); kind != "sandboxes" {
+	if c, _ := copies.Of(projectRoot); c.Kind != copies.Sandbox {
 		tc.LinkInto(scriptsPath(projectRoot))
 	}
 	if err := syncEmbeddedRuntime(projectRoot); err != nil {
@@ -141,17 +142,6 @@ var packageName = regexp.MustCompile(`^(@[a-z0-9~-][a-z0-9._~-]*/)?[a-z0-9~-][a-
 
 // syncLibrary copies a shared script folder (relative to the project, e.g.
 // "../common") to node_modules/<name>, giving it a package.json if it has none.
-// librarySource is the folder a script library (the manifest's
-// scriptLibraries) is copied from. A sandbox or variant is a copy of the
-// game's own folder: a library beside the game ("../common") is where the game
-// finds it, not beside the copy.
-func librarySource(projectRoot, dir string) string {
-	if game, _ := copyOf(projectRoot); game != "" && !filepath.IsAbs(dir) && !filepath.IsLocal(dir) {
-		return filepath.Join(game, dir)
-	}
-	return filepath.Join(projectRoot, dir)
-}
-
 func syncLibrary(projectRoot, name, dir string) error {
 	// The name becomes a folder that is wiped and refilled.
 	if !packageName.MatchString(name) {
@@ -160,7 +150,7 @@ func syncLibrary(projectRoot, name, dir string) error {
 	if strings.HasPrefix(name, "@jm/") { // jm's own (@jm/runtime, @jm/behaviors): never replaced
 		return fmt.Errorf("%q is reserved for jm's packages: name the library something else", name)
 	}
-	src := librarySource(projectRoot, dir)
+	src := copies.Beside(projectRoot, dir) // a copy's library is its game's
 	if info, err := os.Stat(src); err != nil || !info.IsDir() {
 		return fmt.Errorf("folder %s not found", src)
 	}
@@ -581,21 +571,6 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return os.WriteFile(dst, data, 0644)
-}
-
-// copyOf gives the game a sandbox's or variant's folder copies
-// (<game>/.jm/sandboxes/<name>, <game>/.jm/variants/<name>) and which kind it
-// is ("sandboxes", "variants"); "" for a game's own folder.
-func copyOf(root string) (game, kind string) {
-	kinds := filepath.Dir(filepath.Clean(root))
-	if k := filepath.Base(kinds); (k != "sandboxes" && k != "variants") || filepath.Base(filepath.Dir(kinds)) != ".jm" {
-		return "", ""
-	}
-	game = filepath.Dir(filepath.Dir(kinds))
-	if _, err := os.Stat(filepath.Join(game, ".jm.json")); err != nil {
-		return "", ""
-	}
-	return game, filepath.Base(kinds)
 }
 
 // build is jm build: the game in the working folder built into build/, its
