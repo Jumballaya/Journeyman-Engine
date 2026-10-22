@@ -1,6 +1,12 @@
 package formats
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
+	"testing"
+)
 
 func TestTheLongestEndingNamesTheFormat(t *testing.T) {
 	for name, want := range map[string]string{
@@ -45,5 +51,31 @@ func TestTextFormatsAreServedAsTheirType(t *testing.T) {
 		if f, _ := Of(name); f.TextMIME != want {
 			t.Errorf("%s is served as %q, want %q", name, f.TextMIME, want)
 		}
+	}
+}
+
+// The editor's own table (editor/Project.cpp assetKindOf) knows the formats a
+// game ships: a format added here is one it shows too.
+func TestTheEditorKnowsWhatShips(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "..", "editor", "Project.cpp"))
+	if err != nil {
+		t.Skip("no editor source here:", err)
+	}
+	table := regexp.MustCompile(`(?s)kBySuffix\[\] = \{(.*?)\};`).FindSubmatch(src)
+	if table == nil {
+		t.Fatal("editor/Project.cpp has no kBySuffix table")
+	}
+	var editor []string
+	for _, m := range regexp.MustCompile(`\{"(\.[a-z0-9.]+)", AssetKind::`).FindAllSubmatch(table[1], -1) {
+		editor = append(editor, string(m[1]))
+	}
+	var shipped []string
+	for _, f := range All(func(f Format) bool { return f.Archive != "" && f.Archive != "manifest" }) {
+		shipped = append(shipped, f.Suffix)
+	}
+	slices.Sort(editor)
+	slices.Sort(shipped)
+	if !slices.Equal(editor, shipped) {
+		t.Errorf("the editor knows %v; the game ships %v", editor, shipped)
 	}
 }
