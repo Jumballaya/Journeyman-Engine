@@ -22,20 +22,15 @@ studioTabs.push((() => {
     if (JSON.stringify(log) !== before) ctx.rerender();
   };
 
+  const logging = kit.latest(() => [state.game, state.problems, state.gen].join("\n"));
   const poll = async () => {
     const ctx = state.ctx;
     forGame(ctx);
     if (ctx.current === "console" && document.visibilityState !== "hidden" && state.game) {
-      const asked = { game: state.game, problems: state.problems, gen: state.gen };
-      let log;
-      try {
-        const r = await ctx.call("game_log", { lines: 400, errors: asked.problems, game: asked.game });
-        const s = r && r.structuredContent;
-        log = s && Array.isArray(s.lines) ? s : { error: (r && r.content && r.content[0] && r.content[0].text) || "No log." };
-        if (s && s.game && s.game !== asked.game) log = null;  // another game's
-      } catch (e) { log = { error: String(e && e.message || e) }; }
-      const current = asked.gen === state.gen && asked.game === state.game && asked.problems === state.problems;
-      if (log && current) {
+      const r = await logging(() => ctx.call("game_log", { lines: 400, errors: state.problems, game: state.game }));
+      const s = r && !r.isError && r.structuredContent;
+      const log = s && Array.isArray(s.lines) ? s : { error: kit.said(r) || "No log." };
+      if (r && !(s && s.game && s.game !== state.game)) {  // null: asked for another game, filter or log; else not another game's
         if (selection()) state.held = log; else show(ctx, log);
       }
     }

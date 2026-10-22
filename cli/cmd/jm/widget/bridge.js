@@ -175,7 +175,7 @@ function jmHost(app) {
   };
   // An MCP Apps call waits for the host: one still starting up may refuse it.
   h.callTool = (name, args) => legacy()
-    ? Promise.resolve(openai.callTool(name, args)).then((r) => resultOf(r) || {})
+    ? Promise.resolve().then(() => openai.callTool(name, args)).then((r) => resultOf(r) || {})  // a throw: a rejection, as framed
     : ready().then(() => request("tools/call", { name, arguments: args }));
   const blocks = (content) => typeof content === "string" ? [{ type: "text", text: content }] : content;
   // Waits for the host to say whether it takes openai/message: send and
