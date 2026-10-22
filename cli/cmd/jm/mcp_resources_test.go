@@ -107,7 +107,7 @@ func TestResourceTemplatesAreListedAndAGamesFileReads(t *testing.T) {
 	for _, tmpl := range replies[2]["result"].(map[string]any)["resourceTemplates"].([]any) {
 		uris = append(uris, tmpl.(map[string]any)["uriTemplate"].(string))
 	}
-	if got := strings.Join(uris, " "); got != "jm://game/{game}/file/{path} jm://play/{play} jm://play/{play}/{marker} jm://entity{?scene,name} jm://docs/{topic}" {
+	if got := strings.Join(uris, " "); got != "jm://game/{game}/file/{path} jm://game/{game}/play/{play} jm://game/{game}/play/{play}/{marker} jm://game/{game}/entity{?scene,name} jm://docs/{topic}" {
 		t.Errorf("templates: %s", got)
 	}
 	if got := jsonOf(replies[3]["result"]); got != `{"contents":[{"mimeType":"text/plain","text":"hello","uri":"jm://game/Neon%20Vow/file/notes.txt"}]}` {
@@ -174,13 +174,13 @@ func TestCompletionsSuggestWhatStartsSo(t *testing.T) {
 		}
 		return reply.Result.(map[string]any)["completion"].(map[string]any)
 	}
-	entity := `{"type":"ref/resource","uri":"jm://entity{?scene,name}"}`
-	marker := `{"type":"ref/resource","uri":"jm://play/{play}/{marker}"}`
+	entity := `{"type":"ref/resource","uri":"jm://game/{game}/entity{?scene,name}"}`
+	marker := `{"type":"ref/resource","uri":"jm://game/{game}/play/{play}/{marker}"}`
 	for _, c := range []struct{ ref, arg, value, context, want string }{
 		{entity, "scene", "scenes/L", `{}`, `["scenes/level1.scene.json"]`},
 		{entity, "name", "b", `{"scene":"scenes/level1.scene.json"}`, `["Brick"]`},
 		{entity, "name", "", `{"scene":"../x.scene.json"}`, `[]`},
-		{`{"type":"ref/resource","uri":"jm://play/{play}"}`, "play", "2000-01-02", `{}`, `["2000-01-02_000000"]`},
+		{`{"type":"ref/resource","uri":"jm://game/{game}/play/{play}"}`, "play", "2000-01-02", `{}`, `["2000-01-02_000000"]`},
 		{marker, "marker", "", `{"play":"2000-01-02_000000"}`, `["m1"]`},
 		{marker, "marker", "", `{"play":"2000-01-01_000000"}`, `[]`},
 		{`{"type":"ref/resource","uri":"jm://docs/{topic}"}`, "topic", "agen", `{}`, `["agents"]`},
@@ -222,5 +222,58 @@ func TestRootsOpenTheGame(t *testing.T) {
 	text := jsonOf(reply["result"])
 	if want, _ := filepath.EvalSymlinks(game); !strings.Contains(text, "Open: Rooted ("+want+")") {
 		t.Errorf("games: %s", text)
+	}
+}
+
+// What a host was handed in one game (the list, mentions) reads that game's
+// after open_game: each URI names its game. A bare link is the open game's.
+func TestHandedOutURIsKeepTheirGame(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"a", "b"} {
+		dir := filepath.Join(home, g)
+		filesGame(t, dir)
+		os.WriteFile(filepath.Join(dir, "scenes/main.scene.json"), []byte(`{"entities":[{"name":"Hero","tag":"hero of `+g+`"}]}`), 0o644)
+		os.MkdirAll(filepath.Join(dir, "design"), 0o755)
+		os.WriteFile(filepath.Join(dir, "design", "Pacing.md"), []byte("---\ntitle: Pacing of "+g+"\n---\n"), 0o644)
+		play := filepath.Join(plays.Root(dir), "2000-01-02_000000")
+		os.MkdirAll(play, 0o755)
+		os.WriteFile(filepath.Join(play, "session.json"), []byte(`{"format":1,"frames":60,"seconds":1,"started":"2000-01-02T00:00:00",
+			"markers":[{"n":1,"frame":30,"time":0.5,"scene":"scenes/main.scene.json","note":"floaty in `+g+`"}]}`), 0o644)
+	}
+	t.Chdir(filepath.Join(home, "a"))
+	s := newMCPServer()
+	respond := func(method string, params any) map[string]any {
+		data, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
+		reply, _ := s.respond(data)
+		var out map[string]any
+		data, _ = json.Marshal(reply)
+		json.Unmarshal(data, &out)
+		return out
+	}
+	uris := map[string]string{}
+	for _, r := range respond("resources/list", map[string]any{})["result"].(map[string]any)["resources"].([]any) {
+		if r := r.(map[string]any); r["name"] == "memory" || r["name"] == "scenes/main.scene.json" {
+			uris[r["name"].(string)] = r["uri"].(string)
+		}
+	}
+	for _, query := range []string{"floaty", "Hero"} {
+		found := respond("tools/call", map[string]any{"name": "mention_search", "arguments": map[string]any{"query": query}})
+		item := found["result"].(map[string]any)["structuredContent"].(map[string]any)["items"].([]any)[0].(map[string]any)
+		uris[query] = item["uri"].(string)
+	}
+	s.openGame(filepath.Join(home, "b"))
+	says := map[string]string{"memory": "Pacing of a", "scenes/main.scene.json": "hero of a", "floaty": "floaty in a", "Hero": "hero of a"}
+	for what, uri := range uris {
+		if text := jsonOf(respond("resources/read", map[string]any{"uri": uri})); !strings.Contains(text, says[what]) {
+			t.Errorf("%s (%s) after open_game b: %s", what, uri, text)
+		}
+		if stamp, err := s.stampOf(uri); err != nil || stamp == "" {
+			t.Errorf("%s isn't watched in its game: %q %v", what, stamp, err)
+		}
+	}
+	if text := jsonOf(respond("resources/read", map[string]any{"uri": playLink("2000-01-02_000000", 1)})); !strings.Contains(text, "floaty in b") {
+		t.Errorf("a bare link isn't the open game's: %s", text)
 	}
 }

@@ -278,11 +278,12 @@ they are on the page comes as background context. "Ask about it" and "New
 chat" on a page start their message about that thing, here or in a new chat:
 look at it (`open_game`, `scene_view`, `play_frame`) before you answer.
 When the person @-mentions part of the game (ChatGPT desktop), it arrives as a
-resource link: files are `file://` resources, and `jm://play/<id>`,
-`jm://play/<id>/m<n>` (a marker, with what they saw; a moment's with what
+resource link: files are `file://` resources, and `jm://game/<game>/play/<id>`,
+`…/play/<id>/m<n>` (a marker, with what they saw; a moment's with what
 they picked, outlined, and where each came from) and
-`jm://entity?scene=…&name=…` (every entity of that name in the scene) read
-the same way.
+`…/entity?scene=…&name=…` (every entity of that name in the scene) read
+the same way, in their game whichever is open. In the game's own files
+(tasks, notes) write the link without `jm://game/<game>/`: `jm://play/<id>/m2`.
 `jm editor` opens this game in the editor, where your user works on the same files.
 Without a shell (ChatGPT), the game's files are tools: `files` (the tree with
 git's marks, as `jm files`), `file_read` (text, an etag, and what's wrong: bad

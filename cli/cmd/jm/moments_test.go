@@ -125,7 +125,7 @@ func TestAMomentReachesTheAgentWithItsPicks(t *testing.T) {
 	}
 	items := replies[2]["result"].(map[string]any)["structuredContent"].(map[string]any)["items"].([]any)
 	if link := items[0].(map[string]any); link["name"] != "moment 1: this one" ||
-		!strings.HasSuffix(link["description"].(string), `picked Pip: "this one clips", enemy_zero, point: "this gap is too wide"`) || link["uri"] != "jm://play/2000-01-03_000000/m1" {
+		!strings.HasSuffix(link["description"].(string), `picked Pip: "this one clips", enemy_zero, point: "this gap is too wide"`) || link["uri"] != gameURI(evalOrSelf(here(t)), playLink("2000-01-03_000000", 1)) {
 		t.Errorf("mention: %v", items)
 	}
 	read := replies[3]["result"].(map[string]any)["contents"].([]any)

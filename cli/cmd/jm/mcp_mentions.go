@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -25,12 +23,13 @@ const mentionTool = "mention_search"
 // mentionLimit keeps the picker's list short: typing narrows it.
 const mentionLimit = 30
 
+// A mention's link is as a game's files write it (a task's); its resource_link names the game too.
 type mention struct {
-	kind, name, uri, mime, where string
+	kind, name, link, mime, where string
 }
 
-func (m mention) link() map[string]any {
-	return map[string]any{"type": "resource_link", "uri": m.uri, "name": m.name, "title": m.name,
+func (m mention) resourceLink(root string) map[string]any {
+	return map[string]any{"type": "resource_link", "uri": gameURI(root, m.link), "name": m.name, "title": m.name,
 		"description": m.kind + " · " + m.where, "mimeType": m.mime}
 }
 
@@ -44,8 +43,8 @@ func (s *mcpServer) mentionTools() []mcpTool {
 			items := []map[string]any{}
 			var lines []string
 			for _, m := range found {
-				items = append(items, m.link())
-				lines = append(lines, m.name+" ("+m.kind+"): "+m.uri)
+				items = append(items, m.resourceLink(root))
+				lines = append(lines, m.name+" ("+m.kind+"): "+m.link)
 			}
 			return toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"items": items}}
 		}}}
@@ -58,7 +57,7 @@ func mentionables(root string) []mention {
 	var latest, older []mention
 	for i, p := range all {
 		started := strings.Replace(p.Meta.Started, "T", " ", 1)
-		ms := append([]mention{{"play", "play " + p.ID, "jm://play/" + url.PathEscape(p.ID), "text/plain",
+		ms := append([]mention{{"play", "play " + p.ID, playLink(p.ID, 0), "text/plain",
 			fmt.Sprintf("%s, %s long, %d markers", started[:min(len(started), 16)], clock(p.Meta.Seconds), len(p.Meta.Markers))}},
 			markerMentions(p)...)
 		if i == 0 {
@@ -83,7 +82,7 @@ func markerMentions(p *plays.Play) []mention {
 		if m.Note != "" {
 			name += ": " + m.Note
 		}
-		out = append(out, mention{kind, name, fmt.Sprintf("jm://play/%s/m%d", url.PathEscape(p.ID), m.N), "text/plain", where})
+		out = append(out, mention{kind, name, playLink(p.ID, m.N), "text/plain", where})
 	}
 	return out
 }
@@ -161,13 +160,9 @@ func entityMentions(rel, real string) []mention {
 		if counts[name] > 1 {
 			where = fmt.Sprintf("%d in %s", counts[name], short)
 		}
-		out = append(out, mention{"entity", name, entityURI(rel, name), "application/json", where})
+		out = append(out, mention{"entity", name, entityLink(rel, name), "application/json", where})
 	}
 	return out
-}
-
-func entityURI(scene, name string) string {
-	return "jm://entity?" + url.Values{"scene": {scene}, "name": {name}}.Encode()
 }
 
 func readScene(path string) sceneFile {
@@ -202,82 +197,4 @@ func searchMentions(all []mention, query string, limit int) []mention {
 	}
 	sort.SliceStable(found, func(i, j int) bool { return rank(found[i]) < rank(found[j]) })
 	return found[:min(len(found), limit)]
-}
-
-// readMentioned reads a play, marker or entity of the game at root a mention
-// linked; false: uri isn't one of those.
-func readMentioned(root, uri string) ([]map[string]any, bool, error) {
-	if rest, ok := strings.CutPrefix(uri, "jm://play/"); ok {
-		contents, err := readPlayMention(root, uri, rest)
-		return contents, true, err
-	}
-	if strings.HasPrefix(uri, "jm://entity?") {
-		contents, err := readEntityMention(root, uri)
-		return contents, true, err
-	}
-	return nil, false, nil
-}
-
-func readPlayMention(root, uri, rest string) ([]map[string]any, error) {
-	id, marker, _ := strings.Cut(rest, "/")
-	id, err := url.PathUnescape(id)
-	if err != nil {
-		return nil, err
-	}
-	if root == "" {
-		return nil, errNoGame
-	}
-	p, b, err := openPlay(root, id)
-	if err != nil {
-		return nil, err
-	}
-	if p.ID != id {
-		return nil, fmt.Errorf("no play %s", id) // a prefix finds a play: a link names one
-	}
-	o, err := overviewOf(root, p, b)
-	if err != nil {
-		return nil, err
-	}
-	if marker == "" {
-		return []map[string]any{{"uri": uri, "mimeType": "text/plain", "text": o.text()}}, nil
-	}
-	m, err := markerOf(p, marker)
-	if err != nil {
-		return nil, err
-	}
-	contents := []map[string]any{{"uri": uri, "mimeType": "text/plain", "text": momentSummary(p, m)}}
-	if data := jpegImage(momentPicture(p, m), 960); data != nil {
-		contents = append(contents, map[string]any{"uri": uri, "mimeType": "image/jpeg", "blob": base64.StdEncoding.EncodeToString(data)})
-	}
-	return contents, nil
-}
-
-func readEntityMention(root, uri string) ([]map[string]any, error) {
-	u, err := url.Parse(uri)
-	if err != nil {
-		return nil, err
-	}
-	scene, name := u.Query().Get("scene"), u.Query().Get("name")
-	real, rel, err := gamePath(root, scene)
-	if err != nil {
-		return nil, err
-	}
-	if !strings.HasSuffix(rel, ".scene.json") {
-		return nil, fmt.Errorf("%s isn't one of the project's scenes", scene)
-	}
-	type found struct {
-		Where  string         `json:"where"`
-		Entity map[string]any `json:"entity"`
-	}
-	var matches []found
-	eachEntity(readScene(real).Entities, "entities", func(e map[string]any, where string) {
-		if e["name"] == name {
-			matches = append(matches, found{where, e})
-		}
-	})
-	if len(matches) == 0 {
-		return nil, fmt.Errorf("no entity %q in %s", name, scene)
-	}
-	data, _ := json.MarshalIndent(map[string]any{"scene": filepath.ToSlash(rel), "name": name, "entities": matches}, "", "  ")
-	return []map[string]any{{"uri": uri, "mimeType": "application/json", "text": string(data)}}, nil
 }
