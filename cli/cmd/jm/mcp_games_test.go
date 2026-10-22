@@ -309,7 +309,7 @@ func TestANamedGamesFormRoundSurvivesAnotherGameOpening(t *testing.T) {
 	for _, g := range []string{"a", "b"} {
 		filesGame(t, filepath.Join(home, g))
 	}
-	t.Chdir(filepath.Join(home, "b"))
+	t.Chdir(filepath.Join(home, "a"))
 	s := newMCPServer()
 	named := map[string]any{"game": "a"}
 	first := modernCall(t, s, 1, "project_export", named, chatGPTCaps, nil, "")["result"].(map[string]any)
