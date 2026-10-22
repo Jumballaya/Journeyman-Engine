@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -128,5 +129,51 @@ func TestDriveStartFromAPlayTakesNothingElse(t *testing.T) {
 	r := toolOf(t, s, "drive_start").run(toolArgs{"play": "latest", "scene": "scenes/x.scene.json"})
 	if !r.Failed || !strings.Contains(r.Text, "brings its own") {
 		t.Errorf("drive_start: %s", r.Text)
+	}
+}
+
+// A lint: the server's code calls nothing that reads the working folder (a call's
+// game is prepare's), but at startup. The per-game tests fence what it can't see.
+func TestMCPCodeNeverReadsTheWorkingFolder(t *testing.T) {
+	startup := []string{
+		`if err := os.Chdir(mcpDir); err != nil {`,
+		`if cwd, err := os.Getwd(); err == nil && exists(archive.ManifestEntryKey) {`,
+	}
+	files, _ := filepath.Glob("mcp*.go")
+	for _, file := range files {
+		if strings.HasSuffix(file, "_test.go") {
+			continue
+		}
+		data, _ := os.ReadFile(file)
+		for i, line := range strings.Split(string(data), "\n") {
+			reads := false
+			for _, call := range []string{"os.Getwd(", "os.Chdir(", "projectRoot(", `realPath(".")`, `filepath.Abs(".")`, "exists(archive.ManifestEntryKey)"} {
+				reads = reads || strings.Contains(line, call)
+			}
+			allowed := slices.ContainsFunc(startup, func(s string) bool { return strings.Contains(line, s) })
+			if reads && !allowed {
+				t.Errorf("%s:%d reads the working folder: %s", file, i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+}
+
+// Paths the environment gives relative mean from where jm mcp started, wherever
+// a tool or the jm command it runs works after: the engine and temp folders.
+func TestRelativePathSettingsMeanWhereTheServerStarted(t *testing.T) {
+	start := t.TempDir()
+	os.WriteFile(filepath.Join(start, "engine"), []byte("#!/bin/sh\n"), 0o755)
+	t.Chdir(start)
+	t.Setenv("JM_ENGINE", "engine")
+	for _, key := range []string{"TMPDIR", "TMP", "TEMP"} { // Windows reads TMP, TEMP
+		t.Setenv(key, ".")
+	}
+	settlePathSettings()
+	t.Chdir(t.TempDir()) // a tool's work elsewhere
+	if engine, err := resolveEnginePath(); err != nil || evalOrSelf(engine) != evalOrSelf(filepath.Join(start, "engine")) {
+		t.Errorf("engine: %s %v", engine, err)
+	}
+	if tmp := os.TempDir(); evalOrSelf(tmp) != evalOrSelf(start) {
+		t.Errorf("temp: %s", tmp)
 	}
 }

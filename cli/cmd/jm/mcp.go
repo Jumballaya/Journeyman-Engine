@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -113,6 +114,7 @@ plays do. A server started in no game opens the client's root that's a game
 (roots/list), before the game opened last.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		settlePathSettings()
 		if mcpDir != "" {
 			if err := os.Chdir(mcpDir); err != nil {
 				return fmt.Errorf("--dir: %w", err)
@@ -251,6 +253,22 @@ func newMCPServer() *mcpServer {
 	return server
 }
 
+// pathSettings name machine things by path (the engine, the editor, temp
+// folders…); a relative one means from where jm mcp started.
+var pathSettings = []string{"JM_ENGINE", "JM_SERVER", "JM_PLAYER", "JM_PLAYERS", "JM_EDITOR", "JM_GAMES", "JM_TOOLCHAIN_DIR", "TMPDIR", "TMP", "TEMP"}
+
+// settlePathSettings makes each absolute, once at startup: the server's tools
+// and the jm commands they run work in game folders, never where it started.
+func settlePathSettings() {
+	for _, key := range pathSettings {
+		if v := os.Getenv(key); v != "" && !filepath.IsAbs(v) {
+			if abs, err := filepath.Abs(v); err == nil {
+				os.Setenv(key, abs)
+			}
+		}
+	}
+}
+
 func serveMCP(in io.Reader, out io.Writer) error { return newMCPServer().serve(in, out) }
 
 func (server *mcpServer) serve(in io.Reader, out io.Writer) error {
@@ -312,7 +330,7 @@ type mcpServer struct {
 	watch     resourceWatch  // what the client subscribed to (mcp_resources.go)
 	pollEvery time.Duration  // how often subscriptions are checked
 	roots     rootsState     // the client's roots, for the game to open
-	home      string         // the games folder, absolute: as the tools have it (the working folder moves)
+	home      string         // the games folder, absolute
 	rootsWork sync.WaitGroup // roots answers being acted on
 	byRecent  bool           // the open game is only the one opened last: the client's root beats it
 	open      atomic.Value   // string: the game calls work on when they name none; only setOpen changes it (resource polls read it unlocked)
@@ -771,7 +789,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 			onGame: jmTool(func(string, toolArgs) ([]string, error) { return []string{"build", "--json"}, nil })},
 		{Name: "doctor", Description: "jm doctor --json: jm's and the engine's versions, the script toolchain (Node, AssemblyScript), the project, and any problems with their fixes.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{}),
-			run: func(a toolArgs) toolResult { return textResult(runJM(a.call(), "", "doctor", "--json")) }},
+			orNone: true, onGame: jmTool(func(string, toolArgs) ([]string, error) { return []string{"doctor", "--json"}, nil })},
 		{Name: "test", Description: "jm test --json: run tests/*.spec.ts (game logic, no engine). A JSON line per test; the last is the result.",
 			Annotations: writes(), InputSchema: object(map[string]any{"specs": listArg("spec files (default: all)")}),
 			onGame: jmTool(func(root string, a toolArgs) ([]string, error) {
@@ -785,12 +803,12 @@ func (s *mcpServer) makeTools() []mcpTool {
 			})},
 		{Name: "schema", Description: "jm schema: every component's scene keys and script fields (or one component's), as JSON.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"component": strArg("e.g. SpriteComponent (default: all)")}),
-			run: func(a toolArgs) toolResult {
+			orNone: true, onGame: jmTool(func(_ string, a toolArgs) ([]string, error) { // the game's script fields too
 				if c := a.str("component"); c != "" {
-					return textResult(runJM(a.call(), "", positional([]string{"schema"}, c)...))
+					return positional([]string{"schema"}, c), nil
 				}
-				return textResult(runJM(a.call(), "", "schema"))
-			}},
+				return []string{"schema"}, nil
+			})},
 		{Name: "generate", Description: "jm generate <kind> <name>: make a file from a template (jm generate list shows the kinds).",
 			Annotations: writes(), InputSchema: object(map[string]any{"kind": strArg("e.g. prefab, script, scene, ui, shader, bindings, list"), "name": strArg("the new file's name")}, "kind"),
 			onGame: jmTool(func(_ string, a toolArgs) ([]string, error) {
@@ -916,9 +934,6 @@ func jsonResult(v any) toolResult {
 func runSessionTool(root string, a toolArgs) toolResult {
 	peers, frames := int(a.num("peers", 2, 1, 64)), int(a.num("frames", 300, 1, 1e7))
 	work, err := os.MkdirTemp("", "jm-session-")
-	if err == nil {
-		work, err = filepath.Abs(work) // the games run in root: a relative TMPDIR would be found there
-	}
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
@@ -996,11 +1011,11 @@ func runSessionTool(root string, a toolArgs) toolResult {
 	return textResult(string(text), runErr != nil || len(errors) > 0)
 }
 
-// runJM runs this jm with args in dir ("": the working folder) for call c: its
+// runJM runs this jm with args in the game dir ("": none) for call c: its
 // output, and whether it failed. A variable so tests can see what a tool runs where.
 var runJM = func(c *toolCall, dir string, args ...string) (string, bool) { return jmIn(c, dir, args...) }
 
-// jmIn runs this jm with args in dir ("": the current folder) for call c.
+// jmIn runs this jm with args in the game dir ("": none) for call c.
 func jmIn(c *toolCall, dir string, args ...string) (string, bool) {
 	out, err := c.run(jmCommand(c.context(), dir, args...))
 	text := strings.TrimSpace(string(out))
@@ -1010,14 +1025,14 @@ func jmIn(c *toolCall, dir string, args ...string) (string, bool) {
 	return text, err != nil
 }
 
-// jmCommand is this jm with args, run in dir until ctx ends.
+// jmCommand is this jm with args, run in the game dir ("": none, so where no game is) until ctx ends.
 func jmCommand(ctx context.Context, dir string, args ...string) *exec.Cmd {
 	self, err := os.Executable()
 	if err != nil {
 		self = "jm"
 	}
 	cmd := exec.CommandContext(ctx, self, args...)
-	cmd.Dir = dir
+	cmd.Dir = cmp.Or(dir, os.TempDir())
 	return cmd
 }
 
@@ -1303,7 +1318,7 @@ func mimeOf(path string) string {
 
 func readResource(root, uri string) (string, string, error) {
 	if uri == "jm://schema" {
-		out, failed := runJM(nil, "", "schema")
+		out, failed := runJM(nil, root, "schema")
 		if failed {
 			return "", "", fmt.Errorf("%s", out)
 		}
