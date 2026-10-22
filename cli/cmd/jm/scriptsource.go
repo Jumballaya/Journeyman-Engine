@@ -137,7 +137,8 @@ type scriptRef struct {
 	exact      bool
 }
 
-var onlyLiteral = regexp.MustCompile(`^\s*(?:"[^"]*"|'[^']*'|` + "`[^`$]*`" + `)\s*$`)
+// onlyLiteral: one literal, no escapes (its value would differ from its text).
+var onlyLiteral = regexp.MustCompile(`^\s*(?:"[^"\\]*"|'[^'\\]*'|` + "`[^`$\\\\]*`" + `)\s*$`)
 
 // refs are the resources s names in resourceCalls written in its code, in order.
 func (s scriptSource) refs() []scriptRef {
@@ -153,7 +154,7 @@ func (s scriptSource) refs() []scriptRef {
 				at = start + 1
 				continue
 			}
-			at += m[1]
+			at = argAt // a call inside the argument is a call too
 			exact := onlyLiteral.MatchString(arg)
 			for _, q := range quoted.FindAllStringSubmatchIndex(arg, -1) {
 				for g := 2; g < len(q); g += 2 {
@@ -167,4 +168,3 @@ func (s scriptSource) refs() []scriptRef {
 	slices.SortFunc(out, func(a, b scriptRef) int { return a.offset - b.offset })
 	return out
 }
-

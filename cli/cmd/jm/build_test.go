@@ -346,6 +346,7 @@ Scene.load("scenes/level2.scene.json");
 const help = 'spawn("ghost", 0, 0)';
 // spawn("commented", 0, 0)
 Scene.transition("levle3", "fade", 1.0); spawnPlayer(peer, "brikk"); spawn(boss ? "brick" : "brik", 0, 0);
+spawn(spawn("brak", 0, 0).params.text("weapon"), 0, 0); Scene.load("level\u0032");
 `), 0o644)
 	man := manifest.GameManifest{
 		Scenes: []string{"scenes/level2.scene.json"},
@@ -360,6 +361,7 @@ Scene.transition("levle3", "fade", 1.0); spawnPlayer(peer, "brikk"); spawn(boss 
 		`3:13 no scene named "levle2" in .jm.json (did you mean "level2"?)`,
 		`7:19 no scene named "levle3" in .jm.json (did you mean "level2"?)`,
 		`7:61 no prefab named "brikk" in .jm.json (did you mean "brick"?)`,
+		`8:14 no prefab named "brak" in .jm.json (did you mean "brick"?)`,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %q", got)
