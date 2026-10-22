@@ -10,12 +10,11 @@ studioTabs.push((() => {
   let state = fresh(null);
 
   // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
-  const on = (ctx, args = {}) => ({ ...args, game: ctx.game.path });
   const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
 
   const load = async (ctx) => {
     const n = ++state.seq, mine = state;
-    const [s, l] = await Promise.all([ctx.call("vcs_status", on(ctx)), ctx.call("vcs_log", on(ctx, { count: 200 }))].map((p) => p.catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }))));
+    const [s, l] = await Promise.all([ctx.call("vcs_status", {}), ctx.call("vcs_log", { count: 200 })].map((p) => p.catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }))));
     if (n !== mine.seq || mine !== state) return;
     state.changes = (s && s.structuredContent && s.structuredContent.changes) || [];
     state.versions = (l && l.structuredContent && l.structuredContent.versions) || [];
@@ -34,7 +33,7 @@ studioTabs.push((() => {
     const picked = state.picked = { kind: "change", path, diff: null };
     state.confirm = "";
     ctx.rerender();
-    const r = await ctx.call("vcs_diff", on(ctx, { file: path })).catch(() => null);
+    const r = await ctx.call("vcs_diff", { file: path }).catch(() => null);
     if (state.picked !== picked) return;
     const s = r && r.structuredContent;
     picked.diff = s && s.file === path ? s.diff : "Couldn't read the diff.";  // only this file's: the header names it
@@ -46,7 +45,7 @@ studioTabs.push((() => {
     if (picked.file === path) { picked.file = null; return ctx.rerender(); }  // open: closes it
     Object.assign(picked, { file: path, diff: null });
     ctx.rerender();
-    const r = await ctx.call("vcs_diff", on(ctx, { file: path, of: picked.hash })).catch(() => null);
+    const r = await ctx.call("vcs_diff", { file: path, of: picked.hash }).catch(() => null);
     if (state.picked !== picked || picked.file !== path) return;
     const s = r && r.structuredContent;
     picked.diff = s && s.file === path && s.of === picked.hash ? s.diff : "Couldn't read the diff.";
@@ -56,13 +55,13 @@ studioTabs.push((() => {
   const run = async (ctx, label, name, args, done) => {
     state.confirm = "";
     const mine = state;
-    const ok = await ctx.act(label, name, on(ctx, args), done);
+    const ok = await ctx.act(label, name, args, done);
     if (mine === state) await load(ctx);  // else another game is shown now: its page reads its own
     return ok;
   };
 
   // A button that asks first (ctx.confirm: in the host's modal, else pressed twice here), then runs name.
-  const twice = (ctx, key, label, ask, verb, name, args, done) => ctx.confirm({ key, label, ask, tool: name, args: on(ctx, args),
+  const twice = (ctx, key, label, ask, verb, name, args, done) => ctx.confirm({ key, label, ask, tool: name, args,
     armed: state.confirm === key, arm: () => { state.confirm = key; ctx.rerender(); }, go: () => run(ctx, verb, name, args, done) });
 
   const marks = { M: "changed", A: "added", "?": "new", D: "deleted", U: "conflict" };

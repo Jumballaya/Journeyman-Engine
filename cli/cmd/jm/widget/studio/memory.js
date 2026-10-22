@@ -13,13 +13,12 @@ studioTabs.push((() => {
   let state = fresh(null);
 
   // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
-  const on = (ctx, args = {}) => ({ ...args, game: ctx.game.path });
   const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
 
   const list = async (ctx, path) => {
     const n = ++state.seq, mine = state;
     try {
-      const r = await ctx.call("memory", on(ctx, {}));
+      const r = await ctx.call("memory", {});
       if (n !== mine.seq || mine !== state) return;
       const s = r && r.structuredContent;
       state.listed = { path, notes: s && Array.isArray(s.notes) ? s.notes : [], error: r && r.isError ? said(r) : "" };
@@ -31,7 +30,7 @@ studioTabs.push((() => {
 
   const recall = async (ctx, mine) => {
     const n = ++mine.recallSeq;
-    const r = await ctx.call("recall", on(ctx, {})).catch(() => null);
+    const r = await ctx.call("recall", {}).catch(() => null);
     if (mine !== state || n !== mine.recallSeq) return;  // another game's, or an older recall
     state.facts = (r && r.structuredContent && r.structuredContent.facts) || [];
     ctx.rerender();
@@ -41,8 +40,8 @@ studioTabs.push((() => {
     const read = state.read = { title, note: null, world: null };
     state.form = null;
     ctx.rerender();
-    const [r, w] = await Promise.all([ctx.call("memory", on(ctx, { note: title })).catch(() => null),
-      ctx.call("world_context", on(ctx, { note: title, steps: 1 })).catch(() => null)]);
+    const [r, w] = await Promise.all([ctx.call("memory", { note: title }).catch(() => null),
+      ctx.call("world_context", { note: title, steps: 1 }).catch(() => null)]);
     if (state.read === read) {
       read.note = r && !r.isError && r.structuredContent ? r.structuredContent : { error: said(r) || `No note ${title}.` };
       read.world = w && !w.isError && w.structuredContent ? w.structuredContent : null;
@@ -87,7 +86,7 @@ studioTabs.push((() => {
     if (!all) return null;
     const forget = async (f) => {
       const mine = state;
-      if (!(await ctx.act("Forgetting", "forget", on(ctx, { id: f.id, scope: f.scope }), (t) => t)) || mine !== state) return;
+      if (!(await ctx.act("Forgetting", "forget", { id: f.id, scope: f.scope }, (t) => t)) || mine !== state) return;
       recall(ctx, mine);
       if (f.scope === "game" && state.read && state.read.note && state.read.note.note && state.read.note.note.path === "design/Memory.md") open(ctx, state.read.title);  // the page it was on
     };
@@ -101,7 +100,7 @@ studioTabs.push((() => {
     state.query = text;
     if (!text.trim()) { state.searchSeq++; state.found = null; ctx.rerender(); return; }
     const n = ++state.searchSeq, mine = state;
-    const r = await ctx.call("memory_search", on(ctx, { text })).catch(() => null);
+    const r = await ctx.call("memory_search", { text }).catch(() => null);
     if (mine !== state || n !== state.searchSeq) return;  // another game's, or an older search
     state.found = { text, hits: (r && r.structuredContent && r.structuredContent.hits) || [] };
     ctx.rerender();
@@ -158,7 +157,7 @@ studioTabs.push((() => {
   const save = async (ctx, label, name, args, done, reopen) => {
     let saved = null;
     const mine = state;  // another game shown meanwhile: its tab isn't this one's to touch
-    const ok = await ctx.act(label, name, on(ctx, args), (text) => {
+    const ok = await ctx.act(label, name, args, (text) => {
       try { saved = JSON.parse(text).note || null; } catch (e) {}
       return done(saved);
     });
@@ -204,7 +203,7 @@ studioTabs.push((() => {
         el("button", { disabled: ctx.busy, onclick: () => { state.form = "decide"; ctx.rerender(); } }, "Decide"),
         el("span", { class: "spacer" }),
         el("button", { onclick: () => host.openLink(n.obsidian).catch((e) => ctx.say("Couldn't: " + (e && e.message || e))) }, "Obsidian"),
-        el("button", { disabled: ctx.busy, onclick: () => ctx.act("Opening", "file_open", on(ctx, { path: note.path }), (t) => t) }, "Code editor")),
+        el("button", { disabled: ctx.busy, onclick: () => ctx.act("Opening", "file_open", { path: note.path }, (t) => t) }, "Code editor")),
       el("div", { class: "head mem-plays" }, el("span", { class: "meta" }, "Playbooks:"),
         playbook(ctx, "expand_world", { note: which }, "Grow the world"),
         note.type === "location" ? playbook(ctx, "level_from_place", { place: which }, "Make it a level") : null,

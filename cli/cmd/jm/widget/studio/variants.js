@@ -13,11 +13,10 @@ studioTabs.push((() => {
 
   const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
   // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
-  const on = (ctx, args = {}) => ({ ...args, game: ctx.game.path });
 
   const load = async (ctx) => {
     const n = ++state.seq, mine = state;
-    const ask = (tool) => ctx.call(tool, on(ctx)).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
+    const ask = (tool) => ctx.call(tool, {}).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
     const [v, s, p] = await Promise.all([ask("variants"), ask("sandboxes"), ask("plays_list")]);
     if (n !== mine.seq || mine !== state) return;
     state.plays = (p && !p.isError && p.structuredContent && p.structuredContent.plays) || [];
@@ -40,7 +39,7 @@ studioTabs.push((() => {
     const mine = state;  // another game shown meanwhile: its tab isn't this one's to touch
     state.confirm = "";
     state.compared = null;  // what it showed may be no longer so
-    const ok = await ctx.act(label, name, on(ctx, args), done);
+    const ok = await ctx.act(label, name, args, done);
     if (mine !== state) return;
     if (ok && after) after();
     await load(ctx);
@@ -49,7 +48,7 @@ studioTabs.push((() => {
   const compare = async (ctx, name, kind) => {
     const mine = state, c = state.compared = { name, kind, frame: state.frame, play: state.play, result: null };
     ctx.rerender();
-    const r = await ctx.call("variant_compare", on(ctx, { a: name, ...(kind === "sandbox" ? { sandbox: true } : {}), frame: c.frame, ...(c.play ? { play: c.play } : {}) })).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
+    const r = await ctx.call("variant_compare", { a: name, ...(kind === "sandbox" ? { sandbox: true } : {}), frame: c.frame, ...(c.play ? { play: c.play } : {}) }).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
     if (mine !== state) return;  // another game shown meanwhile
     const frame = r && !r.isError && r._meta && (r._meta["jm/frames"] || [])[0];
     if (frame) (kind === "sandbox" ? state.sandboxThumbs : state.thumbs)[name] = frame;  // its picture now, as the next list says
@@ -58,7 +57,7 @@ studioTabs.push((() => {
   };
 
   // A button that asks first (ctx.confirm: in the host's modal, else pressed twice here), then runs name.
-  const twice = (ctx, key, label, ask, verb, name, args, done, after) => ctx.confirm({ key, label, ask, tool: name, args: on(ctx, args),
+  const twice = (ctx, key, label, ask, verb, name, args, done, after) => ctx.confirm({ key, label, ask, tool: name, args,
     armed: state.confirm === key, arm: () => { state.confirm = key; ctx.rerender(); }, go: () => run(ctx, verb, name, args, done, after),
     after: () => { state.compared = null; } });  // what it showed may be no longer so
 
@@ -104,7 +103,7 @@ studioTabs.push((() => {
     return el("section", { class: "section var-detail" },
       el("div", { class: "head" }, el("h1", {}, v.name), el("span", { class: "meta" }, `${v.branch} · ${v.subject || ""}`), el("span", { class: "spacer" }),
         workHere(ctx, v),
-        el("button", { disabled: ctx.busy, onclick: () => ctx.act("Starting the variant", "variant_play", on(ctx, { name: v.name }), () => `Variant ${v.name} is open to play.`) }, "Play"),
+        el("button", { disabled: ctx.busy, onclick: () => ctx.act("Starting the variant", "variant_play", { name: v.name }, () => `Variant ${v.name} is open to play.`) }, "Play"),
         twice(ctx, "merge:" + v.name, "Merge", "Merge into the game?", "Merging", "variant_merge", { name: v.name }, () => `Variant ${v.name} is merged into the game.`),
         twice(ctx, "drop:" + v.name, "Drop", v.changed ? `Drop? (${v.changed} uncommitted files go)` : "Drop?",
           "Dropping", "variant_drop", { name: v.name }, (t) => t, () => { state.picked = null; }),
@@ -120,7 +119,7 @@ studioTabs.push((() => {
     state.ran[s.name] = mine;
     ctx.rerender();
     let r;
-    try { r = await ctx.call("sandbox_run", on(ctx, { name: s.name, args: [what] })); } catch (e) { r = { isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }; }
+    try { r = await ctx.call("sandbox_run", { name: s.name, args: [what] }); } catch (e) { r = { isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }; }
     if (state.game !== game || state.ran[s.name] !== mine) return;  // another game, or a later run
     const text = ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join("\n").trim();
     state.ran[s.name] = { what, ok: !(r && r.isError), text };
