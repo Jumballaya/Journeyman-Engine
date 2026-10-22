@@ -77,7 +77,7 @@ func (b *board) scan() {
 		b.kept = lastTaskOf(front)
 	}
 	b.last = max(b.last, b.kept)
-	seen, drafts := map[string]bool{}, map[string]int{}
+	seen := map[string]bool{}
 	for i, line := range b.lines {
 		indented := line == "" || line[0] == ' ' || line[0] == '\t'
 		if n := len(b.tasks); open && (indented || code[i] > 0 && code[i] == code[i-1]) { // a fence it opened goes on to its end
@@ -97,12 +97,8 @@ func (b *board) scan() {
 			t := Task{ID: m[3], Text: m[2], Column: column, Links: links(m[2])}
 			if v, ok := idNumber(t.ID); ok && !seen[t.ID] {
 				seen[t.ID], b.last = true, max(b.last, v)
-			} else { // none, or a copied task's: listed by its text
-				id := "new-" + fmt.Sprintf("%x", sha256.Sum256([]byte(t.Text)))[:8]
-				if drafts[id]++; drafts[id] > 1 {
-					id += "-" + strconv.Itoa(drafts[id])
-				}
-				t.ID = id
+			} else { // none, or a copied task's: listed by its text (two alike: one draft, which find refuses)
+				t.ID = "new-" + fmt.Sprintf("%x", sha256.Sum256([]byte(t.Text)))[:8]
 			}
 			if m[1] != " " { // ticked by hand (Obsidian): done, whatever column it's in
 				t.Column = "Done"
@@ -176,8 +172,20 @@ func (b *board) put(column string, lines ...string) error {
 	return nil
 }
 
-func (b *board) find(id string) int {
-	return slices.IndexFunc(b.tasks, func(t Task) bool { return t.ID == id })
+// find is the task id names (-1: none); an error when it names more than one
+// (hand-written tasks alike share a draft id: which one it meant isn't known).
+func (b *board) find(id string) (int, error) {
+	at := -1
+	for i, t := range b.tasks {
+		if t.ID != id {
+			continue
+		}
+		if at >= 0 {
+			return -1, fmt.Errorf("more than one task reads %q: give one an id (^t…) or new text in %s", t.Text, tasksPath)
+		}
+		at = i
+	}
+	return at, nil
 }
 
 func (b *board) text() string { return strings.Join(b.lines, "\n") + "\n" }
@@ -218,7 +226,13 @@ func withLastTask(text string, last int) (string, error) {
 		if c := front[at].node.LineComment; c != "" { // its comment on its line too
 			mark += " " + c
 		}
-		out = strings.Replace(text, "\n"+front[at].raw+"\n", "\n"+strings.Join(append([]string{mark}, lines[value:]...), "\n")+"\n", 1)
+		kept := []string{mark}
+		for _, line := range lines[1:value] { // and those among its value's lines
+			if strings.HasPrefix(strings.TrimSpace(line), "#") {
+				kept = append(kept, line)
+			}
+		}
+		out = strings.Replace(text, "\n"+front[at].raw+"\n", "\n"+strings.Join(append(kept, lines[value:]...), "\n")+"\n", 1)
 	} else if strings.HasPrefix(text, "---\n") && strings.Contains(text[3:], "\n---\n") {
 		out = "---\n" + mark + "\n" + text[4:]
 	}
@@ -312,7 +326,10 @@ func MoveTask(root, id, column string) (t Task, err error) {
 		if err != nil {
 			return false, err
 		}
-		i := b.find(id) // first: a draft id is the board's as listed
+		i, err := b.find(id) // first: a draft id is the board's as listed
+		if err != nil {
+			return false, err
+		}
 		if i < 0 {
 			return false, fmt.Errorf("no task %s (the board lists them)", id)
 		}
@@ -329,9 +346,9 @@ func MoveTask(root, id, column string) (t Task, err error) {
 // RemoveTask takes a task (and its notes) off the board; one that isn't there is already off.
 func RemoveTask(root, id string) error {
 	return change(root, func(b *board) (bool, error) {
-		i := b.find(id)
+		i, err := b.find(id)
 		if i < 0 {
-			return false, nil
+			return false, err
 		}
 		b.ided() // first: a copy of it (a draft, its ^id the same) isn't left to become it
 		b.lines = slices.Delete(b.lines, b.at[i], b.end[i])

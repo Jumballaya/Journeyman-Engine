@@ -170,26 +170,46 @@ func TestARemovedTasksIDIsntGivenAgain(t *testing.T) {
 func TestAHandWrittenTaskIsFoundByItsDraftID(t *testing.T) {
 	root := t.TempDir()
 	os.MkdirAll(filepath.Join(root, "design"), 0o755)
-	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte("## To do\n- [ ] Coins\n- [ ] Coins\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte("## To do\n- [ ] Coins\n- [ ] Boss\n"), 0o644)
 	_, tasks, err := Tasks(root)
 	if err != nil || len(tasks) != 2 || !strings.HasPrefix(tasks[0].ID, "new-") || tasks[0].ID == tasks[1].ID {
 		t.Fatalf("listed: %+v %v", tasks, err)
 	}
-	if got := boardFile(t, root); got != "## To do\n- [ ] Coins\n- [ ] Coins\n" {
+	if got := boardFile(t, root); got != "## To do\n- [ ] Coins\n- [ ] Boss\n" {
 		t.Errorf("listing wrote:\n%s", got)
 	}
-	first := tasks[0].ID
+	boss := tasks[1].ID
 	text := strings.Replace(boardFile(t, root), "## To do\n", "## To do\n- [ ] Pits\n", 1) // written above by hand
 	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte(text), 0o644)
-	moved, err := MoveTask(root, first, "Done")
-	if err != nil || moved.Text != "Coins" || !strings.HasPrefix(moved.ID, "t") {
-		t.Fatalf("moving %s moved %+v (%v)", first, moved, err)
+	moved, err := MoveTask(root, boss, "Done")
+	if err != nil || moved.Text != "Boss" || !strings.HasPrefix(moved.ID, "t") {
+		t.Fatalf("moving %s moved %+v (%v)", boss, moved, err)
 	}
 	if _, tasks, _ = Tasks(root); len(tasks) != 3 || tasks[2].ID != moved.ID || tasks[2].Column != "Done" {
 		t.Errorf("after: %+v", tasks)
 	}
-	if _, err := MoveTask(root, first, "Doing"); err == nil {
+	if _, err := MoveTask(root, boss, "Doing"); err == nil {
 		t.Error("a draft id outlived its task getting a real one")
+	}
+}
+
+// Hand-written tasks alike (one renamed to the other's text since listing)
+// share a draft id, which names neither: a change by it is refused.
+func TestADraftIDOfTasksAlikeIsRefused(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "design"), 0o755)
+	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte("## To do\n- [ ] Coins\n- [ ] Boss\n"), 0o644)
+	_, tasks, _ := Tasks(root)
+	boss := tasks[1].ID
+	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte("## To do\n- [ ] Boss\n- [ ] Boss\n"), 0o644) // Coins renamed by hand
+	if _, err := MoveTask(root, boss, "Done"); err == nil || !strings.Contains(err.Error(), "more than one task") {
+		t.Errorf("moved by an id of two tasks: %v", err)
+	}
+	if err := RemoveTask(root, boss); err == nil {
+		t.Error("removed by an id of two tasks")
+	}
+	if got := boardFile(t, root); got != "## To do\n- [ ] Boss\n- [ ] Boss\n" {
+		t.Errorf("the board changed:\n%s", got)
 	}
 }
 
@@ -228,11 +248,12 @@ func TestRemovingATaskLeavesItsCopyItsOwn(t *testing.T) {
 // can't be (an anchor others use) refuses the change rather than lose count.
 func TestLastTaskKeepsTheFrontmattersShape(t *testing.T) {
 	for front, want := range map[string]string{
-		"  title: Tasks\n  lastTask: t7":             "  title: Tasks\n  lastTask: t8\n",
-		"  title: Tasks":                             "---\n  lastTask: t8\n  title: Tasks\n",
-		"lastTask: |-\n  t7\ntitle: Tasks":           "\nlastTask: t8\ntitle: Tasks\n",
-		"lastTask: t7\n# kept by hand\ntitle: Tasks": "\nlastTask: t8\n# kept by hand\ntitle: Tasks\n",
-		"lastTask: t7 # do not reset\ntitle: Tasks":  "\nlastTask: t8 # do not reset\ntitle: Tasks\n",
+		"  title: Tasks\n  lastTask: t7":                  "  title: Tasks\n  lastTask: t8\n",
+		"  title: Tasks":                                  "---\n  lastTask: t8\n  title: Tasks\n",
+		"lastTask: |-\n  t7\ntitle: Tasks":                "\nlastTask: t8\ntitle: Tasks\n",
+		"lastTask: t7\n# kept by hand\ntitle: Tasks":      "\nlastTask: t8\n# kept by hand\ntitle: Tasks\n",
+		"lastTask: t7 # do not reset\ntitle: Tasks":       "\nlastTask: t8 # do not reset\ntitle: Tasks\n",
+		"lastTask:\n  # do not reset\n  t7\ntitle: Tasks": "\nlastTask: t8\n  # do not reset\ntitle: Tasks\n",
 	} {
 		root := t.TempDir()
 		os.MkdirAll(filepath.Join(root, "design"), 0o755)
