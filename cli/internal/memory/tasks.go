@@ -110,7 +110,7 @@ func (b *board) scan() {
 	// one (find refuses it), and a change giving ids retires every draft listed.
 	for i, t := range b.tasks {
 		if t.ID == "" {
-			b.tasks[i].ID = "new-" + fmt.Sprintf("%x", sha256.Sum256([]byte(strconv.Itoa(b.last)+"\x00"+t.Text)))[:8]
+			b.tasks[i].ID = "new-" + fmt.Sprintf("%x", sha256.Sum256([]byte(strconv.Itoa(b.last)+"\x00"+t.Text)))[:16]
 		}
 	}
 	for _, c := range Columns {
