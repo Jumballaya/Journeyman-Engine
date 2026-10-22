@@ -85,7 +85,7 @@ func TestIndexLinksOnlyWhatItIndexed(t *testing.T) {
 	root, outside := t.TempDir(), t.TempDir()
 	os.WriteFile(filepath.Join(outside, "secret.png"), []byte("x"), 0o644)
 	for path, text := range map[string]string{
-		".jm.json": `{"name":"G","assets":["assets/**"]}`, "assets/a.png": "x", "assets/readme.txt": "hi", "assets/env.d.ts": "",
+		".jm.json": `{"name":"G","assets":["assets/**"]}`, "assets/a.png": "x", "assets/readme.rtf": "hi", "assets/env.d.ts": "",
 		"plugins/journeyman/plugin.json": "{}", // the agents' plugin, not the game's
 	} {
 		os.MkdirAll(filepath.Join(root, filepath.Dir(path)), 0o755)

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Jumballaya/Journeyman-Engine/internal/formats"
 	"io/fs"
 	"net/url"
 	"os"
@@ -348,18 +349,8 @@ func fileURI(abs string) string {
 	return "file://" + strings.Join(segments, "/")
 }
 
+// mimeOf is the content type jm serves the file at path as text; "" for none.
 func mimeOf(path string) string {
-	switch {
-	case strings.HasSuffix(path, ".json"), strings.HasSuffix(path, ".tmj"), strings.HasSuffix(path, ".tsj"):
-		return "application/json"
-	case strings.HasSuffix(path, ".ts"):
-		return "text/x-typescript"
-	case strings.HasSuffix(path, ".html"):
-		return "text/html"
-	case strings.HasSuffix(path, ".css"):
-		return "text/css"
-	case strings.HasSuffix(path, ".frag"), strings.HasSuffix(path, ".txt"), strings.HasSuffix(path, ".md"):
-		return "text/plain"
-	}
-	return ""
+	f, _ := formats.Of(strings.ToLower(path))
+	return f.TextMIME
 }
