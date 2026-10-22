@@ -160,6 +160,20 @@ func TestNotesOfOneTitleAreTwoPlaces(t *testing.T) {
 	}
 }
 
+// A link two notes answer by link rules is a conflict, though a tool's ref of
+// the same text is one note's path (design/Harbor.md).
+func TestALinkTwoNotesAnswerIsAConflict(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	os.MkdirAll(filepath.Join(root, Dir, "design"), 0o755)
+	os.WriteFile(filepath.Join(root, Dir, "Harbor.md"), []byte("---\ntitle: \"design/Harbor\"\n---\n\n# design/Harbor\n"), 0o644)
+	os.WriteFile(filepath.Join(root, Dir, "design", "Harbor.md"), []byte("# Harbor\n"), 0o644)
+	os.WriteFile(filepath.Join(root, Dir, "Map.md"), []byte("# Map\n\nSee [[design/Harbor]].\n"), 0o644)
+	if c := WorldOf(root).Conflicts(); !slices.ContainsFunc(c, func(c Conflict) bool { return strings.Contains(c.Message, "Map's [[design/Harbor]]: it's 2 notes") }) {
+		t.Errorf("%+v", c)
+	}
+}
+
 // A road stated from both ends with two lengths, and a place inside itself.
 func TestTheWorldsConflicts(t *testing.T) {
 	root := warringNations(t)

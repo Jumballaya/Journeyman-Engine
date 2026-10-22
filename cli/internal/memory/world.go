@@ -190,9 +190,13 @@ func WorldOf(root string) World {
 		}
 	}
 	edge := func(from Note, kind, link string, attrs map[string]string) string {
-		if named := w.named(link); len(named) > 1 {
-			_, err := w.node(link)
-			w.ambiguous = append(w.ambiguous, Conflict{from.Path, fmt.Sprintf("%s's [[%s]]: %v; it's read as %s", w.Name(from), link, err, w.Name(named[0]))})
+		if found := linked(w.Notes, link); len(found) > 1 {
+			var names []string
+			for _, n := range found {
+				names = append(names, w.Name(n))
+			}
+			w.ambiguous = append(w.ambiguous, Conflict{from.Path, fmt.Sprintf("%s's [[%s]]: it's %d notes (%s); it's read as %s",
+				w.Name(from), link, len(found), strings.Join(names, ", "), w.Name(found[0]))})
 		}
 		to, ok := w.find(link)
 		if !ok {
@@ -309,7 +313,8 @@ func (w World) writesLink(name string, n Note) bool {
 
 // linksOnly says whether [[link]] names n and no other note.
 func (w World) linksOnly(link string, n Note) bool {
-	return linksTo(link, n) && !slices.ContainsFunc(w.Notes, func(o Note) bool { return o.Path != n.Path && linksTo(link, o) })
+	found := linked(w.Notes, link)
+	return len(found) == 1 && found[0].Path == n.Path
 }
 
 // at is the node an edge's end is.
@@ -324,10 +329,8 @@ func (w World) at(path, name string) Note {
 
 // find is the note a [[link]] names.
 func (w World) find(link string) (Note, bool) {
-	for _, n := range w.Notes {
-		if linksTo(link, n) {
-			return n, true
-		}
+	if found := linked(w.Notes, link); len(found) > 0 {
+		return found[0], true
 	}
 	return Note{}, false
 }

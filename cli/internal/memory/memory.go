@@ -146,21 +146,28 @@ func Find(root, ref string) (Note, error) {
 // else those at it in any case (one, on a case-blind disk), else each a
 // [[ref]] names (title, file name or folder/title).
 func named(all []Note, ref string) []Note {
-	ref = strings.TrimSuffix(strings.TrimSpace(ref), ".md")
+	ref = strings.TrimSpace(ref)
+	path := strings.TrimSuffix(ref, ".md")
 	var found []Note
 	for _, n := range all {
-		switch path := strings.TrimSuffix(n.Path, ".md"); {
-		case path == ref:
+		switch p := strings.TrimSuffix(n.Path, ".md"); {
+		case p == path:
 			return []Note{n}
-		case strings.EqualFold(path, ref):
+		case strings.EqualFold(p, path):
 			found = append(found, n)
 		}
 	}
 	if len(found) > 0 {
 		return found
 	}
+	return linked(all, ref)
+}
+
+// linked are the notes a [[link]] names, by link rules (none put first).
+func linked(all []Note, link string) []Note {
+	var found []Note
 	for _, n := range all {
-		if linksTo(ref, n) {
+		if linksTo(link, n) {
 			found = append(found, n)
 		}
 	}

@@ -534,6 +534,14 @@ func TestANotesNameFindsIt(t *testing.T) {
 	}
 }
 
+// A ref's .md is taken off once: Foo.md.md is that file, not Foo.md.
+func TestARefsExtensionIsTakenOffOnce(t *testing.T) {
+	all := []Note{{Title: "Foo", Path: "design/Foo.md"}, {Title: "Foo.md", Path: "design/Foo.md.md"}}
+	if found := named(all, "Foo.md.md"); len(found) != 1 || found[0].Path != "design/Foo.md.md" {
+		t.Errorf("%+v", found)
+	}
+}
+
 // The decisions index is the scaffold's Decisions.md, whatever else is titled so.
 func TestADecisionIsIndexedBesideAnotherDecisions(t *testing.T) {
 	root := t.TempDir()
