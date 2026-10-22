@@ -84,7 +84,7 @@ func TestFencedLinesAreNotTheBoard(t *testing.T) {
 	if _, err := MoveTask(root, "t1", "Done"); err != nil {
 		t.Fatal(err)
 	}
-	if got := boardFile(t, root); !strings.Contains(got, "```\n## Done\n- [ ] Not a task ^t9\n~~~~\n") || !strings.HasSuffix(got, "\n## Done\n- [x] Coins ^t1\n\n ```\nits code\n ```\n") || !strings.HasPrefix(got, "## To do\n~~~~\n") {
+	if got := boardFile(t, root); !strings.Contains(got, "```\n## Done\n- [ ] Not a task ^t9\n~~~~\n") || !strings.HasSuffix(got, "\n## Done\n- [x] Coins ^t1\n\n ```\nits code\n ```\n") || !strings.HasPrefix(got, "---\nlastTask: t1\n---\n\n## To do\n~~~~\n") {
 		t.Errorf("Tasks.md:\n%s", got)
 	}
 }
@@ -133,5 +133,51 @@ func TestAFenceOpenToTheEndRefusesTheChange(t *testing.T) {
 		if add == nil || move == nil || hidden == nil || boardFile(t, root) != hand {
 			t.Errorf("%s: %v %v %v\n%s", fence, add, move, hidden, boardFile(t, root))
 		}
+	}
+}
+
+// A removed task's id is never another's: whoever still holds it (another
+// tab, an agent) can't move or remove the task added after.
+func TestARemovedTasksIDIsntGivenAgain(t *testing.T) {
+	root := t.TempDir()
+	a, _ := AddTask(root, "A", "", nil)
+	if err := RemoveTask(root, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := AddTask(root, "B", "", nil)
+	if b.ID == a.ID {
+		t.Fatalf("B got A's id %s", a.ID)
+	}
+	if err := RemoveTask(root, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := MoveTask(root, a.ID, "Done"); err == nil {
+		t.Error("A's id moved something")
+	}
+	if _, tasks, _ := Tasks(root); len(tasks) != 1 || tasks[0].ID != b.ID {
+		t.Errorf("a late removal of A took B: %+v", tasks)
+	}
+	// lastTask lost by hand: the ids on the board still aren't given again.
+	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte("## To do\n- [ ] B ^t2\n"), 0o644)
+	if c, _ := AddTask(root, "C", "", nil); c.ID != "t3" {
+		t.Errorf("after t2: %s", c.ID)
+	}
+}
+
+// The id a hand-written task is listed with is saved: what's done with it
+// later finds it, however the board changed between.
+func TestAListedTaskKeepsItsID(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "design"), 0o755)
+	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte("## To do\n- [ ] Coins\n"), 0o644)
+	_, tasks, err := Tasks(root)
+	if err != nil || len(tasks) != 1 || tasks[0].ID == "" {
+		t.Fatalf("listed: %+v %v", tasks, err)
+	}
+	coins := tasks[0].ID
+	text := strings.Replace(boardFile(t, root), "## To do\n", "## To do\n- [ ] Pits\n", 1) // written above it by hand
+	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte(text), 0o644)
+	if moved, err := MoveTask(root, coins, "Done"); err != nil || moved.Text != "Coins" {
+		t.Errorf("moving %s moved %+v (%v)", coins, moved, err)
 	}
 }
