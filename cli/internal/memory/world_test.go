@@ -358,3 +358,15 @@ func TestARelationsLinkFindsItsNoteAlone(t *testing.T) {
 		t.Error("a link for one of two paths differing in case")
 	}
 }
+
+// A title a [[link]] can't hold (C#: the link ends at #) isn't the name
+// written: the note's file name is.
+func TestARelationToATitleALinkCantHoldUsesItsFileName(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	os.WriteFile(filepath.Join(root, Dir, "csharp.md"), []byte("---\ntitle: \"C#\"\n---\n\n# C#\n"), 0o644)
+	n, err := Relate(root, "Pillars", Relation{Type: "uses", Target: "design/csharp.md"})
+	if err != nil || !slices.ContainsFunc(n.Relations, func(r Relation) bool { return r.Target == "csharp" }) {
+		t.Errorf("%v %+v", err, n.Relations)
+	}
+}

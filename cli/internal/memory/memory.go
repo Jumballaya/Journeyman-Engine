@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -166,10 +167,14 @@ func named(all []Note, ref string) []Note {
 	return found
 }
 
-// NameOf is the shortest name that finds n among all: its title, else its
-// folder/title, else its path.
+// NameOf is the shortest name a [[link]] finds n alone by: its title, else its
+// file name, else its folder/file, else its path.
 func NameOf(all []Note, n Note) string {
-	for _, name := range []string{n.Title, strings.TrimSuffix(strings.TrimPrefix(n.Path, Dir+"/"), ".md")} {
+	stem := strings.TrimSuffix(strings.TrimPrefix(n.Path, Dir+"/"), ".md")
+	for _, name := range []string{n.Title, path.Base(stem), stem} {
+		if strings.ContainsAny(name, "[]|#^\n") { // a [[link]] of it would end or split there
+			continue
+		}
 		if found := named(all, name); len(found) == 1 && found[0].Path == n.Path {
 			return name
 		}
