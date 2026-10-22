@@ -323,7 +323,8 @@ func TestReferencedScriptsAreTheOnesContentNames(t *testing.T) {
 	os.WriteFile("scenes/main.scene.json", []byte(`{"entities": [{"components": {"ScriptComponent": {"script": "assets/scripts/ball.ts"}}}]}`), 0o644)
 	os.WriteFile("assets/data/waves.json", []byte(`{"waves": [{"boss": "assets/scripts/boss.ts"}]}`), 0o644)
 	os.MkdirAll("assets/scripts/lib", 0o755)
-	os.WriteFile("assets/scripts/lib/rules.ts", []byte(`export const x = 1; // no paths here`), 0o644)
+	os.WriteFile("assets/scripts/lib/rules.ts", []byte(`export const x = 1; // was "assets/scripts/old.ts"
+const s = "say 'assets/scripts/quoted.ts' twice";`), 0o644)
 	os.WriteFile("assets/scripts/spawner.ts", []byte(`spawn("orb", 0, 0, new Overrides().set("ScriptComponent", "script", "assets/scripts/orb.ts"));`), 0o644)
 	os.WriteFile(".jm.json", []byte(`{"net": {"server": {"scripts": ["assets/scripts/server/matchmaker.ts"]}}}`), 0o644)
 	got := referencedScripts([]string{".jm.json", "scenes/main.scene.json", "assets/data/waves.json", "assets/scripts/lib/rules.ts",
@@ -343,6 +344,8 @@ spawn("brick", 1, 2); spawn("pickup_" + kind, 0, 0);
 Scene.load("levle2");
 Scene.load("scenes/level2.scene.json");
 const help = 'spawn("ghost", 0, 0)';
+// spawn("commented", 0, 0)
+Scene.transition("levle3", "fade", 1.0); spawnPlayer(peer, "brikk"); spawn(boss ? "brick" : "brik", 0, 0);
 `), 0o644)
 	man := manifest.GameManifest{
 		Scenes: []string{"scenes/level2.scene.json"},
@@ -355,6 +358,8 @@ const help = 'spawn("ghost", 0, 0)';
 	want := []string{
 		`1:8 no prefab named "brik" in .jm.json (did you mean "brick"?)`,
 		`3:13 no scene named "levle2" in .jm.json (did you mean "level2"?)`,
+		`7:19 no scene named "levle3" in .jm.json (did you mean "level2"?)`,
+		`7:61 no prefab named "brikk" in .jm.json (did you mean "brick"?)`,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %q", got)
