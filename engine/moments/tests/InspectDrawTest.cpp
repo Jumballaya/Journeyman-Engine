@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <stb_image_write.h>
+
 #include <fstream>
 
 #include "../../core/tests/assets/TempDir.hpp"
@@ -40,4 +42,33 @@ TEST(InspectDraw, EachItemIsItsEntitys) {
   const auto& glyphs = seen["draw"]["screen"];
   ASSERT_FALSE(glyphs.empty());
   for (const auto& g : glyphs) EXPECT_EQ(g["entity"], seen["entities"][3]["id"]);
+}
+
+// Tile maps scroll by the camera the frame is drawn with: a half-speed
+// parallax layer sits halfway to a camera at x=1000, not where it'd be at 0.
+TEST(InspectDraw, ParallaxIsByTheShownCamera) {
+  TempDir game;
+  const unsigned char pixel[4] = {255, 255, 255, 255};
+  stbi_write_png((game.path() / "far.png").string().c_str(), 1, 1, 4, pixel, 4);
+  game.writeFile("level.tmj", R"({"width": 4, "height": 2, "tilewidth": 16, "tileheight": 16, "layers": [
+      {"type": "imagelayer", "image": "far.png", "parallaxx": 0.5, "parallaxy": 1}]})");
+  game.writeFile(".jm.json", R"({"name": "P", "entryScene": "main.scene.json", "scenes": ["main.scene.json"],
+                                 "assets": ["far.png", "level.tmj"]})");
+  game.writeFile("main.scene.json", R"({"name": "main", "entities": [
+    {"name": "Map", "components": {"TransformComponent": {}, "TileMapComponent": {"map": "level.tmj"}}},
+    {"name": "Eye", "components": {"TransformComponent": {"position": [1000, 0, 0]}, "CameraComponent": {}}}]})");
+  EngineOptions options;
+  options.dev = DevOptions{};
+  options.dev.renderer = "none";
+  options.dev.inspectOut = game.path() / "seen.json";
+  options.dev.saveDir = game.path() / "save";
+  {
+    Engine engine(game.path(), ".jm.json", options);
+    engine.initialize();
+    engine.run();
+  }
+  std::ifstream in(options.dev.inspectOut);
+  const auto seen = nlohmann::json::parse(in);
+  ASSERT_EQ(seen["draw"]["world"].size(), 1u) << seen.dump();
+  EXPECT_NEAR(seen["draw"]["world"][0]["center"][0].get<float>(), 500.0f, 1.0f);
 }

@@ -661,9 +661,7 @@ void Renderer2DModule::draw(Engine& app, float dt) {
   const float fraction = app.drawFraction();
   const float viewSize = static_cast<float>(std::min(_renderer.logicalSize().x, _renderer.logicalSize().y));
   const StepBlend::Camera camera = _blend.blend(world, {_cameras.view().center, _cameras.view().zoom}, fraction, viewSize);
-  world.runSystems(dt * app.getClock().stepScale(), SystemStage::Render, SystemStage::Render);
-  const GameClock& clock = app.getClock();
-  _renderer.setTime(static_cast<float>(clock.unscaledElapsed() - (1.0f - fraction) * clock.unscaledDt()));
+  // Before the render systems: tile maps cull and scroll parallax by this frame's camera.
   if (_editorView) {
     _renderer.camera().setPosition(_editorView->center);
     _renderer.camera().setZoom(_editorView->zoom);
@@ -671,6 +669,9 @@ void Renderer2DModule::draw(Engine& app, float dt) {
     _renderer.camera().setPosition(camera.center + _shake);
     _renderer.camera().setZoom(camera.zoom);
   }
+  world.runSystems(dt * app.getClock().stepScale(), SystemStage::Render, SystemStage::Render);
+  const GameClock& clock = app.getClock();
+  _renderer.setTime(static_cast<float>(clock.unscaledElapsed() - (1.0f - fraction) * clock.unscaledDt()));
   for (auto& pass : _overlayPasses) pass(_renderer);
   _renderer.setDrawing(!app.fastForwarding());
   _renderer.endFrame();
