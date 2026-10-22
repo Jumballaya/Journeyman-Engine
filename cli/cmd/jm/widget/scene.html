@@ -79,11 +79,10 @@
   };
 
   // laid: a scene_view answer this page asked for after a save, over the
-  // host's. file: the opened file as read (uri, doc, etag, writable), when the
-  // host opened one. selected: an entity's where. shared: what the model has.
+  // host's. selected: an entity's where. shared: what the model has.
   // drawn: the engine's frame of the scene shown (scene_render), { of, src | "", error }; src "" while it
   // draws; of: the scene result it's of, so another shown since drops it.
-  const state = { laid: null, file: null, loading: "", selected: null, notice: "", saving: false, shared: "", drawn: null };
+  const state = { laid: null, selected: null, notice: "", shared: "", drawn: null };
 
   const data = () => {
     const out = state.laid && state.laid.over === host.result ? state.laid.result : host.result;
@@ -94,21 +93,10 @@
     return { loading: !out, scene: s && Array.isArray(s.entities) ? s : null, said, looks };
   };
 
-  // The opened file, read through the host once per file: its JSON is what edits change.
+  // The host-opened file: its JSON is what edits change.
   const opened = () => host.input && host.input.file && host.input.file.resourceUri;
-  const readFile = async (uri) => {
-    state.loading = uri;
-    try {
-      const r = await host.readResource(uri);
-      const doc = JSON.parse(r.text);
-      // Saved as written back: only a file that reads back the same (jm fmt's
-      // layout, numbers a JS number keeps) is edited here.
-      state.file = { uri, doc, etag: r.etag, writable: r.writable && !!r.etag && kit.jsonText(doc) + "\n" === r.text,
-                     why: !r.writable || !r.etag ? "the host won't save it" : "it isn't as jm fmt writes it (jm fmt it)" };
-    } catch (e) { state.notice = "Couldn't read the file: " + (e && e.message || e); }
-    render();
-  };
-  const editable = () => state.file && state.file.writable && state.file.uri === opened();
+  const doc = kit.jsonFile(host, { say: (notice) => { state.notice = notice; }, changed: () => render() });
+  const editable = () => doc.editable(opened());
 
   // The entity at where ("entities[2].children[0]") in a scene document;
   // null for one that isn't in it (a prefab's child: "entities[2]/Shadow").
@@ -130,27 +118,9 @@
   // Changes one value of the selected entity and saves the file, unless it
   // changed since it was read (then it's read again and the change dropped).
   const change = async (where, set) => {
-    const f = state.file;
-    const doc = JSON.parse(JSON.stringify(f.doc));
-    set(entryAt(doc, where));
-    state.saving = true; state.notice = "Saving…"; render();
-    try {
-      const r = await host.writeResource(f.uri, kit.jsonText(doc) + "\n", f.etag);
-      if (r && r.outcome === "saved") {
-        Object.assign(f, { doc, etag: r.etag });
-        state.notice = "Saved.";
-        await relayout();
-      } else if (r && r.outcome === "conflict") {
-        state.notice = "The file changed since: read it again, make the change again.";
-        state.selected = null;  // where it was may be another entity now
-        await readFile(f.uri);
-        await relayout();
-      } else {
-        state.notice = r && r.outcome === "too-large" ? `Too large to save (at most ${r.maxBytes} bytes).` : "Couldn't save.";
-      }
-    } catch (e) { state.notice = "Couldn't save: " + (e && e.message || e); }
-    state.saving = false;
-    render();
+    const outcome = await doc.save((d) => set(entryAt(d, where)));
+    if (outcome === "conflict") state.selected = null;  // where it was may be another entity now
+    if (outcome === "saved" || outcome === "conflict") { await relayout(); render(); }
   };
 
   const view = (s, { sprites, maps }) => {
@@ -267,7 +237,7 @@
   // A value's editor: numbers, text, switches, and lists of numbers; others shown.
   let fields = 0;
   const field = (label, value, set) => {
-    const disabled = state.saving;
+    const disabled = doc.saving;
     const id = `field${++fields}`;  // the label's (a vector's: its first value's, each value named by axis)
     const num = (v, put, attrs = { id }) => $("input", { type: "number", step: "any", value: String(v), disabled, ...attrs,
       onchange: (e) => { const n = Number(e.target.value); if (Number.isFinite(n)) put(n); } });
@@ -290,7 +260,7 @@
       kids.push($("div", { class: "asks" }, $("button", { onclick: () => ask(s, e, "active") }, "Ask about this"),
         host.can("openai/message") ? $("button", { title: "A new chat about this entity", onclick: () => ask(s, e, "new") }, "New chat") : null));
     }
-    const own = editable() && entryAt(state.file.doc, e.where);
+    const own = editable() && entryAt(doc.file.doc, e.where);
     if (own) {
       kids.push(field("name", own.name || "", (v) => change(e.where, (x) => { x.name = v; })));
       const key = own.prefab ? "overrides" : "components";
@@ -335,13 +305,13 @@
     if (host.outdated()) return "This ChatGPT is older than Journeyman's pages need (26.928.20710): update it to change scenes here.";
     if (editable()) return "";
     if (!uri || !host.can("openai/resource")) return "Read only here: open the file from your files in ChatGPT to change it.";
-    return state.file ? `Read only: ${state.file.why}.` : "Reading the file…";
+    return doc.file ? `Read only: ${doc.file.why}.` : "Reading the file…";
   };
 
   const render = () => {
     document.documentElement.dataset.theme = host.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     const uri = opened();
-    if (uri && state.loading !== uri && host.can("openai/resource")) readFile(uri);
+    if (host.can("openai/resource")) doc.open(uri);
     const d = data();
     const app = document.getElementById("app");
     app.replaceChildren();

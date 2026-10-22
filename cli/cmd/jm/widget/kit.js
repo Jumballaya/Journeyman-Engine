@@ -167,6 +167,55 @@ const kit = (() => {
     return JSON.stringify(v);
   };
 
+  // The JSON file the host opened, edited on this page: read through the host
+  // for its version, writable only when it reads back as jm fmt writes it.
+  // One save at a time; a read or save that ends after another began changes
+  // nothing. say(notice) shows what happened; changed() re-renders.
+  const jsonFile = (host, { say, changed }) => {
+    let reads = 0, wanted = "";
+    const f = { file: null, saving: false };  // file: { uri, doc, etag, writable, why }
+    f.read = async (uri) => {
+      const n = ++reads;
+      wanted = uri;
+      let file = null, notice = "";
+      try {
+        const r = await host.readResource(uri);
+        const doc = JSON.parse(r.text);
+        file = { uri, doc, etag: r.etag, writable: r.writable && !!r.etag && jsonText(doc) + "\n" === r.text,
+                 why: !r.writable || !r.etag ? "the host won't save it" : "it isn't as jm fmt writes it (jm fmt it)" };
+      } catch (e) { notice = "Couldn't read the file: " + (e && e.message || e); }
+      if (n !== reads) return;
+      if (file) f.file = file; else say(notice);
+      changed();
+    };
+    // open reads uri once (again only after another file).
+    f.open = (uri) => { if (uri && uri !== wanted) f.read(uri); };
+    f.editable = (uri) => !!(f.file && f.file.writable && f.file.uri === uri);
+    // save writes edit(copy of the doc); a conflict reads the file again. "saved" | "conflict" | "failed",
+    // or null: nothing written (a save under way), or the file it began on isn't the one shown now.
+    f.save = async (edit) => {
+      const s = f.file;
+      if (!s || f.saving) return null;
+      const doc = JSON.parse(JSON.stringify(s.doc));
+      edit(doc);
+      f.saving = true; say("Saving…"); changed();
+      let outcome = "failed", notice = "Couldn't save.";
+      try {
+        const r = await host.writeResource(s.uri, jsonText(doc) + "\n", s.etag);
+        if (r && r.outcome === "saved") { Object.assign(s, { doc, etag: r.etag }); outcome = "saved"; notice = "Saved."; }
+        else if (r && r.outcome === "conflict") { outcome = "conflict"; notice = "The file changed since: read it again, make the change again."; }
+        else if (r && r.outcome === "too-large") notice = `Too large to save (at most ${r.maxBytes} bytes).`;
+      } catch (e) { notice = "Couldn't save: " + (e && e.message || e); }
+      f.saving = false;
+      if (f.file !== s) { changed(); return null; }
+      say(notice);
+      if (outcome === "conflict") await f.read(s.uri);
+      changed();
+      return outcome;
+    };
+    return f;
+  };
+
   // A 16px line icon from an SVG path (in a 16 by 16 box).
   const icon = (d) => el("svg:svg", { viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", "stroke-width": "1.4", "stroke-linejoin": "round",
     "stroke-linecap": "round", "aria-hidden": "true" }, el("svg:path", { d }));
@@ -177,5 +226,5 @@ const kit = (() => {
   const empty = (text, ...kids) => el("div", { class: "empty" }, el("div", {}, text), kids);
   const section = (title, ...kids) => el("section", { class: "section" }, el("h2", {}, title), kids);
 
-  return { el, theme, ago, tree, grid, split, empty, section, focusKey, jsonText, icon, nothumb, plural };
+  return { el, theme, ago, tree, grid, split, empty, section, focusKey, jsonText, jsonFile, icon, nothumb, plural };
 })();
