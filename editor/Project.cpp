@@ -195,14 +195,15 @@ fs::path gamesFolder() {
 
 namespace {
 
-// Copies the sources under `from` into `to` (not build outputs, caches or links).
-void copySources(const fs::path& from, const fs::path& to, std::error_code& ec) {
+// Copies the sources under `from` into `to` (not caches or links; nor, for a
+// game rather than a library it uses, the build outputs jm makes at its top).
+void copySources(const fs::path& from, const fs::path& to, bool game, std::error_code& ec) {
   static const std::set<std::string> kNotSources = {".jm", "node_modules", ".git"};
   fs::create_directories(to, ec);
   for (auto it = fs::recursive_directory_iterator(from, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
     const std::string name = it->path().filename().string();
-    // generated at the top only: assets/frames is a sprite's. A link could point anywhere.
-    if ((it.depth() == 0 && generatedFolder(name)) || kNotSources.contains(name) || it->is_symlink()) {
+    // jm's folders at a game's top only (assets/frames is a sprite's; a library's frames/ its own). A link could point anywhere.
+    if ((game && it.depth() == 0 && generatedFolder(name)) || kNotSources.contains(name) || it->is_symlink()) {
       if (!it->is_symlink() && it->is_directory()) it.disable_recursion_pending();
       continue;
     }
@@ -264,7 +265,7 @@ bool copyProject(const fs::path& from, const fs::path& to, const std::string& na
     }
   }
   for (const auto& [what, where] : copies) {
-    copySources(what, where, ec);
+    copySources(what, where, what == from, ec);
     if (ec) {
       error = "Couldn't copy " + what.string() + ": " + ec.message();
       return false;
