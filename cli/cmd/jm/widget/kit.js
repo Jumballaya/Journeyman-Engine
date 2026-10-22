@@ -191,10 +191,11 @@ const kit = (() => {
     // open reads uri once (again only after another file).
     f.open = (uri) => { if (uri && uri !== wanted) f.read(uri); };
     f.editable = (uri) => !!(f.file && f.file.writable && f.file.uri === uri);
-    // save writes edit(copy of the doc); a conflict reads the file again. "saved" | "conflict" | "failed",
-    // or null: nothing written (a save under way), or the file it began on isn't the one shown now.
-    f.save = async (edit) => {
-      const s = f.file;
+    // save writes edit(copy of the doc); a conflict reads the file again. after(outcome) is the page's
+    // follow-up (lay it out again), awaited while still saving. "saved" | "conflict" | "failed", or
+    // null: nothing written (a save under way), or another file was opened since it began.
+    f.save = async (edit, after) => {
+      const s = f.file, n = reads;
       if (!s || f.saving) return null;
       const doc = JSON.parse(JSON.stringify(s.doc));
       edit(doc);
@@ -206,10 +207,11 @@ const kit = (() => {
         else if (r && r.outcome === "conflict") { outcome = "conflict"; notice = "The file changed since: read it again, make the change again."; }
         else if (r && r.outcome === "too-large") notice = `Too large to save (at most ${r.maxBytes} bytes).`;
       } catch (e) { notice = "Couldn't save: " + (e && e.message || e); }
-      f.saving = false;
-      if (f.file !== s) { changed(); return null; }
+      if (n !== reads) { f.saving = false; changed(); return null; }
       say(notice);
       if (outcome === "conflict") await f.read(s.uri);
+      try { if (after) await after(outcome); } catch (e) { say(notice + " Couldn't show it again: " + (e && e.message || e)); }
+      f.saving = false;
       changed();
       return outcome;
     };

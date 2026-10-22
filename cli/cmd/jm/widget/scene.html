@@ -117,11 +117,10 @@
 
   // Changes one value of the selected entity and saves the file, unless it
   // changed since it was read (then it's read again and the change dropped).
-  const change = async (where, set) => {
-    const outcome = await doc.save((d) => set(entryAt(d, where)));
+  const change = (where, set) => doc.save((d) => set(entryAt(d, where)), async (outcome) => {
     if (outcome === "conflict") state.selected = null;  // where it was may be another entity now
-    if (outcome === "saved" || outcome === "conflict") { await relayout(); render(); }
-  };
+    if (outcome !== "failed") await relayout();
+  });
 
   const view = (s, { sprites, maps }) => {
     const es = s.entities;

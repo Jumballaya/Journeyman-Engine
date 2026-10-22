@@ -69,6 +69,33 @@ test('a save that ends after another file opened changes nothing shown', async (
   assert.equal(said.at(-1), 'Saving…', 'nothing said of a file no longer shown');
 });
 
+test('a save that ends before the newly opened file reads changes nothing, nor reads its own again', async () => {
+  const host = fakeHost(), { f, said } = opened(host);
+  f.open('a');
+  host.pending[0].resolve({ text: text({ n: 1 }), etag: 'v1', writable: true }); await settle();
+  const saving = f.save((d) => { d.n = 2; });
+  f.open('b');
+  host.pending[1].resolve({ outcome: 'conflict' });
+  assert.equal(await saving, null);
+  assert.equal(host.pending.length, 3, 'no read of a again');
+  host.pending[2].resolve({ text: text({ of: 'b' }), etag: 'b1', writable: true }); await settle();
+  assert.equal(f.file.uri, 'b');
+  assert.equal(said.at(-1), 'Saving…');
+});
+
+test("the page's follow-up runs while still saving; its failure is said", async () => {
+  const host = fakeHost(), { f, said } = opened(host);
+  f.open('a');
+  host.pending[0].resolve({ text: text({ n: 1 }), etag: 'v1', writable: true }); await settle();
+  let during;
+  const saving = f.save((d) => { d.n = 2; }, async (outcome) => { during = [outcome, f.saving]; throw new Error('no layout'); });
+  host.pending[1].resolve({ outcome: 'saved', etag: 'v2' });
+  assert.equal(await saving, 'saved');
+  assert.deepEqual(during, ['saved', true]);
+  assert.equal(f.saving, false);
+  assert.equal(said.at(-1), "Saved. Couldn't show it again: no layout");
+});
+
 test('a save too large, or failing, says so', async () => {
   for (const [answer, said] of [[{ outcome: 'too-large', maxBytes: 10 }, 'Too large to save (at most 10 bytes).'], [{}, "Couldn't save."]]) {
     const host = fakeHost(), o = opened(host);
