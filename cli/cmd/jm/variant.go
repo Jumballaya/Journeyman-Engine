@@ -14,6 +14,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 	"github.com/Jumballaya/Journeyman-Engine/internal/vcs"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/jmfolder"
 	"github.com/spf13/cobra"
 )
 
@@ -202,7 +203,7 @@ func newVariant(root, name, from string) (variant, error) {
 	if exists(dir) {
 		return variant{}, fmt.Errorf("variant %s already exists", name)
 	}
-	if err := os.MkdirAll(variantsDir(root), 0o755); err != nil {
+	if _, err := jmfolder.Make(root, "variants"); err != nil {
 		return variant{}, err
 	}
 	// Variants live in .jm: an older game that doesn't ignore it would commit them.
@@ -375,7 +376,7 @@ func compareVariants(c *toolCall, root, a, b string, frame int, play string, san
 			return cmp, err
 		}
 	}
-	if err := os.MkdirAll(filepath.Join(root, ".jm", "compare"), 0o755); err != nil {
+	if _, err := jmfolder.Make(root, "compare"); err != nil {
 		return cmp, err
 	}
 	for i, s := range sides {
