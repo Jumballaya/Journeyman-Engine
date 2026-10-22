@@ -56,41 +56,45 @@ strict: an error the game logs fails it too.
 --update records the images instead (after you've looked at them). Run
 jm build first. --json reports like jm build --json.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		specs, err := filepath.Glob(filepath.Join(goldenDir, "*.golden.json"))
-		if err != nil || len(specs) == 0 {
-			return fmt.Errorf("no goldens: add %s/<name>.golden.json (see jm golden --help)", goldenDir)
-		}
-		names := []string{}
-		for _, s := range specs {
-			name := strings.TrimSuffix(filepath.Base(s), ".golden.json")
-			if len(args) == 0 || slices.Contains(args, name) {
-				names = append(names, name)
-			}
-		}
-		if len(names) == 0 {
-			return fmt.Errorf("no golden named %s in %s", strings.Join(args, ", "), goldenDir)
-		}
-		manifestPath := filepath.Join("build", archive.ManifestEntryKey)
-		man, err := manifest.LoadManifest(manifestPath)
-		if err != nil {
-			fail(Diagnostic{Category: "golden", Message: "no build to run (jm build first): " + err.Error()})
-		}
-		engine, err := resolveEnginePath()
-		if err == nil {
-			engine, err = filepath.Abs(engine) // the runs start in build/
-		}
-		if err != nil {
-			fail(Diagnostic{Category: "golden", Message: err.Error()})
-		}
-		width, height := windowSize(man)
-		ok := true
-		for _, name := range names {
-			stage("Checking golden %s", name)
-			ok = checkGolden(engine, name, width, height) && ok
-		}
-		finish(ok)
-		return nil
+		r := &report{category: "golden"}
+		return r.end(runGoldens(r, args))
 	},
+}
+
+// runGoldens checks the goldens args names (all of them: none), reporting to r.
+func runGoldens(r *report, args []string) error {
+	specs, err := filepath.Glob(filepath.Join(goldenDir, "*.golden.json"))
+	if err != nil || len(specs) == 0 {
+		return fmt.Errorf("no goldens: add %s/<name>.golden.json (see jm golden --help)", goldenDir)
+	}
+	names := []string{}
+	for _, s := range specs {
+		name := strings.TrimSuffix(filepath.Base(s), ".golden.json")
+		if len(args) == 0 || slices.Contains(args, name) {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return fmt.Errorf("no golden named %s in %s", strings.Join(args, ", "), goldenDir)
+	}
+	manifestPath := filepath.Join("build", archive.ManifestEntryKey)
+	man, err := manifest.LoadManifest(manifestPath)
+	if err != nil {
+		return fmt.Errorf("no build to run (jm build first): %w", err)
+	}
+	engine, err := resolveEnginePath()
+	if err == nil {
+		engine, err = filepath.Abs(engine) // the runs start in build/
+	}
+	if err != nil {
+		return err
+	}
+	width, height := windowSize(man)
+	for _, name := range names {
+		stage("Checking golden %s", name)
+		checkGolden(r, engine, name, width, height)
+	}
+	return nil
 }
 
 func init() {
@@ -134,7 +138,7 @@ func captureFrames(ctx context.Context, engine, game, work string, frames []int,
 }
 
 // checkGolden runs one golden and compares (or records) its frames.
-func checkGolden(engine, name string, width, height int) bool {
+func checkGolden(r *report, engine, name string, width, height int) {
 	specPath := filepath.Join(goldenDir, name+".golden.json")
 	var spec goldenSpec
 	data, err := os.ReadFile(specPath)
@@ -145,8 +149,8 @@ func checkGolden(engine, name string, width, height int) bool {
 		err = fmt.Errorf("lists no frames")
 	}
 	if err != nil {
-		emit(Diagnostic{Level: "error", Category: "golden", File: specPath, Message: err.Error()})
-		return false
+		r.add(Diagnostic{Level: "error", Category: "golden", File: specPath, Message: err.Error()})
+		return
 	}
 	if spec.Threshold <= 0 {
 		spec.Threshold = 40
@@ -157,8 +161,8 @@ func checkGolden(engine, name string, width, height int) bool {
 
 	work, err := os.MkdirTemp("", "jm-golden-")
 	if err != nil {
-		emit(Diagnostic{Level: "error", Category: "golden", Message: err.Error()})
-		return false
+		r.add(Diagnostic{Level: "error", Category: "golden", Message: err.Error()})
+		return
 	}
 	defer os.RemoveAll(work)
 	var env []string
@@ -173,17 +177,16 @@ func checkGolden(engine, name string, width, height int) bool {
 		session := filepath.Join(work, "session.json")
 		data, _ := json.Marshal(spec.Session)
 		if err := os.WriteFile(session, data, 0644); err != nil {
-			emit(Diagnostic{Level: "error", Category: "golden", Message: err.Error()})
-			return false
+			r.add(Diagnostic{Level: "error", Category: "golden", Message: err.Error()})
+			return
 		}
 		env = append(env, "JM_SESSION="+session)
 	}
 	if err := captureFrames(context.Background(), engine, ".", work, spec.Frames, env...); err != nil {
-		emit(Diagnostic{Level: "error", Category: "golden", File: specPath, Message: err.Error()})
-		return false
+		r.add(Diagnostic{Level: "error", Category: "golden", File: specPath, Message: err.Error()})
+		return
 	}
 
-	ok := true
 	for _, frame := range spec.Frames {
 		file := fmt.Sprintf("frame_%05d.png", frame)
 		actual, err := readPNG(filepath.Join(work, "frames", file))
@@ -191,15 +194,13 @@ func checkGolden(engine, name string, width, height int) bool {
 			actual, err = scaleTo(actual, width, height)
 		}
 		if err != nil {
-			emit(Diagnostic{Level: "error", Category: "golden", File: specPath, Message: fmt.Sprintf("frame %d: %v", frame, err)})
-			ok = false
+			r.add(Diagnostic{Level: "error", Category: "golden", File: specPath, Message: fmt.Sprintf("frame %d: %v", frame, err)})
 			continue
 		}
 		goldenPath := filepath.Join(goldenDir, name, file)
 		if goldenUpdate {
 			if err := savePNG(goldenPath, actual); err != nil {
-				emit(Diagnostic{Level: "error", Category: "golden", File: goldenPath, Message: err.Error()})
-				ok = false
+				r.add(Diagnostic{Level: "error", Category: "golden", File: goldenPath, Message: err.Error()})
 			} else {
 				say("Recorded %s", goldenPath)
 			}
@@ -207,8 +208,7 @@ func checkGolden(engine, name string, width, height int) bool {
 		}
 		golden, err := readPNG(goldenPath)
 		if err != nil {
-			emit(Diagnostic{Level: "error", Category: "golden", File: goldenPath, Message: "no golden image (record it with jm golden --update)"})
-			ok = false
+			r.add(Diagnostic{Level: "error", Category: "golden", File: goldenPath, Message: "no golden image (record it with jm golden --update)"})
 			continue
 		}
 		fraction, diff := compareImages(golden, actual, spec.Threshold)
@@ -216,16 +216,14 @@ func checkGolden(engine, name string, width, height int) bool {
 			say("%s frame %d: ok (%.2f%% of pixels differ)", name, frame, fraction*100)
 			continue
 		}
-		ok = false
 		out := filepath.Join("build", "golden", name)
 		_ = savePNG(filepath.Join(out, strings.Replace(file, ".png", ".actual.png", 1)), actual)
 		if diff != nil {
 			_ = savePNG(filepath.Join(out, strings.Replace(file, ".png", ".diff.png", 1)), diff)
 		}
-		emit(Diagnostic{Level: "error", Category: "golden", File: goldenPath,
+		r.add(Diagnostic{Level: "error", Category: "golden", File: goldenPath,
 			Message: fmt.Sprintf("frame %d: %.2f%% of pixels differ (%.2f%% allowed); see %s", frame, fraction*100, spec.MaxDiff*100, out)})
 	}
-	return ok
 }
 
 func firstLine(texts ...string) string {

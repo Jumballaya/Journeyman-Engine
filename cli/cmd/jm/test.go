@@ -89,7 +89,7 @@ func runTests(projectRoot string, specs []string) error {
 	node.Stderr = os.Stderr
 	if err := node.Run(); err != nil {
 		if jsonOutput {
-			os.Exit(1) // the last line said so
+			return exitCode{code: 1} // the last line said so
 		}
 		return fmt.Errorf("tests failed")
 	}

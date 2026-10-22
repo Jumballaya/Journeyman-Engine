@@ -44,139 +44,9 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 --json prints no progress; each problem is a JSON line ({"level", "category",
 "message", "file", "line", "column"}) and the last line is the result
 ({"result": "ok"|"failed", "errors", "warnings"}).`,
-	Run: func(cmd *cobra.Command, args []string) {
-		say("Building game...")
-		stage("Building")
-
-		projectRoot, err := os.Getwd()
-		exitOnError("Failed to resolve project root", err)
-		warnAboutEditorEdits(projectRoot)
-
-		// Toolchain errors are already actionable; print them as-is.
-		tc, err := scriptToolchain(projectRoot)
-		if err != nil {
-			fail(Diagnostic{Category: "toolchain", Message: err.Error()})
-		}
-
-		sources := buildSources(projectRoot) // before reading any: one changed meanwhile makes this build stale
-		man, err := manifest.LoadManifest(archive.ManifestEntryKey)
-		exitOnError("Error loading manifest", err)
-
-		// npm install prunes @jm/runtime and libraries (they aren't in package.json), so re-extract them.
-		exitOnError("Failed to sync script packages", syncScriptPackages(projectRoot, man, tc))
-
-		man.Assets, err = manifest.ExpandAssets(os.DirFS(projectRoot), man.Assets)
-		exitOnError("Failed to expand asset patterns", err)
-		man.Assets = withNormalMaps(man.Assets)
-
-		// Validate every path before touching the filesystem.
-		for _, p := range slices.Concat(man.Assets, man.Scenes) {
-			exitOnError(fmt.Sprintf("Invalid manifest path %q", p), validateRelativePath(p))
-			if strings.HasSuffix(p, ".script.json") {
-				fail(Diagnostic{Category: "manifest", File: p, Message: "a legacy .script.json asset; run `jm migrate` to convert the project"})
-			}
-		}
-
-		// A .ts asset is a script when content attaches it (a ScriptComponent in
-		// a scene, prefab, map or data file names it, or the manifest does). The rest are modules that
-		// scripts import (or scripts not attached yet): compiled, so their errors
-		// show, but not shipped on their own.
-		for _, d := range slices.Concat(scriptNameProblems(man), inputActionProblems(man)) {
-			emit(d)
-		}
-		// The art keeps the game's art note (design/Art.md): its palette, sizes and animation sets.
-		for _, f := range art.Check(projectRoot).Findings {
-			emit(Diagnostic{Level: "warning", Category: "art", File: f.File, Message: f.Message})
-		}
-		// The manifest too: a dedicated server's scripts are in net.server.scripts.
-		scripts := referencedScripts(slices.Concat([]string{archive.ManifestEntryKey}, man.Scenes, man.Assets))
-		for _, script := range slices.Sorted(maps.Keys(scripts)) {
-			if strings.HasPrefix(script, behaviorsPrefix) && !slices.Contains(man.Assets, script) {
-				man.Assets = append(man.Assets, script) // shipped under its own name
-			}
-		}
-		var modules []string
-		man.Assets = slices.DeleteFunc(man.Assets, func(a string) bool {
-			if strings.HasSuffix(a, ".ts") && !scripts[a] {
-				modules = append(modules, a)
-				return true
-			}
-			return false
-		})
-
-		// build/ is CLI-owned and starts empty so stale artifacts never ship. The new
-		// build goes to a staging folder that replaces build/ only once it's all there,
-		// so a failed build (a script that doesn't compile) leaves the last good one
-		// in place for the editor and the game.
-		exitOnError("Failed to clean the staging directory", os.RemoveAll(outDir))
-
-		exitOnError("Failed to write the built manifest",
-			editManifest(archive.ManifestEntryKey, filepath.Join(outDir, archive.ManifestEntryKey),
-				func(raw map[string]any) { raw["assets"] = append([]string{}, man.Assets...) })) // [], never null: the editor reads an array
-
-		for _, asset := range man.Assets {
-			source := asset
-			if strings.HasPrefix(asset, behaviorsPrefix) {
-				source = path.Join(scriptsPkgDir, "node_modules", asset)
-				if !fileExists(source) {
-					emit(Diagnostic{Level: "error", Category: "script", File: asset, Message: "no such stock behavior (see docs: runtime-gameplay's Stock behaviors)"})
-					continue
-				}
-			}
-			exitOnError("Failed to copy "+asset, copyFile(source, filepath.Join(outDir, asset)))
-			say("Copied asset: %s", asset)
-			if strings.HasSuffix(asset, ".ts") {
-				stage("Building script %s", path.Base(asset))
-				// Every script, then the content, before failing: one build
-				// reports all the problems it can.
-				if err := runAsc(tc, source, projectRoot, filepath.Join(projectRoot, outDir, asset)); err != nil {
-					emit(Diagnostic{Level: "error", Category: "script", File: asset, Message: "doesn't compile (asc: " + err.Error() + ")"})
-					continue
-				}
-				say("Built script: %s", asset)
-			}
-		}
-		checked := filepath.Join(projectRoot, outDir+".modules")
-		for _, module := range modules {
-			if err := runAsc(tc, module, projectRoot, filepath.Join(checked, module)); err != nil {
-				emit(Diagnostic{Level: "error", Category: "script", File: module, Message: "doesn't compile (asc: " + err.Error() + ")"})
-				continue
-			}
-			say("Checked module: %s (no scene or prefab attaches it)", module)
-		}
-		exitOnError("Failed to clean up checked modules", os.RemoveAll(checked))
-		for _, asset := range man.Assets {
-			if strings.HasSuffix(asset, ".atlas.json") {
-				if err := bakeAtlas(asset); err != nil {
-					fail(Diagnostic{Category: "atlas", File: asset, Message: err.Error()})
-				}
-			}
-			if strings.HasSuffix(asset, ".tsj") {
-				if err := bakeTileset(asset); err != nil {
-					fail(Diagnostic{Category: "tileset", File: asset, Message: err.Error()})
-				}
-			}
-		}
-		for _, scene := range man.Scenes {
-			exitOnError("Failed to copy "+scene, copyFile(scene, filepath.Join(outDir, scene)))
-		}
-
-		content := slices.Clone(man.Scenes)
-		for _, f := range man.Assets {
-			if strings.HasSuffix(f, ".prefab.json") {
-				content = append(content, f)
-			}
-		}
-		stage("Checking scenes")
-		checkContent(slices.Compact(slices.Sorted(slices.Values(content))))
-		if errorCount > 0 {
-			finish(false) // build/ keeps the last good build
-		}
-
-		exitOnError("Failed to record the build's sources", recordSources(outDir, sources))
-		exitOnError("Failed to replace build/", swapBuild())
-		say("Build complete!")
-		finish(true)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		r := &report{category: "build"}
+		return r.end(buildGame(r))
 	},
 }
 
@@ -552,7 +422,7 @@ export function __jmOnMessage(): void {
 
 // runAsc compiles a script (project-relative path) to outFile, through a
 // generated entry under node_modules/.jm so @jm/runtime resolves normally.
-func runAsc(tc toolchain.Toolchain, scriptPath, projectRoot, outFile string) error {
+func runAsc(r *report, tc toolchain.Toolchain, scriptPath, projectRoot, outFile string) error {
 	scriptsDir := scriptsPath(projectRoot)
 	entry := scriptsPath(projectRoot, "node_modules", ".jm", "entries", scriptPath)
 	importPath, err := filepath.Rel(filepath.Dir(entry), filepath.Join(projectRoot, strings.TrimSuffix(scriptPath, ".ts")))
@@ -588,7 +458,7 @@ func runAsc(tc toolchain.Toolchain, scriptPath, projectRoot, outFile string) err
 		}
 		return p
 	}) {
-		emit(d)
+		r.add(d)
 	}
 	return err
 }
@@ -782,12 +652,6 @@ func copyFile(src, dst string) error {
 	return os.WriteFile(dst, data, 0644)
 }
 
-func exitOnError(msg string, err error) {
-	if err != nil {
-		fail(Diagnostic{Category: "build", Message: fmt.Sprintf("%s: %s", msg, err)})
-	}
-}
-
 // copyOf gives the game a sandbox's or variant's folder copies
 // (<game>/.jm/sandboxes/<name>, <game>/.jm/variants/<name>) and which kind it
 // is ("sandboxes", "variants"); "" for a game's own folder.
@@ -801,4 +665,163 @@ func copyOf(root string) (game, kind string) {
 		return "", ""
 	}
 	return game, filepath.Base(kinds)
+}
+
+// buildGame builds the game in the working folder into build/, reporting its problems to r.
+func buildGame(r *report) error {
+	say("Building game...")
+	stage("Building")
+
+	projectRoot, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("Failed to resolve project root: %w", err)
+	}
+	warnAboutEditorEdits(r, projectRoot)
+
+	// Toolchain errors are already actionable; print them as-is.
+	tc, err := scriptToolchain(projectRoot)
+	if err != nil {
+		return Diagnostic{Category: "toolchain", Message: err.Error()}
+	}
+
+	sources := buildSources(projectRoot) // before reading any: one changed meanwhile makes this build stale
+	man, err := manifest.LoadManifest(archive.ManifestEntryKey)
+	if err != nil {
+		return fmt.Errorf("Error loading manifest: %w", err)
+	}
+
+	// npm install prunes @jm/runtime and libraries (they aren't in package.json), so re-extract them.
+	if err := syncScriptPackages(projectRoot, man, tc); err != nil {
+		return fmt.Errorf("Failed to sync script packages: %w", err)
+	}
+
+	man.Assets, err = manifest.ExpandAssets(os.DirFS(projectRoot), man.Assets)
+	if err != nil {
+		return fmt.Errorf("Failed to expand asset patterns: %w", err)
+	}
+	man.Assets = withNormalMaps(man.Assets)
+
+	// Validate every path before touching the filesystem.
+	for _, p := range slices.Concat(man.Assets, man.Scenes) {
+		if err := validateRelativePath(p); err != nil {
+			return fmt.Errorf("Invalid manifest path %q: %w", p, err)
+		}
+		if strings.HasSuffix(p, ".script.json") {
+			return Diagnostic{Category: "manifest", File: p, Message: "a legacy .script.json asset; run `jm migrate` to convert the project"}
+		}
+	}
+
+	// A .ts asset is a script when content attaches it (a ScriptComponent in
+	// a scene, prefab, map or data file names it, or the manifest does). The rest are modules that
+	// scripts import (or scripts not attached yet): compiled, so their errors
+	// show, but not shipped on their own.
+	for _, d := range slices.Concat(scriptNameProblems(man), inputActionProblems(man)) {
+		r.add(d)
+	}
+	// The art keeps the game's art note (design/Art.md): its palette, sizes and animation sets.
+	for _, f := range art.Check(projectRoot).Findings {
+		r.add(Diagnostic{Level: "warning", Category: "art", File: f.File, Message: f.Message})
+	}
+	// The manifest too: a dedicated server's scripts are in net.server.scripts.
+	scripts := referencedScripts(slices.Concat([]string{archive.ManifestEntryKey}, man.Scenes, man.Assets))
+	for _, script := range slices.Sorted(maps.Keys(scripts)) {
+		if strings.HasPrefix(script, behaviorsPrefix) && !slices.Contains(man.Assets, script) {
+			man.Assets = append(man.Assets, script) // shipped under its own name
+		}
+	}
+	var modules []string
+	man.Assets = slices.DeleteFunc(man.Assets, func(a string) bool {
+		if strings.HasSuffix(a, ".ts") && !scripts[a] {
+			modules = append(modules, a)
+			return true
+		}
+		return false
+	})
+
+	// build/ is CLI-owned and starts empty so stale artifacts never ship. The new
+	// build goes to a staging folder that replaces build/ only once it's all there,
+	// so a failed build (a script that doesn't compile) leaves the last good one
+	// in place for the editor and the game.
+	if err := os.RemoveAll(outDir); err != nil {
+		return fmt.Errorf("Failed to clean the staging directory: %w", err)
+	}
+
+	if err := editManifest(archive.ManifestEntryKey, filepath.Join(outDir, archive.ManifestEntryKey),
+		func(raw map[string]any) { raw["assets"] = append([]string{}, man.Assets...) }); err != nil { // [], never null: the editor reads an array
+		return fmt.Errorf("Failed to write the built manifest: %w", err)
+	}
+
+	for _, asset := range man.Assets {
+		source := asset
+		if strings.HasPrefix(asset, behaviorsPrefix) {
+			source = path.Join(scriptsPkgDir, "node_modules", asset)
+			if !fileExists(source) {
+				r.add(Diagnostic{Level: "error", Category: "script", File: asset, Message: "no such stock behavior (see docs: runtime-gameplay's Stock behaviors)"})
+				continue
+			}
+		}
+		if err := copyFile(source, filepath.Join(outDir, asset)); err != nil {
+			return fmt.Errorf("Failed to copy %s: %w", asset, err)
+		}
+		say("Copied asset: %s", asset)
+		if strings.HasSuffix(asset, ".ts") {
+			stage("Building script %s", path.Base(asset))
+			// Every script, then the content, before failing: one build
+			// reports all the problems it can.
+			if err := runAsc(r, tc, source, projectRoot, filepath.Join(projectRoot, outDir, asset)); err != nil {
+				r.add(Diagnostic{Level: "error", Category: "script", File: asset, Message: "doesn't compile (asc: " + err.Error() + ")"})
+				continue
+			}
+			say("Built script: %s", asset)
+		}
+	}
+	checked := filepath.Join(projectRoot, outDir+".modules")
+	for _, module := range modules {
+		if err := runAsc(r, tc, module, projectRoot, filepath.Join(checked, module)); err != nil {
+			r.add(Diagnostic{Level: "error", Category: "script", File: module, Message: "doesn't compile (asc: " + err.Error() + ")"})
+			continue
+		}
+		say("Checked module: %s (no scene or prefab attaches it)", module)
+	}
+	if err := os.RemoveAll(checked); err != nil {
+		return fmt.Errorf("Failed to clean up checked modules: %w", err)
+	}
+	for _, asset := range man.Assets {
+		if strings.HasSuffix(asset, ".atlas.json") {
+			if err := bakeAtlas(asset); err != nil {
+				return Diagnostic{Category: "atlas", File: asset, Message: err.Error()}
+			}
+		}
+		if strings.HasSuffix(asset, ".tsj") {
+			if err := bakeTileset(asset); err != nil {
+				return Diagnostic{Category: "tileset", File: asset, Message: err.Error()}
+			}
+		}
+	}
+	for _, scene := range man.Scenes {
+		if err := copyFile(scene, filepath.Join(outDir, scene)); err != nil {
+			return fmt.Errorf("Failed to copy %s: %w", scene, err)
+		}
+	}
+
+	content := slices.Clone(man.Scenes)
+	for _, f := range man.Assets {
+		if strings.HasSuffix(f, ".prefab.json") {
+			content = append(content, f)
+		}
+	}
+	stage("Checking scenes")
+	checkContent(r, slices.Compact(slices.Sorted(slices.Values(content))))
+	if r.errors > 0 {
+		return nil // r.end fails it: build/ keeps the last good build
+	}
+
+	if err := recordSources(outDir, sources); err != nil {
+		return fmt.Errorf("Failed to record the build's sources: %w", err)
+	}
+	if err := swapBuild(); err != nil {
+		return fmt.Errorf("Failed to replace build/: %w", err)
+	}
+	say("Build complete!")
+	return nil
 }
