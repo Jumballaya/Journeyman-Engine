@@ -3,11 +3,10 @@
 // are edited here and saved through it (as jm fmt writes them).
 studioTabs.push((() => {
   "use strict";
-  // viewed: file_view answers by game, path and visit. saved: the host-opened file as read for
-  // writing ({ uri, doc, etag, writable, why, saving }); reads: bumped by each read of it, so a
-  // late one can't replace a newer. picked: an entity or image.
-  // waited: a route's game it waited on. seen: the host's answer last looked at (a new one may say go to its game).
-  const state = { viewed: {}, saved: null, reading: "", reads: 0, picked: null, capture: null, notice: "", waited: null, seen: undefined };
+  // viewed: file_view answers by game, path and visit. doc: the host-opened file, edited here (kit.jsonFile).
+  // picked: an entity or image. waited: a route's game it waited on.
+  // seen: the host's answer last looked at (a new one may say go to its game).
+  const state = { viewed: {}, doc: null, picked: null, capture: null, notice: "", waited: null, seen: undefined };
 
   // The engine's control names (engine/inputs) from a browser key's code.
   const keyName = (code) => {
@@ -62,54 +61,17 @@ studioTabs.push((() => {
     return state.viewed[key];
   };
 
-  // The host-opened file, read once for its version: only a file that reads back as jm fmt writes it is changed here.
+  // The host-opened file: its JSON is what edits change.
   const opened = (ctx) => ctx.host.input && ctx.host.input.file && ctx.host.input.file.resourceUri;
-  const readOpened = async (ctx, uri) => {
-    const read = ++state.reads;
-    state.reading = uri;
-    let saved = null, notice = "";
-    try {
-      const r = await ctx.host.readResource(uri);
-      const doc = JSON.parse(r.text);
-      saved = { uri, doc, etag: r.etag, writable: r.writable && !!r.etag && ctx.kit.jsonText(doc) + "\n" === r.text,
-                why: !r.writable || !r.etag ? "the host won't save it" : "it isn't as jm fmt writes it (jm fmt it)" };
-    } catch (e) { notice = "Couldn't read the file: " + (e && e.message || e); }
-    if (read !== state.reads || opened(ctx) !== uri) return;  // another read since, or another file
-    if (saved) state.saved = saved; else state.notice = notice;
-    ctx.rerender();
-  };
-
-  // One save at a time (each needs the last one's version): the controls wait meanwhile.
-  // The save goes with the file it began on: done after another file opened, it changes nothing shown.
-  const save = async (ctx, change) => {
-    const s = state.saved, doc = JSON.parse(JSON.stringify(s.doc));
-    if (s.saving) return;
-    change(doc.actions);
-    s.saving = true; state.notice = "Saving…"; ctx.rerender();
-    let notice;
-    try {
-      const r = await ctx.host.writeResource(s.uri, ctx.kit.jsonText(doc) + "\n", s.etag);
-      if (r && r.outcome === "saved") { Object.assign(s, { doc, etag: r.etag }); notice = "Saved."; }
-      else if (r && r.outcome === "conflict") notice = "The file changed since: read again, change it again.";
-      else notice = "Couldn't save.";
-      s.saving = false;
-      if (state.saved !== s) return;
-      state.notice = notice;
-      if (r && r.outcome === "conflict") await readOpened(ctx, s.uri);
-    } catch (e) {
-      s.saving = false;
-      if (state.saved !== s) return;
-      state.notice = "Couldn't save: " + (e && e.message || e);
-    }
-    ctx.rerender();
-  };
+  const docOf = (ctx) => state.doc || (state.doc = ctx.kit.jsonFile(ctx.host, { say: (notice) => { state.notice = notice; }, changed: () => ctx.rerender() }));
+  const save = (ctx, change) => docOf(ctx).save((doc) => change(doc.actions));
 
   // Editable: the file the host opened (not another picked since), as read for writing.
   const bindings = (ctx, file, own) => {
     const { kit } = ctx, { el } = kit;
-    const editable = own && state.saved && state.saved.writable && state.saved.uri === opened(ctx);
-    const busy = !!(state.saved && state.saved.saving);
-    const actions = editable ? state.saved.doc.actions : file.actions;
+    const doc = docOf(ctx), editable = own && doc.editable(opened(ctx));
+    const busy = doc.saving;
+    const actions = editable ? doc.file.doc.actions : file.actions;
     const chip = (action, key) => el("span", { class: "badge", style: { display: "inline-flex", gap: "4px", alignItems: "center" } }, key,
       editable ? el("button", { "aria-label": `Remove ${key} from ${action}`, disabled: busy, style: { border: 0, background: "none", padding: 0, color: "inherit" },
         onclick: () => save(ctx, (a) => { a[action] = a[action].filter((k) => k !== key); }) }, "×") : null);
@@ -155,7 +117,8 @@ studioTabs.push((() => {
   const view = (ctx) => {
     const { kit } = ctx, { el } = kit;
     const uri = opened(ctx);
-    if (uri && state.reading !== uri && ctx.host.can("openai/resource")) readOpened(ctx, uri);
+    const doc = docOf(ctx);
+    if (ctx.host.can("openai/resource")) doc.open(uri);
     const shown = current(ctx);
     if (!shown || !shown.file) return kit.empty(shown ? shown.error || "Opening the file…" : "Open a prefab, an atlas or key bindings from your files, or pick one in Index.");
     const { file } = shown;
@@ -163,8 +126,8 @@ studioTabs.push((() => {
     const picked = state.picked && (file.entities || file.images || []).find((x) => (x.where || x.path) === state.picked);
     const what = picked ? (picked.region ? ` (${file.path}#${picked.region})` : ` (${picked.name})`) : "";
     ctx.share(`The person is looking at the ${file.kind} ${file.path}${what} in Journeyman Studio.`, { file: file.path, kind: file.kind });
-    const readOnly = file.kind === "bindings" && !(shown.own && state.saved && state.saved.writable)
-      ? (uri && shown.own ? (state.saved ? `Read only: ${state.saved.why}.` : "Reading the file…") : "Read only here: open the file from your files in ChatGPT to change it.") : "";
+    const readOnly = file.kind === "bindings" && !(shown.own && doc.editable(uri))
+      ? (uri && shown.own ? (doc.file ? `Read only: ${doc.file.why}.` : "Reading the file…") : "Read only here: open the file from your files in ChatGPT to change it.") : "";
     return el("div", {},
       el("div", { class: "head" }, el("h1", {}, file.path.split("/").pop()), el("span", { class: "badge" }, file.kind),
         el("span", { class: "meta" }, `${file.path} · ${file.gameName}`), el("span", { class: "spacer" }), el("span", { class: "meta" }, state.notice || readOnly),
