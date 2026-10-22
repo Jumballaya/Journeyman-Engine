@@ -207,3 +207,39 @@ func TestLastTaskIsReadAsYAML(t *testing.T) {
 		}
 	}
 }
+
+// A removed task's copy (its ^id the same, listed by a draft) doesn't become it.
+func TestRemovingATaskLeavesItsCopyItsOwn(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "design"), 0o755)
+	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte("## To do\n- [ ] Original ^t1\n- [ ] Copy ^t1\n"), 0o644)
+	if err := RemoveTask(root, "t1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveTask(root, "t1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, tasks, _ := Tasks(root); len(tasks) != 1 || tasks[0].Text != "Copy" || tasks[0].ID == "t1" {
+		t.Errorf("after removing t1 twice: %+v", tasks)
+	}
+}
+
+// lastTask is raised as the frontmatter is written: indented alike, an anchor left be.
+func TestLastTaskKeepsTheFrontmattersShape(t *testing.T) {
+	for front, want := range map[string]string{
+		"  title: Tasks\n  lastTask: t7": "  title: Tasks\n  lastTask: t8\n",
+		"  title: Tasks":                 "---\n  lastTask: t8\n  title: Tasks\n",
+		"lastTask: &n t7\nnext: *n":      "lastTask: &n t7\nnext: *n\n",
+	} {
+		root := t.TempDir()
+		os.MkdirAll(filepath.Join(root, "design"), 0o755)
+		os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte("---\n"+front+"\n---\n\n## To do\n- [ ] Old ^t7\n"), 0o644)
+		if _, err := AddTask(root, "A", "", nil); err != nil {
+			t.Fatal(err)
+		}
+		got := boardFile(t, root)
+		if _, _, err := frontmatter(got); err != nil || !strings.Contains(got, want) {
+			t.Errorf("%q: %v\n%s", front, err, got)
+		}
+	}
+}

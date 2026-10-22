@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
+	"gopkg.in/yaml.v3"
 )
 
 // The game's task board: design/Tasks.md, a column per "## " heading and a
@@ -21,7 +22,7 @@ import (
 // lines: whatever else the person wrote there stays. Its lastTask property
 // is the highest id given: a removed task's id is never another's. A task
 // written without one is listed by a draft id (new-…, from its text) that a
-// change finds it by; adding or moving a task gives each draft a real id.
+// change finds it by; a change gives each draft a real id.
 
 // Columns are a new board's, in order; a task moved to Done is ticked.
 var Columns = []string{"To do", "Doing", "Done"}
@@ -187,17 +188,24 @@ func (b *board) find(id string) int {
 func (b *board) text() string { return strings.Join(b.lines, "\n") + "\n" }
 
 // save writes the board, raising its lastTask to the highest id given (a
-// frontmatter made for it if it has none; one YAML can't read is left be).
+// frontmatter made for it if it has none). Frontmatter YAML can't read, or
+// a lastTask that's more than a value (an anchor others use), is left be.
 func (b *board) save(root string) error {
 	text, mark := b.text(), "lastTask: t"+strconv.Itoa(b.last)
 	front, _, err := frontmatter(text)
 	at := slices.IndexFunc(front, func(p property) bool { return p.key == "lastTask" })
+	indent := ""
+	if len(front) > 0 { // frontmatter indented alike: the new line too
+		indent = front[0].raw[:len(front[0].raw)-len(strings.TrimLeft(front[0].raw, " "))]
+	}
 	switch {
 	case b.last <= b.kept || err != nil:
+	case at >= 0 && front[at].node.Anchor == "" && front[at].node.Kind == yaml.ScalarNode:
+		line, _, _ := strings.Cut(front[at].raw, "\n")
+		text = strings.Replace(text, "\n"+line+"\n", "\n"+indent+mark+"\n", 1)
 	case at >= 0:
-		text = strings.Replace(text, "\n"+front[at].raw, "\n"+mark, 1)
 	case strings.HasPrefix(text, "---\n") && strings.Contains(text[3:], "\n---\n"):
-		text = "---\n" + mark + "\n" + text[4:]
+		text = "---\n" + indent + mark + "\n" + text[4:]
 	default:
 		text = "---\n" + mark + "\n---\n\n" + text
 	}
@@ -296,10 +304,12 @@ func MoveTask(root, id, column string) (t Task, err error) {
 func RemoveTask(root, id string) error {
 	return change(root, func(b *board) (bool, error) {
 		i := b.find(id)
-		if i >= 0 {
-			b.lines = slices.Delete(b.lines, b.at[i], b.end[i])
+		if i < 0 {
+			return false, nil
 		}
-		return i >= 0, nil
+		b.ided() // first: a copy of it (a draft, its ^id the same) isn't left to become it
+		b.lines = slices.Delete(b.lines, b.at[i], b.end[i])
+		return true, nil
 	})
 }
 
