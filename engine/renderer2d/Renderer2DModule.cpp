@@ -120,6 +120,7 @@ void Renderer2DModule::initialize(Engine& app) {
   registerAssetTypes(app);
   app.getWorld().registerSystem<AnimatorSystem>();
   app.getWorld().registerSystem<SpriteAnimationSystem>();
+  app.getWorld().registerSystem<SpriteFrameSystem>();
   app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
   app.getWorld().registerSystem<ParticleSystem>();
   app.getWorld().registerSystem<CameraSystem>(_cameras, [this]() { return glm::vec2(gameSize()); });
