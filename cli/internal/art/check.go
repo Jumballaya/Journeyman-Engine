@@ -200,7 +200,7 @@ func (c *checker) atlases() (map[string]bool, [][]Finding) {
 			for _, src := range config.Sources {
 				src = filepath.ToSlash(filepath.Clean(src))
 				listed[src] = true
-				if strings.EqualFold(filepath.Ext(src), ".json") {
+				if atlas.SourceOf(src).Sheet {
 					found = append(found, c.sheet(src, "", ""))
 				} else {
 					found = append(found, c.image(src))

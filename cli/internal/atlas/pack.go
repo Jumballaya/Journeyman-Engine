@@ -13,7 +13,7 @@ import (
 )
 
 // SourceImage is one decoded source PNG and its atlas region name (the PNG's
-// basename without extension, chosen by build.go's loadAtlasSources).
+// basename without extension, chosen by SourceOf).
 type SourceImage struct {
 	Name   string
 	Img    image.Image

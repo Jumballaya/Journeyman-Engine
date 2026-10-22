@@ -13,6 +13,8 @@ import (
 	"path"
 	"sort"
 	"strings"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 )
 
 // Tiled's flags in a gid's top bits; the engine's TileGrid reads the same.
@@ -276,12 +278,19 @@ func flipped(img image.Image, d, h, v bool) image.Image {
 }
 
 func readGameJSON(root, file string, v any) bool {
-	real, outside := contentFile(root, file)
-	if outside != nil {
-		return false
-	}
-	data, err := os.ReadFile(real)
+	data, err := gameReader(root)(file)
 	return err == nil && json.Unmarshal(data, v) == nil
+}
+
+// gameReader reads the game's files by the paths its files name them by.
+func gameReader(root string) atlas.ReadFunc {
+	return func(file string) ([]byte, error) {
+		real, err := contentFile(root, file)
+		if err != nil {
+			return nil, err
+		}
+		return os.ReadFile(real)
+	}
 }
 
 func readGameImage(root, file string) image.Image {

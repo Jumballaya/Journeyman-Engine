@@ -5,9 +5,6 @@ import (
 	"encoding/base64"
 	"image"
 	"image/png"
-	"os"
-	"path"
-	"strconv"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
@@ -94,43 +91,6 @@ func gameImage(root, ref string) image.Image {
 	if !readGameJSON(root, file, &config) {
 		return nil
 	}
-	return atlasRegion(root, config, region)
-}
-
-// atlasRegion is one region of an atlas as the build cuts it: the source
-// named for it (a PNG's name, or an Aseprite sheet's name_<frame>); nil when
-// no source makes it.
-func atlasRegion(root string, config atlas.AtlasConfig, region string) image.Image {
-	for _, source := range config.Sources {
-		name := strings.TrimSuffix(path.Base(source), path.Ext(source))
-		sheet := strings.HasSuffix(source, ".json")
-		if !(name == region && !sheet || sheet && strings.HasPrefix(region, name+"_")) {
-			continue
-		}
-		if !sheet {
-			return readGameImage(root, source)
-		}
-		// Only the frame asked for, its sheet's image and its size bounded before they're made.
-		i, err := strconv.Atoi(strings.TrimPrefix(region, name+"_"))
-		real, outside := contentFile(root, source)
-		if err != nil || outside != nil || region != name+"_"+strconv.Itoa(i) { // hero_00 is another source's, not hero_0
-			continue
-		}
-		data, err := os.ReadFile(real)
-		if err != nil {
-			continue
-		}
-		parsed, err := atlas.ParseSheet(data)
-		if err != nil {
-			continue
-		}
-		img := readGameImage(root, path.Join(path.Dir(source), parsed.Image))
-		if img == nil {
-			continue
-		}
-		if frame, err := parsed.Frame(i, img, pictureSideMax); err == nil {
-			return frame
-		}
-	}
-	return nil
+	img, _ := config.Region(gameReader(root), region, pictureSideMax)
+	return img
 }
