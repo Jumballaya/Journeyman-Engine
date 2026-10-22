@@ -5,15 +5,14 @@ studioTabs.push((() => {
   "use strict";
   // board: the tasks answer ({ columns, tasks }). draft: the new task's text. confirm: the remove asked once.
   // failed: why the last listing failed (the board then is the one before).
-  const fresh = (game) => ({ game, asking: "", seq: 0, board: null, failed: "", draft: "", links: "", confirm: "", picked: null });
+  const fresh = (game) => ({ game, asking: "", board: null, failed: "", draft: "", links: "", confirm: "", picked: null });
   let state = fresh(null);
-  const failure = (e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] });
-  const said = (r) => ((r && r.content) || [])[0]?.text || "no answer";
+  const said = (r) => kit.said(r) || "no answer";
+  const asking = kit.latest(() => state);  // the board's: a list or a change; an older answer, or another game's, is dropped
 
   const load = async (ctx) => {
-    const n = ++state.seq, mine = state;
-    const r = await ctx.call("tasks", {}).catch(failure);
-    if (n !== mine.seq || mine !== state) return;
+    const r = await asking(() => ctx.call("tasks", {}));
+    if (!r) return;
     state.failed = show(r) ? "" : "Couldn't read the board: " + said(r);
     ctx.rerender();
   };
@@ -27,9 +26,8 @@ studioTabs.push((() => {
   // Changes the board; the answer is the board as it is after.
   const change = async (ctx, name, args) => {
     state.confirm = "";
-    const n = ++state.seq, mine = state;  // a list asked before this is stale; so is this, once another goes
-    const r = await ctx.call(name, args).catch(failure);
-    if (n !== mine.seq || mine !== state) return false;
+    const r = await asking(() => ctx.call(name, args));  // a list asked before this is stale; so is this, once another goes
+    if (!r) return false;
     if (r && r.isError) ctx.say("Couldn't: " + said(r));
     else if (show(r)) state.failed = "";
     ctx.rerender();

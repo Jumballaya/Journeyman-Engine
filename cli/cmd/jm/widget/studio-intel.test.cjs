@@ -28,6 +28,24 @@ test('the Index lists files by kind; a file shows what it uses, what uses it, an
   assert.match(s.app.text, /hero\.prefab\.json prefab/);
 });
 
+test('the Index shows its latest visit\'s answer, though an earlier one comes after', async () => {
+  const asked = [];
+  const answer = (path) => ({ structuredContent: { game: 'Pip', entries: [{ path, kind: 'texture', uses: [], usedBy: [] }] } });
+  const s = await studio(games, { answers: { game_index: () => new Promise((resolve) => asked.push(resolve)) }, widgetState: { route: '/index' } });
+  await settle(6);
+  s.tab('Files').fire('click');
+  s.tab('Index').fire('click');
+  await settle(6);
+  assert.equal(asked.length, 2);
+  asked[1](answer('assets/new.png'));
+  await settle(6);
+  asked[0](answer('assets/old.png'));
+  await settle(6);
+  assert.match(s.app.text, /new\.png/);
+  assert.doesNotMatch(s.app.text, /old\.png/);
+  assert.equal(asked.length, 2, 'the late answer starts no reload');
+});
+
 test('"unused" finds what nothing uses; a link picks a file', async () => {
   const s = await studio(games, { answers: { game_index: index }, widgetState: { route: '/index?path=scenes/a.scene.json' } });
   await settle(6);

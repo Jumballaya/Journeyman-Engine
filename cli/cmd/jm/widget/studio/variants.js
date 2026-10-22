@@ -7,18 +7,18 @@ studioTabs.push((() => {
   // compared: { name, frame, play, result | null } while/after comparing. plays: the game's recorded plays, to compare
   // both with one's inputs (play: its id, "" none). confirm: the button asked once.
   // failed: { variants, sandboxes }: why the last ask for that list failed (its data then is the one before).
-  const fresh = (game) => ({ game, asking: "", seq: 0, variants: null, thumbs: {}, sandboxes: null, sandboxThumbs: {}, failed: {}, picked: null, compared: null,
+  const fresh = (game) => ({ game, asking: "", variants: null, thumbs: {}, sandboxes: null, sandboxThumbs: {}, failed: {}, picked: null, compared: null,
                              frame: 120, plays: [], play: "", draft: null, newName: "", confirm: "", routed: null, ran: Object.create(null) });  // ran: by sandbox name (any name, "constructor" too)
   let state = fresh(null);
 
-  const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
+  const { said } = kit;
+  const loading = kit.latest(() => state);  // an older answer, or another game's, is dropped
   // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
 
   const load = async (ctx) => {
-    const n = ++state.seq, mine = state;
-    const ask = (tool) => ctx.call(tool, {}).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
-    const [v, s, p] = await Promise.all([ask("variants"), ask("sandboxes"), ask("plays_list")]);
-    if (n !== mine.seq || mine !== state) return;
+    const all = await loading(() => Promise.all(["variants", "sandboxes", "plays_list"].map((tool) => kit.answer(ctx.call(tool, {})))));
+    if (!all) return;
+    const [v, s, p] = all;
     state.plays = (p && !p.isError && p.structuredContent && p.structuredContent.plays) || [];
     if (state.play && !state.plays.some((x) => x.id === state.play)) state.play = "";
     const list = (key, r) => {  // a failed ask keeps what was there, said to be failing

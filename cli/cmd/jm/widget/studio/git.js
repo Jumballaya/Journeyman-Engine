@@ -5,17 +5,17 @@ studioTabs.push((() => {
   "use strict";
   // changes / versions: vcs_status's and vcs_log's answers. picked: { kind: "change", path, diff }
   // or { kind: "version", hash, file?, diff? } (a file of it opened: what the version changed in it). confirm: the button asked once ("discard:<path>", "back:<hash>", …).
-  const fresh = (game) => ({ game, asking: "", seq: 0, changes: null, versions: null, thumbs: {}, error: "", statusError: "", picked: null,
+  const fresh = (game) => ({ game, asking: "", changes: null, versions: null, thumbs: {}, error: "", statusError: "", picked: null,
                              message: "", confirm: "", routed: null });
   let state = fresh(null);
 
-  // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
-  const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
+  const { said } = kit;
+  const loading = kit.latest(() => state);  // an older answer, or another game's, is dropped
 
   const load = async (ctx) => {
-    const n = ++state.seq, mine = state;
-    const [s, l] = await Promise.all([ctx.call("vcs_status", {}), ctx.call("vcs_log", { count: 200 })].map((p) => p.catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }))));
-    if (n !== mine.seq || mine !== state) return;
+    const both = await loading(() => Promise.all([ctx.call("vcs_status", {}), ctx.call("vcs_log", { count: 200 })].map(kit.answer)));
+    if (!both) return;
+    const [s, l] = both;
     state.changes = (s && s.structuredContent && s.structuredContent.changes) || [];
     state.versions = (l && l.structuredContent && l.structuredContent.versions) || [];
     state.thumbs = (l && l._meta && l._meta["jm/thumbs"]) || {};

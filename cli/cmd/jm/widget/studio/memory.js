@@ -8,31 +8,27 @@ studioTabs.push((() => {
   // read: { title, note: memory's answer for it | null, world: world_context's | null }. found: a search's { text, hits }.
   // facts: recall's facts (the person's and the game's), asked each visit.
   // form: "note" | "decide" while that form is open; draft: its fields.
-  // game: whose these are (another game's start over). seq: the latest list asked (an older answer is dropped).
-  const fresh = (game) => ({ game, listed: null, asking: "", read: null, found: null, query: "", form: null, draft: {}, routed: "", seq: 0, searchSeq: 0, facts: null, recallSeq: 0 });
+  // game: whose these are (another game's start over).
+  const fresh = (game) => ({ game, listed: null, asking: "", read: null, found: null, query: "", form: null, draft: {}, routed: "", facts: null });
   let state = fresh(null);
 
-  // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
-  const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
+  const { said } = kit;
+  const listing = kit.latest(() => state), searching = kit.latest(() => state), recalling = kit.latest(() => state);  // an older answer, or another game's, is dropped
 
   const list = async (ctx, path) => {
-    const n = ++state.seq, mine = state;
-    try {
-      const r = await ctx.call("memory", {});
-      if (n !== mine.seq || mine !== state) return;
-      const s = r && r.structuredContent;
-      state.listed = { path, notes: s && Array.isArray(s.notes) ? s.notes : [], error: r && r.isError ? said(r) : "" };
-    } catch (e) { if (n !== mine.seq || mine !== state) return; state.listed = { path, notes: [], error: String(e && e.message || e) }; }
-    recall(ctx, mine);
+    const r = await listing(() => ctx.call("memory", {}));
+    if (!r) return;
+    const s = r.structuredContent;
+    state.listed = { path, notes: s && Array.isArray(s.notes) ? s.notes : [], error: r.isError ? said(r) : "" };
+    recall(ctx);
     if (!state.read && state.listed.notes.length) open(ctx, (state.listed.notes.find((n) => n.title === "Design") || state.listed.notes[0]).title);
     ctx.rerender();
   };
 
-  const recall = async (ctx, mine) => {
-    const n = ++mine.recallSeq;
-    const r = await ctx.call("recall", {}).catch(() => null);
-    if (mine !== state || n !== mine.recallSeq) return;  // another game's, or an older recall
-    state.facts = (r && r.structuredContent && r.structuredContent.facts) || [];
+  const recall = async (ctx) => {
+    const r = await recalling(() => ctx.call("recall", {}));
+    if (!r) return;
+    state.facts = (r.structuredContent && r.structuredContent.facts) || [];
     ctx.rerender();
   };
 
@@ -87,7 +83,7 @@ studioTabs.push((() => {
     const forget = async (f) => {
       const mine = state;
       if (!(await ctx.act("Forgetting", "forget", { id: f.id, scope: f.scope }, (t) => t)) || mine !== state) return;
-      recall(ctx, mine);
+      recall(ctx);
       if (f.scope === "game" && state.read && state.read.note && state.read.note.note && state.read.note.note.path === "design/Memory.md") open(ctx, state.read.title);  // the page it was on
     };
     return section("Keep in mind", all.length ? el("ul", { class: "mem-list mem-facts" }, all.map((f) => el("li", {},
@@ -98,11 +94,10 @@ studioTabs.push((() => {
 
   const search = async (ctx, text) => {
     state.query = text;
-    if (!text.trim()) { state.searchSeq++; state.found = null; ctx.rerender(); return; }
-    const n = ++state.searchSeq, mine = state;
-    const r = await ctx.call("memory_search", { text }).catch(() => null);
-    if (mine !== state || n !== state.searchSeq) return;  // another game's, or an older search
-    state.found = { text, hits: (r && r.structuredContent && r.structuredContent.hits) || [] };
+    if (!text.trim()) { searching(() => null); state.found = null; ctx.rerender(); return; }  // an answer still coming is dropped
+    const r = await searching(() => ctx.call("memory_search", { text }));
+    if (!r) return;
+    state.found = { text, hits: (r.structuredContent && r.structuredContent.hits) || [] };
     ctx.rerender();
   };
 

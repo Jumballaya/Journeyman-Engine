@@ -59,17 +59,20 @@ studioTabs.push((() => {
   const show = (ctx, args, label) =>
     ctx.act("Showing it in the editor", "editor_show", args, () => `${label} is shown in the editor.`);
 
+  const sceneAsks = {};  // scene_view's, a channel by scene
   const sceneEntities = (ctx, scene) => {
-    const game = forGame(ctx);
+    forGame(ctx);  // another game's scenes start over
     const known = state.scenes[scene];
     if (!known || known.visit !== ctx.visit) {
       const visit = ctx.visit;
       state.scenes[scene] = { ...known, visit };  // the last answer shows meanwhile
-      const answer = (value) => { if (state.game === game) { state.scenes[scene] = { ...value, visit }; ctx.rerender(); } };
-      ctx.call("scene_view", { scene }).then((r) => {
-        const s = r && r.structuredContent;
-        answer(s && Array.isArray(s.entities) ? { entities: s.entities } : { error: "Couldn't read it." });
-      }, () => answer({ error: "Couldn't read it." }));
+      const ask = sceneAsks[scene] ||= kit.latest(() => state.game);  // an earlier visit's answer, or another game's, is dropped
+      ask(() => ctx.call("scene_view", { scene })).then((r) => {
+        if (!r) return;
+        const s = !r.isError && r.structuredContent;
+        state.scenes[scene] = { ...(s && Array.isArray(s.entities) ? { entities: s.entities } : { error: "Couldn't read it." }), visit };
+        ctx.rerender();
+      });
     }
     return state.scenes[scene];
   };
