@@ -172,6 +172,11 @@ jobs:
             xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-determinism.sh "$demo/build" scripts/determinism-replay.txt 60,600,1500
             echo "::endgroup::"
           done 3< "$RUNNER_TEMP/demos.txt"
+      # jm's tools that show what the engine builds (scene_view, file_view), with this engine.
+      - name: jm's in-engine tests
+        if: matrix.shard == 0
+        working-directory: cli
+        run: go test -count=1 -run '^TestInEngine' ./cmd/jm/
       # Frames recorded on one machine (tests/golden) hold on another GPU.
       - name: Golden frames
         run: |

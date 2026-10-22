@@ -12,21 +12,15 @@ import (
 	"time"
 )
 
-// A prefab is laid out with its children, key bindings listed; other files are refused.
-func TestFileViewShowsPrefabsAndBindings(t *testing.T) {
+// Key bindings are listed (a prefab, as the engine makes it: in-engine tests); a scene is refused.
+func TestFileViewShowsBindings(t *testing.T) {
 	root := sceneGame(t)
 	t.Chdir(root)
 	os.WriteFile(filepath.Join(root, "assets", "input.bindings.json"), []byte(`{"actions":{"jump":["Space","Gamepad.A"]}}`), 0o644)
-	r := sceneCall(t, `{"name":"file_view","arguments":{"path":"assets/prefabs/cloud.prefab.json"}}`)
-	file := r["structuredContent"].(map[string]any)["file"].(map[string]any)
-	entities := file["entities"].([]any)
-	if file["kind"] != "prefab" || len(entities) != 2 || entities[1].(map[string]any)["name"] != "Shadow" {
-		t.Errorf("prefab: %v", file)
-	}
+	r := sceneCall(t, `{"name":"file_view","arguments":{"path":"assets/input.bindings.json"}}`)
 	if _, ok := r["structuredContent"].(map[string]any)["games"]; !ok {
 		t.Error("the Studio around it has no games")
 	}
-	r = sceneCall(t, `{"name":"file_view","arguments":{"path":"assets/input.bindings.json"}}`)
 	if text := r["content"].([]any)[0].(map[string]any)["text"].(string); !strings.Contains(text, "jump: Space, Gamepad.A") {
 		t.Errorf("bindings: %s", text)
 	}

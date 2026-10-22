@@ -237,6 +237,7 @@ func TestPickOffersFilesWithPreviews(t *testing.T) {
 
 // A scene's preview stays the scene of the game picked in, whichever game opens after.
 func TestPickPreviewStaysInItsGame(t *testing.T) {
+	fakeInspect(t) // which game's file: not how the engine lays it out
 	scratchSettings(t)
 	home := t.TempDir()
 	t.Setenv("JM_GAMES", home)
