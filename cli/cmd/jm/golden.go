@@ -9,7 +9,6 @@ import (
 	"image/png"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -124,8 +123,7 @@ func captureFrames(ctx context.Context, engine, game, work string, frames []int,
 	for i, f := range frames {
 		list[i] = fmt.Sprint(f)
 	}
-	run := exec.CommandContext(ctx, engine, ".")
-	run.Dir = filepath.Join(game, "build")
+	run := engineRun(ctx, engine, game, filepath.Join(game, "build"))
 	run.Env = append(append(os.Environ(), "JM_HEADLESS=1", "JM_STRICT=1",
 		"JM_EXIT_AFTER_FRAMES="+fmt.Sprint(slices.Max(frames)+1),
 		"JM_SAVE_DIR="+filepath.Join(work, "save"), "JM_CAPTURE_DIR="+filepath.Join(work, "frames"),

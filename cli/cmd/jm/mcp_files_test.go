@@ -94,32 +94,34 @@ func TestGameLogReadsOnlyTheGamesOwnLog(t *testing.T) {
 		r := sceneCall(t, `{"name":"game_log","arguments":{}}`)
 		return fmt.Sprint(r["content"], r["structuredContent"])
 	}
-	os.MkdirAll(filepath.Join(root, "build", "logs"), 0o755)
-	os.Symlink(secret, filepath.Join(root, "build", "logs", "engine.log"))
+	log := filepath.Join(root, filepath.FromSlash(engineLog))
 	os.Symlink(outside, filepath.Join(root, "logs")) // a linked folder: logs/engine.log is outside
 	if got := logOf(); strings.Contains(got, "SENTINEL") || !strings.Contains(got, "No log yet") {
-		t.Errorf("a log outside the game was read: %s", got)
+		t.Errorf("a log in a linked folder outside the game was read: %s", got)
 	}
 	os.Remove(filepath.Join(root, "logs"))
 	os.MkdirAll(filepath.Join(root, "logs"), 0o755)
-	os.WriteFile(filepath.Join(root, "logs", "engine.log"), []byte("[2026-10-08 09:47:04.080] [engine] [info] mine\n"), 0o644)
-	old := time.Now().Add(-time.Hour)
-	os.Chtimes(filepath.Join(root, "logs", "engine.log"), old, old) // older than the link, which is skipped
-	if got := logOf(); !strings.Contains(got, "mine") || strings.Contains(got, "SENTINEL") {
-		t.Errorf("the game's own older log: %s", got)
+	os.Symlink(secret, log)
+	if got := logOf(); strings.Contains(got, "SENTINEL") || !strings.Contains(got, "No log yet") {
+		t.Errorf("a linked log outside the game was read: %s", got)
 	}
-	os.Remove(filepath.Join(root, "build", "logs", "engine.log"))
-	os.MkdirAll(filepath.Join(root, "build", "logs", "engine.log"), 0o755) // a folder
+	os.Remove(log)
+	os.WriteFile(log, []byte("[2026-10-08 09:47:04.080] [engine] [info] mine\n"), 0o644)
 	if got := logOf(); !strings.Contains(got, "mine") {
+		t.Errorf("the game's own log: %s", got)
+	}
+	os.Remove(log)
+	os.MkdirAll(log, 0o755) // a folder
+	if got := logOf(); !strings.Contains(got, "No log yet") {
 		t.Errorf("with a folder there: %s", got)
 	}
-	os.Remove(filepath.Join(root, "build", "logs", "engine.log"))
-	if mkfifo(filepath.Join(root, "build", "logs", "engine.log")) == nil {
+	os.Remove(log)
+	if mkfifo(log) == nil {
 		done := make(chan string, 1)
 		go func() { done <- logOf() }()
 		select {
 		case got := <-done:
-			if !strings.Contains(got, "mine") {
+			if !strings.Contains(got, "No log yet") {
 				t.Errorf("with a pipe there: %s", got)
 			}
 		case <-time.After(5 * time.Second):
