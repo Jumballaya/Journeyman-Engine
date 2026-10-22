@@ -28,6 +28,7 @@ add_executable(test_engine_core
     app/ErrorReportTest.cpp
     app/EngineStateTest.cpp
     app/EngineDriverTest.cpp
+    app/InspectTest.cpp
     app/EntitySpawnerTest.cpp
     app/PlaySessionTest.cpp
     app/ProfilerTest.cpp

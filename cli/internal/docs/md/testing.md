@@ -62,6 +62,7 @@ below) or state for state (`JM_DUMP_DIR`).
 | `JM_SAVE_DIR=dir` | keep `save.json` out of the player's real save directory |
 | `JM_DRIVE=1` (+ `JM_DRIVE_RECORD=file`) | stepped by commands on stdin, answering on stdout (below); the record is the run's inputs as a replay |
 | `JM_DUMP_DIR=dir` (+ `JM_DUMP_FRAMES=60,120`) | write the game's state as JSON: `dir/state_exit.json` at the end, and `dir/state_00060.json` at those frames (below) |
+| `JM_INSPECT=file` | build the entry scene (`JM_ENTRY_SCENE`) as the game would, run nothing (no scripts, no frames), and write it as JSON: each entity's origin (scene entry, prefab), parent and the component JSON it was made from; entries not built (`group`, `if`/`unless`); a scene that fails to load is its `error` |
 | `JM_ERRORS=-` or `JM_ERRORS=file` | every error as a JSON line, on stderr or into the file (below) |
 | `JM_STRICT=1` | the first error ends the run, with exit code 1 |
 | `JM_PROFILE=file` | write where the frames' time went (the driver's `profile`) to the file as JSON at exit; `jm run --profile` prints it |

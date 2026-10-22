@@ -57,6 +57,10 @@ std::filesystem::path AgentRun::saveDir(std::filesystem::path usual) {
 }
 
 void AgentRun::start() {
+  if (loadsEntryScene()) {  // JM_INSPECT: built as the game builds it, never run (no scripts, no steps)
+    _engine.setSimulating(false);
+    _engine.getWorld().keepComponentJson();
+  }
   trackOrigins();
   startSession();
   if (_dev.drive || !_dev.profileOut.empty()) _engine.setProfiling(true);
@@ -141,6 +145,10 @@ void AgentRun::startRecording() {
 }
 
 bool AgentRun::runStarts() {
+  if (loadsEntryScene()) {
+    inspect();
+    return true;
+  }
   if (_dev.drive) {
     drive(std::cin, std::cout);
     return true;
