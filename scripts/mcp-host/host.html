@@ -157,6 +157,7 @@ async function show(tool, args, result, uri) {
     iframe.addEventListener("load", () => Object.defineProperty(iframe.contentDocument, "visibilityState", { get: () => "visible" }));
   }
   const box = el("div", { className: "frame" }, el("div", { className: "bar" }, tool.name, el("span", { textContent: uri })), iframe);
+  for (const f of frames) if (f.mode === "fullscreen") setMode(f, "inline");  // the new one shows, as a host's does
   $("stage").insertBefore(box, $("apps").nextSibling);
   frames.add({ iframe, tool, args, result, mode: "inline", box });
 }

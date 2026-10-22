@@ -19,7 +19,6 @@ import { createInterface } from "node:readline";
 import { parseArgs } from "node:util";
 
 const { values } = parseArgs({ options: { jm: { type: "string", default: "jm" }, port: { type: "string", default: "8765" } } });
-const host = readFileSync(new URL("./host.html", import.meta.url));
 const sessions = new Map(); // page id → its jm mcp
 
 // A page's session: jm's messages to it as server-sent events, for as long as it's open.
@@ -47,7 +46,7 @@ createServer((req, res) => {
     req.on("data", (d) => { body += d; });
     req.on("end", () => { jm.stdin.write(JSON.stringify(JSON.parse(body)) + "\n"); res.end(); });
   } else if (url.pathname === "/") {
-    res.writeHead(200, { "content-type": "text/html" }).end(host);
+    res.writeHead(200, { "content-type": "text/html" }).end(readFileSync(new URL("./host.html", import.meta.url)));  // an edit shows on reload
   } else {
     res.writeHead(404).end();
   }
