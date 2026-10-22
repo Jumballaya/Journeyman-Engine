@@ -101,7 +101,6 @@ func gameHolding(file string) string {
 	}
 }
 
-// openGame makes dir the server's game, stopping the game the driver ran.
 // openRecentIfNone: a server started outside a game (ChatGPT starts one per
 // chat) works on the client's root that's a game, else the game opened last
 // (the shared list), as if opened here.
@@ -121,6 +120,7 @@ func (s *mcpServer) openRecentIfNone() {
 	}
 }
 
+// openGame makes dir the open game and puts it on the person's list of games.
 func (s *mcpServer) openGame(dir string) string {
 	if err := s.setOpen(dir); err != nil {
 		return err.Error()

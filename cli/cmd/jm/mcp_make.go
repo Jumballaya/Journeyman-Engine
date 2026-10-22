@@ -199,3 +199,20 @@ func jmCommand(ctx context.Context, dir string, args ...string) *exec.Cmd {
 	cmd.Dir = cmp.Or(dir, os.TempDir())
 	return cmd
 }
+
+// positional ends a command's flags: what follows is never read as one
+// ("--engine=/bin/sh" stays a name).
+func positional(command []string, args ...string) []string {
+	if len(args) == 0 {
+		return command
+	}
+	return append(append(command, "--"), args...)
+}
+
+// with is args, plus flag when on.
+func with(args []string, on bool, flag ...string) []string {
+	if on {
+		return append(args, flag...)
+	}
+	return args
+}

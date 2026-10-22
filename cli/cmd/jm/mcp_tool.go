@@ -157,23 +157,6 @@ func idempotent(annotations map[string]any) map[string]any {
 // Schemas for structuredContent (outputSchema).
 func typed(kind string) map[string]any { return map[string]any{"type": kind} }
 
-// positional ends a command's flags: what follows is never read as one
-// ("--engine=/bin/sh" stays a name).
-func positional(command []string, args ...string) []string {
-	if len(args) == 0 {
-		return command
-	}
-	return append(append(command, "--"), args...)
-}
-
-// with is args, plus flag when on.
-func with(args []string, on bool, flag ...string) []string {
-	if on {
-		return append(args, flag...)
-	}
-	return args
-}
-
 // jsonResult is a value as compact JSON for the model and as structured
 // content for hosts (which takes an object).
 func jsonResult(v any) toolResult {

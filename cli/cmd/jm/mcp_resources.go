@@ -19,9 +19,8 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 )
 
-// Resources beyond the list: templates for the jm:// URIs resources/read
-// answers, completions for their parts, subscriptions (stdio only: HTTP
-// can't push) and the client's roots as the game to open.
+// The open game's resources: the list, reading a jm:// or file URI, templates
+// for what the list can't enumerate, completions and subscriptions (stdio only).
 
 // resourceTemplates are the shapes of URI resources/read answers that
 // resources/list can't enumerate (any game's files, every play, entity...).
