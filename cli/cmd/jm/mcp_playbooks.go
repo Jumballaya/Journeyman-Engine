@@ -109,8 +109,10 @@ func findPlaybook(name string) (playbook, bool) {
 }
 
 // fill is a playbook's text with its arguments: {a} the value; {a?text} text
-// when a is given, {a!text} when it isn't. A required one missing is an error.
-func (p playbook) fill(args map[string]string) (string, error) {
+// when a is given, {a!text} when it isn't; [[{a}]] the link to the note a
+// names in the game at root (none, or no game: [[a]] as given). A required
+// one missing is an error.
+func (p playbook) fill(root string, args map[string]string) (string, error) {
 	text := p.text
 	for _, a := range p.args {
 		v := strings.TrimSpace(args[a.name])
@@ -119,8 +121,8 @@ func (p playbook) fill(args map[string]string) (string, error) {
 		}
 		text = ifGiven(text, "{"+a.name+"?", v != "")
 		text = ifGiven(text, "{"+a.name+"!", v == "")
-		if rel, ok := strings.CutPrefix(v, memory.Dir+"/"); ok && strings.HasSuffix(rel, ".md") { // a note by its path: linked from the vault, as North/Harbor
-			text = strings.ReplaceAll(text, "[[{"+a.name+"}]]", "[["+strings.TrimSuffix(rel, ".md")+"]]")
+		if link, ok := memory.LinkTo(root, v); root != "" && ok {
+			text = strings.ReplaceAll(text, "[[{"+a.name+"}]]", "[["+link+"]]")
 		}
 		text = strings.ReplaceAll(text, "{"+a.name+"}", v)
 	}
@@ -166,12 +168,12 @@ func promptList() []map[string]any {
 	return out
 }
 
-func getPrompt(name string, args map[string]string) (map[string]any, *rpcError) {
+func getPrompt(root, name string, args map[string]string) (map[string]any, *rpcError) {
 	p, ok := findPlaybook(name)
 	if !ok {
 		return nil, &rpcError{Code: -32602, Message: "unknown prompt " + name}
 	}
-	text, err := p.fill(args)
+	text, err := p.fill(root, args)
 	if err != nil {
 		return nil, &rpcError{Code: -32602, Message: err.Error()}
 	}
@@ -213,7 +215,7 @@ func (s *mcpServer) playbookTools() []mcpTool {
 			Annotations: readOnly(), InputSchema: object(map[string]any{
 				"name": map[string]any{"type": "string", "enum": names, "description": "the playbook"},
 				"args": map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": `its arguments, e.g. {"note": "Ashvale"}`}}),
-			run: func(a toolArgs) toolResult {
+			orNone: true, onGame: func(root string, a toolArgs) toolResult {
 				name := a.str("name")
 				if name == "" {
 					var b strings.Builder
@@ -236,7 +238,7 @@ func (s *mcpServer) playbookTools() []mcpTool {
 						args[k] = fmt.Sprint(v)
 					}
 				}
-				text, err := p.fill(args)
+				text, err := p.fill(root, args)
 				if err != nil {
 					return textResult(err.Error()+". Ask the person, then call playbook again.", true)
 				}

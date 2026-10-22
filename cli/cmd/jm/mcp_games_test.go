@@ -219,7 +219,7 @@ func TestOpenGameTakesAListedNameOrAnAbsolutePath(t *testing.T) {
 func TestEveryToolSaysWhichGameItWorksOn(t *testing.T) {
 	noGame := map[string]bool{ // they choose a game, or need none
 		"games": true, "games_find": true, "new_game": true, "open_game": true,
-		"companions": true, "studio": true, "playbook": true,
+		"companions": true, "studio": true,
 	}
 	// Design debt: these still find their game themselves (their own "game", or the
 	// working folder). Each moves to onGame (todos: Design debt, G2–G6), then off this list.

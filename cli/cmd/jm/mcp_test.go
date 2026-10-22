@@ -429,13 +429,13 @@ func TestMCPOnboard(t *testing.T) {
 // given and when not, and the same from the playbook tool.
 func TestPlaybooks(t *testing.T) {
 	p, _ := findPlaybook("new_dossiers")
-	if text, _ := p.fill(map[string]string{"kind": "character"}); !strings.HasPrefix(text, "Make 3 character dossiers. memory with kind character") {
+	if text, _ := p.fill("", map[string]string{"kind": "character"}); !strings.HasPrefix(text, "Make 3 character dossiers. memory with kind character") {
 		t.Errorf("defaults: %s", text)
 	}
-	if text, _ := p.fill(map[string]string{"kind": "item", "count": "5", "theme": "relics of Varn"}); !strings.HasPrefix(text, "Make 5 item dossiers, relics of Varn.") {
+	if text, _ := p.fill("", map[string]string{"kind": "item", "count": "5", "theme": "relics of Varn"}); !strings.HasPrefix(text, "Make 5 item dossiers, relics of Varn.") {
 		t.Errorf("given: %s", text)
 	}
-	if _, err := p.fill(nil); err == nil || !strings.Contains(err.Error(), "kind") {
+	if _, err := p.fill("", nil); err == nil || !strings.Contains(err.Error(), "kind") {
 		t.Errorf("no kind: %v", err)
 	}
 	for _, p := range playbooks {
@@ -443,7 +443,7 @@ func TestPlaybooks(t *testing.T) {
 		for _, a := range p.args {
 			args[a.name] = "X"
 		}
-		if text, err := p.fill(args); err != nil || strings.ContainsAny(text, "{}") {
+		if text, err := p.fill("", args); err != nil || strings.ContainsAny(text, "{}") {
 			t.Errorf("%s: %v %s", p.name, err, text)
 		}
 	}
@@ -497,8 +497,8 @@ func TestPlaybookCompletionsTellNotesApart(t *testing.T) {
 	}
 }
 
-// A prompt asked wrong is an error, not a crash; a note by its path is linked from the vault.
-func TestPromptErrorsAndPathLinks(t *testing.T) {
+// A prompt asked wrong is an error, not a crash.
+func TestPromptErrors(t *testing.T) {
 	replies := mcpSession(t, `{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"canon_check"}}`,
 		`{"jsonrpc":"2.0","id":2,"method":"prompts/get","params":{"name":"nope"}}`, `{"jsonrpc":"2.0","id":3,"method":"ping"}`)
 	for _, id := range []float64{1, 2} {
@@ -509,9 +509,23 @@ func TestPromptErrorsAndPathLinks(t *testing.T) {
 	if replies[3] == nil {
 		t.Error("the server stopped")
 	}
-	p, _ := findPlaybook("canon_check")
-	if text, _ := p.fill(map[string]string{"note": "design/South/Harbor.md"}); !strings.Contains(text, "Check [[South/Harbor]] against") || !strings.Contains(text, "design/South/Harbor.md") && strings.Contains(text, "{note}") {
-		t.Errorf("by path: %s", text)
+}
+
+// A playbook's [[link]] to a note is the one the game's notes write to reach
+// it, whatever the argument named it by: a path, a title, a folder/title.
+func TestAPlaybooksLinkIsTheNotesLink(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "design", "Locations"), 0o755)
+	os.WriteFile(filepath.Join(root, "design", "Locations", "Harbor.md"), []byte("---\ntype: location\n---\n# Harbor\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "design", "A.md"), []byte("# Locations/Harbor\n"), 0o644) // [[Locations/Harbor]] is this one's title
+	p, _ := findPlaybook("level_from_place")
+	for _, ref := range []string{"design/Locations/Harbor.md", "Harbor"} {
+		if text, _ := p.fill(root, map[string]string{"place": ref}); !strings.Contains(text, "Turn [[Harbor]] into a level") || !strings.Contains(text, "note "+ref) {
+			t.Errorf("%s: %s", ref, text)
+		}
+	}
+	if text, _ := p.fill(root, map[string]string{"place": "Nowhere"}); !strings.Contains(text, "Turn [[Nowhere]] into") {
+		t.Errorf("not a note: %s", text)
 	}
 }
 

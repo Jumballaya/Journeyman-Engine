@@ -428,7 +428,11 @@ func (s *mcpServer) handle(ctx context.Context, method string, params json.RawMe
 			Arguments map[string]string `json:"arguments"`
 		}
 		_ = json.Unmarshal(params, &get)
-		prompt, err := getPrompt(get.Name, get.Arguments)
+		s.calls.Lock() // its links are the open game's notes'
+		s.openRecentIfNone()
+		root := s.opened()
+		s.calls.Unlock()
+		prompt, err := getPrompt(root, get.Name, get.Arguments)
 		if err != nil {
 			return nil, err // a nil map in an any isn't nil
 		}

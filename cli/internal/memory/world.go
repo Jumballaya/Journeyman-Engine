@@ -295,6 +295,16 @@ func (w World) node(name string) (Note, error) {
 // named are the notes name may mean.
 func (w World) named(name string) []Note { return named(w.Notes, name) }
 
+// LinkTo is the [[link]] a note writes to reach the note ref names (a
+// tool's argument, by Find's rules); false when ref names none or several.
+func LinkTo(root, ref string) (string, bool) {
+	w := WorldOf(root)
+	if found := w.named(ref); len(found) == 1 {
+		return w.linkFor(found[0])
+	}
+	return "", false
+}
+
 // linkFor is the shortest name a [[link]] written in a note finds n alone by.
 func (w World) linkFor(n Note) (string, bool) {
 	inVault := strings.TrimPrefix(n.Path, Dir+"/") // with its .md: Foo.md.md isn't Foo.md's
