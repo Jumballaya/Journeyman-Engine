@@ -45,7 +45,7 @@ test('a prefab from Index shows its entities and components; an atlas its images
       : { structuredContent: { ...games, file: atlas }, _meta: { 'jm/files': { 'assets/fx/orb.png': 'data:image/png;base64,orb' } } } } });
   await settle(6);
   assert.match(s.app.text, /cloud\.prefab\.json prefab/);
-  assert.match(s.app.text, /"position": \[0, 0, 0\]/);
+  assert.match(s.app.text, /"position": \[\s*0,\s*0,\s*0\s*\]/);
   assert.match(s.app.text, /Shadow from the prefab/);
   await s.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: '/file?path=assets/fx.atlas.json' } });
   await settle(6);

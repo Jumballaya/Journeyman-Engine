@@ -103,7 +103,7 @@ studioTabs.push((() => {
         items: file.entities.map((e) => ({ id: e.where, label: "  ".repeat(depth(e.where)) + (e.name || e.where), meta: e.inherited ? "from the prefab" : "" })),
         onPick: (item) => { state.picked = item.id; ctx.rerender(); } })),
       kit.section(picked ? picked.name : "Components", picked ? Object.entries(picked.components || {}).map(([name, c]) =>
-        el("div", {}, el("h2", {}, name), el("pre", { style: { margin: "0 0 8px", fontSize: "11px", whiteSpace: "pre-wrap" } }, kit.jsonText(c)))) : null),
+        el("div", {}, el("h2", {}, name), el("pre", { style: { margin: "0 0 8px", fontSize: "11px", whiteSpace: "pre-wrap" } }, JSON.stringify(c, null, 2)))) : null),
       { ratio: 0.4 });
   };
 

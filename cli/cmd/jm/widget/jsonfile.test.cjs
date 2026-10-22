@@ -5,11 +5,13 @@ const vm = require('node:vm');
 const { test } = require('node:test');
 // kit.jsonFile over a host whose reads and writes finish when the test says.
 const { kit } = vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'kit.js'), 'utf8') + '; ({ kit })', {});
-const text = (doc) => kit.jsonText(doc) + '\n';
+const { jsonText, jsonEdit } = require('./jmlayout.cjs');
+const text = (doc) => jsonText(doc) + '\n';
 function fakeHost() {
-  const pending = [];
+  const pending = [], laid = [];
   const later = (kind, args) => new Promise((resolve, reject) => pending.push({ kind, args, resolve, reject }));
-  return { pending, readResource: (uri) => later('read', [uri]), writeResource: (...args) => later('write', args) };
+  return { pending, laid, readResource: (uri) => later('read', [uri]), writeResource: (...args) => later('write', args),
+    callTool: async (name, a) => { laid.push(a); return jsonEdit(a); } };
 }
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 function opened(host) {
@@ -46,6 +48,7 @@ test('one save at a time; a conflict reads the file again', async () => {
   f.open('a');
   host.pending[0].resolve({ text: text({ n: 1 }), etag: 'v1', writable: true }); await settle();
   const first = f.save((d) => { d.n = 2; });
+  await settle();  // jm lays the edits out first
   assert.equal(await f.save((d) => { d.n = 3; }), null, 'a save under way');
   const write = host.pending[1];
   assert.deepEqual([write.args[1], write.args[2]], [text({ n: 2 }), 'v1']);
@@ -61,6 +64,7 @@ test('a save that ends after another file opened changes nothing shown', async (
   f.open('a');
   host.pending[0].resolve({ text: text({ n: 1 }), etag: 'v1', writable: true }); await settle();
   const saving = f.save((d) => { d.n = 2; });
+  await settle();  // jm lays the edits out first
   f.open('b');
   host.pending[2].resolve({ text: text({ of: 'b' }), etag: 'b1', writable: true }); await settle();
   host.pending[1].resolve({ outcome: 'saved', etag: 'v2' });
@@ -74,6 +78,7 @@ test('a save that ends before the newly opened file reads changes nothing, nor r
   f.open('a');
   host.pending[0].resolve({ text: text({ n: 1 }), etag: 'v1', writable: true }); await settle();
   const saving = f.save((d) => { d.n = 2; });
+  await settle();  // jm lays the edits out first
   f.open('b');
   host.pending[1].resolve({ outcome: 'conflict' });
   assert.equal(await saving, null);
@@ -89,6 +94,7 @@ test('a conflict whose reading again is overtaken by another file stops there', 
   host.pending[0].resolve({ text: text({ n: 1 }), etag: 'v1', writable: true }); await settle();
   let followed = false;
   const saving = f.save((d) => { d.n = 2; }, () => { followed = true; });
+  await settle();  // jm lays the edits out first
   host.pending[1].resolve({ outcome: 'conflict' }); await settle();
   f.open('b');
   host.pending[2].resolve({ text: text({ n: 9 }), etag: 'v2', writable: true });
@@ -103,6 +109,7 @@ test("the page's follow-up runs while still saving; its failure is said", async 
   host.pending[0].resolve({ text: text({ n: 1 }), etag: 'v1', writable: true }); await settle();
   let during;
   const saving = f.save((d) => { d.n = 2; }, async (outcome) => { during = [outcome, f.saving]; throw new Error('no layout'); });
+  await settle();  // jm lays the edits out first
   host.pending[1].resolve({ outcome: 'saved', etag: 'v2' });
   assert.equal(await saving, 'saved');
   assert.deepEqual(during, ['saved', true]);
@@ -116,6 +123,7 @@ test('a save too large, or failing, says so', async () => {
     o.f.open('a');
     host.pending[0].resolve({ text: text({ n: 1 }), etag: 'v1', writable: true }); await settle();
     const saving = o.f.save((d) => { d.n = 2; });
+    await settle();  // jm lays the edits out first
     host.pending[1].resolve(answer);
     assert.equal(await saving, 'failed');
     assert.equal(o.said.at(-1), said);
@@ -128,4 +136,21 @@ test('pages save files through kit.jsonFile only', () => {
     : /\.(html|js)$/.test(e.name) && !['kit.js', 'bridge.js'].includes(e.name) ? [path.join(dir, e.name)] : []);
   const writers = pages(__dirname).filter((p) => /\.writeResource\(/.test(fs.readFileSync(p, 'utf8')));
   assert.deepEqual(writers.map((p) => path.relative(__dirname, p)), []);
+});
+
+test('a save sends jm the edits made, not a text of its own', async () => {
+  const host = fakeHost(), { f } = opened(host);
+  f.open('a');
+  host.pending[0].resolve({ text: text({ n: 1e-6, keep: [1, 2], constructor: 'x', gone: 1 }), etag: 'v1', writable: true }); await settle();
+  f.save((d) => { d.keep.push(3); d.constructor = 'y'; delete d.gone; d.added = { a: 1 }; });
+  await settle();  // jm lays the edits out first
+  await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(host.laid.at(-1).edits)), [{ path: ['gone'], remove: true }, { path: ['keep'], value: [1, 2, 3] },
+    { path: ['constructor'], value: 'y' }, { path: ['added'], value: { a: 1 } }]);
+  assert.equal(host.pending[1].args[1], text({ n: 1e-6, keep: [1, 2, 3], constructor: 'y', added: { a: 1 } }));
+});
+
+test('edits: a value changed by its path, nothing for what is the same', () => {
+  assert.deepEqual(JSON.parse(JSON.stringify(kit.edits({ a: [{ x: 1, y: 2 }], b: 1 }, { a: [{ x: 1, y: 3 }], b: 1 }))), [{ path: ['a', 0, 'y'], value: 3 }]);
+  assert.deepEqual(kit.edits({ a: 1 }, { a: 1 }).length, 0);
 });
