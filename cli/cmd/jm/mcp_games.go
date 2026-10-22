@@ -120,7 +120,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 	}
 }
 
-// gamesHome is absolute: the server's working folder moves with the open game.
+// gamesHome is the games folder, absolute.
 func gamesHome() string {
 	dir := os.Getenv("JM_GAMES")
 	if dir == "" {
@@ -160,12 +160,12 @@ func (s *mcpServer) openGame(dir string) string {
 }
 
 // setOpen makes dir the game calls work on when they name none (the driven
-// game is its own: it keeps running). Also the working folder, while some tools
-// still read it. It's kept as the folder's real path: a link retargeted later doesn't move it.
+// game is its own: it keeps running). It's kept as the folder's real path: a
+// link retargeted later doesn't move it. The working folder never moves.
 func (s *mcpServer) setOpen(dir string) error {
 	real := evalOrSelf(dir)
-	if err := os.Chdir(real); err != nil {
-		return err
+	if !isDir(real) {
+		return fmt.Errorf("no folder %s", dir)
 	}
 	s.open.Store(real)
 	return nil

@@ -271,7 +271,7 @@ func TestMRTRRoundIsBoundToTheGameItRunsIn(t *testing.T) {
 	t.Chdir(t.TempDir()) // outside any game: the call opens the remembered one
 	s := newMCPServer()
 	first := modernCall(t, s, 1, "pick", map[string]any{"kind": "scene"}, chatGPTCaps, nil, "")["result"].(map[string]any)
-	abs, _ := filepath.Abs("a.scene.json")
+	abs := filepath.Join(evalOrSelf(game), "a.scene.json") // as offered
 	answer := map[string]any{"form1": accept(map[string]any{"picked": fileURI(abs)})}
 	if done := modernCall(t, s, 2, "pick", map[string]any{"kind": "scene"}, chatGPTCaps, answer, first["requestState"].(string)); done["error"] != nil || done["result"].(map[string]any)["resultType"] != "complete" {
 		t.Errorf("its retry: %v", done)

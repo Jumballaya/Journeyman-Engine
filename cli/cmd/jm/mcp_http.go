@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -31,8 +32,7 @@ func serveMCPHTTP(addr string, allowOrigins []string) error {
 	defer server.stopDriver()
 	path := "/mcp/" + newSessionID()
 
-	root, _ := os.Getwd()
-	fmt.Fprintf(os.Stderr, "jm mcp: serving %s at http://%s%s\n", root, addr, path)
+	fmt.Fprintf(os.Stderr, "jm mcp: serving %s at http://%s%s\n", cmp.Or(server.opened(), "no game yet"), addr, path)
 	fmt.Fprintln(os.Stderr, "The path is the password: share it only with your MCP client.")
 	fmt.Fprintln(os.Stderr, "For ChatGPT: put it behind HTTPS (e.g. `cloudflared tunnel --url http://"+addr+"` or `ngrok http "+addr+"`),")
 	fmt.Fprintln(os.Stderr, "then in ChatGPT: Settings > Apps & Connectors > Create, with the tunnel's URL + "+path+".")

@@ -46,9 +46,8 @@ func TestMCPMakesAndOpensGamesFromNowhere(t *testing.T) {
 	if got := call("new_game", map[string]any{"name": "Neon Vow"}); got.Failed {
 		t.Fatal(got.Text)
 	}
-	cwd, _ := os.Getwd()
-	if want, _ := filepath.EvalSymlinks(filepath.Join(home, "Neon Vow")); evalOr(cwd) != want || !exists(".jm.json") {
-		t.Fatalf("new_game didn't open the new game: in %s", cwd)
+	if want, _ := filepath.EvalSymlinks(filepath.Join(home, "Neon Vow")); s.opened() != want {
+		t.Fatalf("new_game didn't open the new game: %q open", s.opened())
 	}
 	if got := call("new_game", map[string]any{"name": "Neon Vow"}); !got.Failed {
 		t.Error("a second game of the same name must be refused")
@@ -59,8 +58,8 @@ func TestMCPMakesAndOpensGamesFromNowhere(t *testing.T) {
 		}
 	}
 
-	os.Chdir(t.TempDir())
-	if got := call("open_game", map[string]any{"game": "Neon Vow"}); got.Failed || !exists(".jm.json") {
+	s.openGame(t.TempDir())
+	if got := call("open_game", map[string]any{"game": "Neon Vow"}); got.Failed || filepath.Base(s.opened()) != "Neon Vow" {
 		t.Fatalf("open_game by name: %s", got.Text)
 	}
 	if got := call("games", nil); !strings.Contains(got.Text, "Open: Neon Vow") || !strings.Contains(got.Text, `open_game "Neon Vow"`) {
@@ -219,7 +218,7 @@ func TestOpenGameTakesAListedNameOrAnAbsolutePath(t *testing.T) {
 // onDriven the driven run's, or it's listed here. A new tool that's on neither list fails this.
 func TestEveryToolSaysWhichGameItWorksOn(t *testing.T) {
 	noGame := map[string]bool{ // they choose a game, or need none
-		"games": true, "games_find": true, "new_game": true, "open_game": true, "doctor": true, "schema": true,
+		"games": true, "games_find": true, "new_game": true, "open_game": true,
 		"companions": true, "studio": true, "playbook": true,
 	}
 	// Design debt: these still find their game themselves (their own "game", or the
