@@ -94,6 +94,30 @@ func TestAScriptCompilesOnceUntilWhatCompilingReadsChanges(t *testing.T) {
 	if count("a.ts") != 6 {
 		t.Errorf("the asconfig's base changed: compiled %v", compiled())
 	}
+	// A chain of bases, however long: its last one changed compiles again.
+	chain := t.TempDir()
+	for i := range 10 {
+		next := `{"extends": "./` + string(rune('a'+i+1)) + `.json"}`
+		os.WriteFile(filepath.Join(chain, string(rune('a'+i))+".json"), []byte(next), 0o644)
+	}
+	os.WriteFile(base, []byte(`{"extends": "`+filepath.ToSlash(filepath.Join(chain, "a.json"))+`"}`), 0o644)
+	build()
+	os.WriteFile(filepath.Join(chain, "k.json"), []byte(`{"options": {"noAssert": true}}`), 0o644)
+	build()
+	if count("a.ts") != 8 {
+		t.Errorf("the chain's last base changed: compiled %v", compiled())
+	}
+	// What the cache can't follow it doesn't keep: a package's config, a file asc writes but the map.
+	for _, config := range []string{`{"extends": "@studio/asconfig/base.json"}`, `{"options": {"sourceMap": "custom.map"}}`,
+		`{"targets": {"release": {"bindings": "esm"}}}`} {
+		os.WriteFile(base, []byte(config), 0o644)
+		before := count("a.ts")
+		build()
+		build()
+		if count("a.ts") != before+2 {
+			t.Errorf("%s: compiled %d times in two builds", config, count("a.ts")-before)
+		}
+	}
 	if kept, _ := os.ReadDir(filepath.Join(root, ".jm", scriptCacheDir)); len(kept) != 1 {
 		t.Errorf("kept %d sources' compiles: the last's alone", len(kept))
 	}

@@ -93,7 +93,11 @@ func openScriptCache(root string, sources map[string]string, tc toolchain.Toolch
 			read[key] = stamp
 		}
 	}
-	for file, text := range ascConfigs(scriptsPath(root, "asconfig.json")) { // a base it extends may be anywhere
+	configs, known := ascConfigs(scriptsPath(root, "asconfig.json")) // a base it extends may be anywhere
+	if !known {
+		return scriptCache{}
+	}
+	for file, text := range configs {
 		read["asconfig "+file] = text
 	}
 	top, err := jmfolder.Make(root, scriptCacheDir)
@@ -111,22 +115,61 @@ func openScriptCache(root string, sources map[string]string, tc toolchain.Toolch
 	return scriptCache{filepath.Join(top, key)}
 }
 
-// ascConfigs are the asconfig at file and each it extends, by their paths.
-func ascConfigs(file string) map[string]string {
+// ascConfigs are the asconfig at file and each it extends, by their paths;
+// false when what a compile reads or writes is more than the cache knows: a
+// config from a package, or a file asc writes but the wasm and its map.
+func ascConfigs(file string) (map[string]string, bool) {
 	out := map[string]string{}
-	for range 8 { // a loop of extends ends
+	for out[file] == "" {
 		data, err := os.ReadFile(file)
+		if err != nil {
+			out[file] = "none"
+			return out, true
+		}
 		out[file] = string(data)
-		var config struct{ Extends string }
-		if err != nil || json.Unmarshal(data, &config) != nil || config.Extends == "" {
-			break
+		var config map[string]any
+		if json.Unmarshal(data, &config) != nil {
+			return out, true // asc says why
 		}
-		if !filepath.IsAbs(config.Extends) {
-			config.Extends = filepath.Join(filepath.Dir(file), config.Extends)
+		if writesMore(config) {
+			return nil, false
 		}
-		file = config.Extends
+		next, _ := config["extends"].(string)
+		switch {
+		case next == "":
+			return out, true
+		case filepath.IsAbs(next):
+			file = next
+		case strings.HasPrefix(next, "./") || strings.HasPrefix(next, "../"):
+			file = filepath.Join(filepath.Dir(file), next)
+		default:
+			return nil, false // a package's: resolved as node does
+		}
 	}
-	return out
+	return out, true // a loop: asc's to report
+}
+
+// writesMore says whether a config (its options, or a target's) has asc
+// write a file but the wasm and its out.wasm.map.
+func writesMore(config map[string]any) bool {
+	sets := []any{config["options"]}
+	if targets, ok := config["targets"].(map[string]any); ok {
+		for _, t := range targets {
+			sets = append(sets, t)
+		}
+	}
+	for _, set := range sets {
+		options, _ := set.(map[string]any)
+		for _, key := range []string{"textFile", "jsFile", "tsdFile", "idlFile", "bindings", "outFile"} {
+			if options[key] != nil && options[key] != false {
+				return true
+			}
+		}
+		if named, ok := options["sourceMap"].(string); ok && named != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // sourceMap is where asc writes a source map for a compile to out: its name
