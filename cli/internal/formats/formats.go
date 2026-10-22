@@ -20,6 +20,7 @@ type Format struct {
 	UploadMIME []string // content types a host may serve an upload as (a generic binary is always taken)
 	TextMIME   string   // the content type jm serves it as text (resources, file views); "" isn't text
 	Plays      bool     // a change to it can change how the game plays (scripts, data, UI layout), not only how it looks or sounds
+	Compiled   bool     // compiling the scripts may read it: a script, a JSON config (asconfig extends one), the manifest's libraries
 }
 
 // jsonMIME: how hosts serve a JSON file.
@@ -30,16 +31,16 @@ const json, ts, plain = "application/json", "text/x-typescript", "text/plain"
 // table: a source format (Aseprite, Tiled's XML, a bare shader stage) has no
 // Archive: the build bakes it or the engine doesn't read it.
 var table = []Format{
-	{Suffix: ".jm.json", Kind: "manifest", Archive: "manifest", TextMIME: json, Plays: true},
+	{Suffix: ".jm.json", Kind: "manifest", Archive: "manifest", TextMIME: json, Plays: true, Compiled: true},
 	{Suffix: ".scene.json", Kind: "scene", Archive: "scene", Pick: "scene", Upload: true, UploadMIME: jsonMIME, TextMIME: json, Plays: true},
 	{Suffix: ".prefab.json", Kind: "prefab", Archive: "prefab", Pick: "prefab", Upload: true, UploadMIME: jsonMIME, TextMIME: json, Plays: true},
 	{Suffix: ".atlas.json", Kind: "atlas", Archive: "atlas", Upload: true, UploadMIME: jsonMIME, TextMIME: json, Plays: true},
 	{Suffix: ".bindings.json", Kind: "data", Archive: "bindings", Upload: true, UploadMIME: jsonMIME, TextMIME: json, Plays: true},
 	{Suffix: ".golden.json", Kind: "golden", TextMIME: json, Plays: true},
-	{Suffix: ".json", Kind: "data", Archive: "data", Upload: true, UploadMIME: jsonMIME, TextMIME: json, Plays: true}, // read by scripts as is
-	{Suffix: ".spec.ts", Kind: "test", TextMIME: ts, Plays: true},
-	{Suffix: ".d.ts", TextMIME: ts, Plays: true},
-	{Suffix: ".ts", Kind: "script", Archive: "script", Pick: "script", TextMIME: ts, Plays: true}, // jm build leaves its wasm at the .ts path
+	{Suffix: ".json", Kind: "data", Archive: "data", Upload: true, UploadMIME: jsonMIME, TextMIME: json, Plays: true, Compiled: true}, // read by scripts as is
+	{Suffix: ".spec.ts", Kind: "test", TextMIME: ts, Plays: true, Compiled: true},
+	{Suffix: ".d.ts", TextMIME: ts, Plays: true, Compiled: true},
+	{Suffix: ".ts", Kind: "script", Archive: "script", Pick: "script", TextMIME: ts, Plays: true, Compiled: true}, // jm build leaves its wasm at the .ts path
 	{Suffix: ".png", Kind: "texture", Archive: "image", Pick: "texture", Upload: true, UploadMIME: []string{"image/png"}},
 	{Suffix: ".jpg", Kind: "texture", Archive: "image", Pick: "texture", Upload: true, UploadMIME: []string{"image/jpeg"}},
 	{Suffix: ".jpeg", Kind: "texture", Archive: "image", Pick: "texture", Upload: true, UploadMIME: []string{"image/jpeg"}},

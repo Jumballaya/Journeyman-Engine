@@ -45,8 +45,10 @@ var buildCmd = &cobra.Command{
 	Long: `Builds the project into build/: compiles scripts, bakes atlases and
 tilesets, and checks scenes and prefabs against the engine's schema.
 
-Scripts compile at once, and only when a script, the script package or jm
-changed: their last clean compile is kept in .jm/cache/scripts.
+Scripts compile at once, and again only when what compiling may read
+changed (a script, a JSON config, the manifest, jm, the compiler): their last
+clean compile is kept in .jm/cache/scripts. An npm package linked into
+node_modules isn't watched: delete that folder after editing one.
 
 --json prints no progress; each problem is a JSON line ({"level", "category",
 "message", "file", "line", "column"}) and the last line is the result
@@ -347,18 +349,18 @@ export function __jmOnMessage(): void {
 // compileScript compiles a script (project-relative path) to outFile, through a
 // generated entry under node_modules/.jm so @jm/runtime resolves normally,
 // giving what asc said (reportAsc's).
-func compileScript(tc toolchain.Toolchain, scriptPath, projectRoot, outFile string) (string, error) {
+func compileScript(tc toolchain.Toolchain, scriptPath, projectRoot, outFile string) (ascSaid, error) {
 	scriptsDir := scriptsPath(projectRoot)
 	entry := scriptsPath(projectRoot, "node_modules", ".jm", "entries", scriptPath)
 	importPath, err := filepath.Rel(filepath.Dir(entry), filepath.Join(projectRoot, strings.TrimSuffix(scriptPath, ".ts")))
 	if err != nil {
-		return "", fmt.Errorf("compute entry import path: %w", err)
+		return ascSaid{}, fmt.Errorf("compute entry import path: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(entry), 0755); err != nil {
-		return "", err
+		return ascSaid{}, err
 	}
 	if err := os.WriteFile(entry, []byte(fmt.Sprintf(entryTemplate, filepath.ToSlash(importPath))), 0644); err != nil {
-		return "", err
+		return ascSaid{}, err
 	}
 	entryRel, _ := filepath.Rel(scriptsDir, entry)
 	// Run by node directly, not npx (which would fetch from the network).
@@ -368,21 +370,22 @@ func compileScript(tc toolchain.Toolchain, scriptPath, projectRoot, outFile stri
 	cmd := exec.Command(tc.Node, asc, filepath.ToSlash(entryRel), "--config", "asconfig.json", "--optimize",
 		"--outFile", outFile)
 	cmd.Dir = scriptsDir
-	var output bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &output, &output
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err = cmd.Run()
-	return output.String(), err
+	return ascSaid{stdout.String(), stderr.String()}, err
 }
 
-// reportAsc gives asc's output: as diagnostics with project paths (--json),
-// else as it said it.
-func reportAsc(r *report, projectRoot, output string) {
+// reportAsc gives what asc said: as diagnostics with project paths (--json),
+// else as it said it, each on its stream.
+func reportAsc(r *report, projectRoot string, said ascSaid) {
 	if !jsonOutput {
-		fmt.Print(output)
+		fmt.Fprint(os.Stdout, said.stdout)
+		fmt.Fprint(os.Stderr, said.stderr)
 		return
 	}
 	scriptsDir := scriptsPath(projectRoot)
-	for _, d := range parseAsc(output, func(p string) string {
+	for _, d := range parseAsc(said.stdout+said.stderr, func(p string) string {
 		if rel, err := filepath.Rel(projectRoot, filepath.Join(scriptsDir, p)); err == nil {
 			return filepath.ToSlash(rel)
 		}

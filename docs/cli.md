@@ -9,8 +9,10 @@ Build game assets and compile AssemblyScript.
 Builds the project into build/: compiles scripts, bakes atlases and
 tilesets, and checks scenes and prefabs against the engine's schema.
 
-Scripts compile at once, and only when a script, the script package or jm
-changed: their last clean compile is kept in .jm/cache/scripts.
+Scripts compile at once, and again only when what compiling may read
+changed (a script, a JSON config, the manifest, jm, the compiler): their last
+clean compile is kept in .jm/cache/scripts. An npm package linked into
+node_modules isn't watched: delete that folder after editing one.
 
 --json prints no progress; each problem is a JSON line ({"level", "category",
 "message", "file", "line", "column"}) and the last line is the result
