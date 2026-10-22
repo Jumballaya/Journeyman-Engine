@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/copies"
 	"github.com/Jumballaya/Journeyman-Engine/internal/vcs"
 )
 
@@ -286,7 +287,7 @@ func TestAVersionWithAnOddJMMakesNoVariant(t *testing.T) {
 		}
 		branches, _ := exec.Command("git", "-C", game, "branch", "--list", variantPrefix+"odd").Output()
 		worktrees, _ := exec.Command("git", "-C", game, "worktree", "list").Output()
-		if len(branches) != 0 || strings.Count(string(worktrees), "\n") != 1 || exists(filepath.Join(variantsDir(game), "odd")) {
+		if len(branches) != 0 || strings.Count(string(worktrees), "\n") != 1 || exists(filepath.Join(copies.Store(game, copies.Variant), "odd")) {
 			t.Errorf("%s: left behind: %q %q", shape, branches, worktrees)
 		}
 		if _, err := newVariant(game, "odd", ""); err != nil {
@@ -352,5 +353,39 @@ func TestAFreshVariantShowsTheGamesPicture(t *testing.T) {
 	os.WriteFile(own, []byte("png"), 0o644)
 	if list, _ := sandboxesOf(game); len(list) != 1 || list[0].thumb != own {
 		t.Errorf("sandbox's own: %+v", list)
+	}
+}
+
+// A variant of a game deep in its repository builds with the library beside
+// the game as it is now, not the worktree's committed copy of it.
+func TestAVariantBuildsWithItsGamesLibrary(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	repo := t.TempDir()
+	game := filesGame(t, filepath.Join(repo, "games", "pip"))
+	shared := filepath.Join(repo, "shared")
+	os.MkdirAll(shared, 0o755)
+	os.WriteFile(filepath.Join(shared, "index.ts"), []byte("// committed\n"), 0o644)
+	os.WriteFile(filepath.Join(repo, ".gitignore"), []byte(".jm/\nbuild/\n"), 0o644)
+	os.WriteFile(filepath.Join(game, ".jm.json"), []byte(`{"name": "Pip", "scriptLibraries": {"shared": "../../shared"}}`), 0o644)
+	git(t, repo, "init", "-q")
+	git(t, repo, "add", "-A")
+	git(t, repo, "commit", "-q", "-m", "start")
+	os.WriteFile(filepath.Join(shared, "index.ts"), []byte("// now\n"), 0o644)
+	v, err := newVariant(game, "try", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := syncLibrary(v.Dir, "shared", "../../shared"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(scriptsPath(v.Dir, "node_modules", "shared", "index.ts")); string(got) != "// now\n" {
+		t.Errorf("the variant's library is %q, want the game's (// now)", got)
+	}
+	if _, stamped := buildSources(v.Dir)[shared]; !stamped {
+		t.Errorf("the variant's build doesn't watch the game's library %s", shared)
 	}
 }

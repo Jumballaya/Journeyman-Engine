@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
+	"github.com/Jumballaya/Journeyman-Engine/internal/copies"
 	"github.com/Jumballaya/Journeyman-Engine/internal/filelock"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
@@ -143,7 +143,9 @@ func scan(root string, maxDepth int) ([]string, error) {
 
 func describe(e entry) Project {
 	p := Project{Name: nameOf(e.Path, e.Name), Path: e.Path, Opened: e.Opened, Scenes: []string{}}
-	p.CopyOf, p.CopyKind, p.Copy = CopyOf(e.Path) // a dropped copy too: it's its game's, not a missing game
+	if c, ok := copies.Of(e.Path); ok { // a dropped copy too: it's its game's, not a missing game
+		p.CopyOf, p.CopyKind, p.Copy = c.Game, string(c.Kind), c.Name
+	}
 	man, err := manifest.LoadManifest(filepath.Join(e.Path, archive.ManifestEntryKey))
 	if err != nil {
 		p.Missing = !isGame(e.Path)
@@ -163,7 +165,7 @@ func WithCopies(list []Project, open string) []Project {
 	listed := func(dir string) bool { return slices.ContainsFunc(list, func(p Project) bool { return p.Path == dir }) }
 	if open != "" {
 		if open = canonical(open); !listed(open) {
-			if g, _, _ := CopyOf(open); g != "" {
+			if _, ok := copies.Of(open); ok {
 				list = append(list, describe(entry{Path: open}))
 			}
 		}
@@ -174,38 +176,6 @@ func WithCopies(list []Project, open string) []Project {
 		}
 	}
 	return list
-}
-
-// inRepo is where dir sits in its git repository ("games/pip"), "" at its top or outside one.
-func inRepo(dir string) string {
-	c := exec.Command("git", "rev-parse", "--show-prefix")
-	c.Dir = dir
-	out, err := c.Output()
-	if err != nil {
-		return ""
-	}
-	return filepath.FromSlash(strings.TrimSuffix(strings.TrimSuffix(string(out), "\n"), "/"))
-}
-
-// CopyOf finds the game a folder is a copy of: <game>/.jm/sandboxes/<name>
-// (the game's folder copied), or <game>/.jm/variants/<name>[/<the game's
-// folder in its repository>] (a worktree). The game must be one.
-func CopyOf(dir string) (game, kind, name string) {
-	parts := strings.Split(filepath.ToSlash(filepath.Clean(dir)), "/")
-	for i := len(parts) - 3; i >= 1; i-- {
-		if parts[i] != ".jm" || (parts[i+1] != "variants" && parts[i+1] != "sandboxes") || (parts[i+1] == "sandboxes" && i+3 != len(parts)) {
-			continue
-		}
-		g := filepath.FromSlash(strings.Join(parts[:i], "/"))
-		if g == "" {
-			g = string(filepath.Separator)
-		}
-		// A variant's game sits where the game sits in its repository (vcs.GameIn), not anywhere below.
-		if isGame(g) && (parts[i+1] == "sandboxes" || filepath.Clean(dir) == filepath.Join(g, ".jm", "variants", parts[i+2], inRepo(g))) {
-			return g, map[string]string{"variants": "variant", "sandboxes": "sandbox"}[parts[i+1]], parts[i+2]
-		}
-	}
-	return "", "", ""
 }
 
 // Thumb is a picture of the game in dir: the newest play's last thumbnail, else the newest golden frame.

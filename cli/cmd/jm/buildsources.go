@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/copies"
 	"github.com/Jumballaya/Journeyman-Engine/internal/gametree"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
@@ -101,7 +102,7 @@ func buildSources(root string) map[string]string {
 		}
 	}
 	for _, dir := range man.ScriptLibraries {
-		src := librarySource(root, dir)
+		src := copies.Beside(root, dir)
 		top, err := filepath.EvalSymlinks(src) // the folder it leads to
 		if err != nil {
 			out[src] = ""
