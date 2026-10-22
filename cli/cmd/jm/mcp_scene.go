@@ -252,19 +252,6 @@ func scenePath(root string, a toolArgs) (path, rel string, err error) {
 	return path, rel, nil
 }
 
-// gameHolding is the game folder holding file (its real path, links resolved: the
-// nearest folder with a .jm.json), "" when no game does.
-func gameHolding(file string) string {
-	for dir := filepath.Dir(evalOrSelf(file)); ; dir = filepath.Dir(dir) {
-		if exists(filepath.Join(dir, archive.ManifestEntryKey)) {
-			return dir
-		}
-		if filepath.Dir(dir) == dir {
-			return ""
-		}
-	}
-}
-
 // placement is where a parent is: children are placed from it, turned with it.
 type placement struct{ x, y, z, rotation float64 }
 

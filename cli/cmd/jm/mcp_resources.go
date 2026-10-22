@@ -9,13 +9,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
-	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
 	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
@@ -456,118 +453,83 @@ func filesOf(root, suffix string) []string {
 	return out
 }
 
-// rootsState is the client's roots, as the game to open when none is.
-type rootsState struct {
-	mu      sync.Mutex
-	listed  bool          // the client has roots to ask for (its initialize said so)
-	game    string        // its first root that's a game: "" when none is
-	pending chan struct{} // closed once the roots last asked for are in (or never will be)
+// projectResources lists the files an agent reads and writes, and the schema.
+func projectResources(root string) []map[string]any {
+	resources := []map[string]any{{"uri": "jm://schema", "name": "schema", "mimeType": "application/json",
+		"description": "every component's scene keys and script fields (jm schema)"},
+		{"uri": "jm://memory", "name": "memory", "mimeType": "application/json", "description": "the game's design notes (design/): each one's title, observations and links"}}
+	for _, t := range docs.Topics() {
+		resources = append(resources, map[string]any{"uri": "jm://docs/" + t.Name, "name": "docs/" + t.Name,
+			"mimeType": "text/markdown", "description": t.Title})
+	}
+	// Only what resources/read gives back.
+	for _, f := range gameFiles(root, func(rel string) bool { return mimeOf(rel) != "" }) {
+		resources = append(resources, map[string]any{"uri": fileURI(filepath.Join(root, f)), "name": f, "mimeType": mimeOf(f)})
+	}
+	return resources
 }
 
-// rootsWait is how long the client may take to say its roots.
-const rootsWait = 30 * time.Second
-
-// askRoots asks the client its roots (when it has them), and opens the
-// first that's a game if none is open by then. The answer comes back on the
-// reader's goroutine, so this doesn't wait for it.
-func (s *mcpServer) askRoots() {
-	r := &s.roots
-	r.mu.Lock()
-	if s.peer == nil || !r.listed {
-		r.mu.Unlock()
-		return
+// fileURI is the file:// URI of an absolute path, each segment escaped
+// ("a b#2.ts": "a%20b%232.ts"); readResource unescapes it.
+func fileURI(abs string) string {
+	segments := strings.Split(filepath.ToSlash(abs), "/")
+	for i, s := range segments {
+		segments[i] = url.PathEscape(s)
 	}
-	r.mu.Unlock()
-	// A new ask under the calls lock: an older answer checking it's the
-	// latest, then opening its game (under the lock too), can't miss it.
-	s.calls.Lock()
-	done := make(chan struct{})
-	r.mu.Lock()
-	r.pending = done
-	r.mu.Unlock()
-	s.calls.Unlock()
-	reply := s.peer.start("roots/list", map[string]any{})
-	s.rootsWork.Add(1)
-	go func() {
-		defer s.rootsWork.Done()
-		game := ""
-		var got struct {
-			Roots []struct {
-				URI string `json:"uri"`
-			} `json:"roots"`
-		}
-		select {
-		case msg, ok := <-reply:
-			if decode(msg, ok, &got) == nil {
-				for _, root := range got.Roots {
-					if game = gameAtRoot(root.URI); game != "" {
-						break
-					}
-				}
-			}
-		case <-time.After(rootsWait):
-			s.peer.abandon(reply)
-		}
-		r.mu.Lock()
-		if r.pending == done { // else a newer ask's answer decides
-			r.game = game
-		}
-		r.mu.Unlock()
-		close(done)
-		s.calls.Lock()
-		defer s.calls.Unlock()
-		r.mu.Lock()
-		latest := r.pending == done // still: a newer ask may have gone out meanwhile
-		r.mu.Unlock()
-		if latest && game != "" {
-			s.openRootIfDefault(game)
-		}
-	}()
+	return "file://" + strings.Join(segments, "/")
 }
 
-// openRootIfDefault opens the root's game when no game is open, or the one
-// open is only the last opened (openRecentIfNone, while the roots were slow
-// to come): a game opened by name stays. The caller holds the calls lock.
-func (s *mcpServer) openRootIfDefault(game string) {
-	if s.opened() != "" && !s.byRecent {
-		return
-	}
-	s.byRecent = false
-	_ = s.setOpen(game)
-}
-
-// rootGame is the client's root that's a game, waiting a moment for roots
-// asked for and not in yet: they'd say which game the person means.
-func (s *mcpServer) rootGame() string {
-	s.roots.mu.Lock()
-	pending := s.roots.pending
-	s.roots.mu.Unlock()
-	if pending != nil {
-		select {
-		case <-pending:
-		case <-time.After(2 * time.Second):
-		}
-	}
-	s.roots.mu.Lock()
-	defer s.roots.mu.Unlock()
-	if s.roots.game != "" && exists(filepath.Join(s.roots.game, archive.ManifestEntryKey)) {
-		return s.roots.game
+func mimeOf(path string) string {
+	switch {
+	case strings.HasSuffix(path, ".json"), strings.HasSuffix(path, ".tmj"), strings.HasSuffix(path, ".tsj"):
+		return "application/json"
+	case strings.HasSuffix(path, ".ts"):
+		return "text/x-typescript"
+	case strings.HasSuffix(path, ".html"):
+		return "text/html"
+	case strings.HasSuffix(path, ".css"):
+		return "text/css"
+	case strings.HasSuffix(path, ".frag"), strings.HasSuffix(path, ".txt"), strings.HasSuffix(path, ".md"):
+		return "text/plain"
 	}
 	return ""
 }
 
-// gameAtRoot is the folder a file:// root names when it's a game, else "".
-func gameAtRoot(uri string) string {
-	u, err := url.Parse(uri)
-	if err != nil || u.Scheme != "file" || u.Path == "" || u.Host != "" && u.Host != "localhost" { // another machine's
-		return ""
+func readResource(root, uri string) (string, string, error) {
+	if uri == "jm://schema" {
+		out, failed := runJM(nil, root, "schema")
+		if failed {
+			return "", "", fmt.Errorf("%s", out)
+		}
+		return out, "application/json", nil
 	}
-	dir := filepath.FromSlash(u.Path)
-	if runtime.GOOS == "windows" && len(u.Path) > 2 && u.Path[0] == '/' && u.Path[2] == ':' {
-		dir = filepath.FromSlash(u.Path[1:]) // file:///C:/games/x
+	if uri == "jm://memory" {
+		data, err := json.Marshal(map[string]any{"notes": memory.Notes(root)})
+		return string(data), "application/json", err
 	}
-	if !filepath.IsAbs(dir) || !exists(filepath.Join(dir, archive.ManifestEntryKey)) {
-		return ""
+	if topic, ok := strings.CutPrefix(uri, "jm://docs/"); ok {
+		text, err := docs.Read(topic)
+		return text, "text/markdown", err
 	}
-	return filepath.Clean(dir)
+	path, ok := strings.CutPrefix(uri, "file://")
+	if !ok {
+		return "", "", fmt.Errorf("unknown resource %s", uri)
+	}
+	path, err := url.PathUnescape(path)
+	if err != nil {
+		return "", "", err
+	}
+	// The files projectResources lists, and no others.
+	real, rel, err := gamePath(root, path)
+	if err != nil {
+		return "", "", err
+	}
+	if mimeOf(rel) == "" {
+		return "", "", fmt.Errorf("%s isn't one of the project's resources", uri)
+	}
+	data, err := os.ReadFile(real)
+	if err != nil {
+		return "", "", err
+	}
+	return string(data), mimeOf(path), nil
 }

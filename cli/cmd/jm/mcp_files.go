@@ -117,43 +117,6 @@ func (s *mcpServer) fileTools() []mcpTool {
 	}
 }
 
-// gameOfTool names the game a file or memory tool works on: a page showing one
-// game says which, so another caller opening a game in between can't redirect it.
-var gameOfTool = strArg("a name or path from `games` (default: the open game)")
-
-// gameRoot is the game a call works on: the one holding the file a host opened
-// it from, else the one its "game" names (a name or absolute path), else the open game.
-func (s *mcpServer) gameRoot(a toolArgs) (string, error) {
-	named := ""
-	if v, given := a["game"]; given && v != "" {
-		game, _ := v.(string) // mistyped: findGame says there's no such game
-		root, err := findGame(s.home, game)
-		if err != nil {
-			return "", err
-		}
-		named = evalOrSelf(root)
-	}
-	if file := a.resource(); file != "" {
-		root := gameHolding(file)
-		switch {
-		case root == "":
-			return "", fmt.Errorf("%s isn't in a game: open_game its game first", filepath.Base(file))
-		case named != "" && named != root:
-			return "", fmt.Errorf("%s is %s's, not %s's", filepath.Base(file), gameName(root), gameName(named))
-		}
-		return root, nil
-	}
-	if named != "" {
-		return named, nil
-	}
-	if root := s.opened(); root != "" {
-		return root, nil
-	}
-	return "", errNoGame
-}
-
-var errNoGame = errors.New("No game open: games, then open_game.")
-
 // filesText is the list for the model: what changed, then every path while there are few.
 func filesText(list []projectEntry) string {
 	var changed, all []string
