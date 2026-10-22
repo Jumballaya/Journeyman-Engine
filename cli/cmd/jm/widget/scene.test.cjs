@@ -77,6 +77,18 @@ test('an edit is written through the host with its version, in jm\'s layout, and
   assert.equal(plain(of('ui/update-model-context').at(-1).params).structuredContent.x, 42, 'the model sees the saved value');
 });
 
+test('a save the scene can\'t be laid out again after says so', async () => {
+  const { find, app } = await scenePage({ answers: {
+    'resources/read': { contents: [{ uri: file.resourceUri, text: raw, _meta: { 'openai/resource': { etag: 'v1', writable: true } } }] },
+    'openai/resources/write': { outcome: 'saved', etag: 'v2' },
+    scene_view: { isError: true, content: [{ type: 'text', text: 'no game open' }] },
+  } });
+  pick(find, 'Kage');
+  xInput(find).listeners.change({ target: { value: '42' } });
+  await settle();
+  assert.match(app.text, /Saved\. Couldn't show it again: no game open/);
+});
+
 const reading = (text, meta) => ({ 'resources/read': { contents: [{ text, _meta: { 'openai/resource': meta } }] } });
 test('a file the page can\'t write back as it was, or without a version to check, is read only', async () => {
   for (const [answers, why] of [[reading(raw.replace('[10, 20, 0]', '[10,20,0]'), { etag: 'v1', writable: true }), /jm fmt it/],
