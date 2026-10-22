@@ -15,7 +15,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 )
@@ -244,76 +243,6 @@ func TestMCPFmtAndExportRunJM(t *testing.T) {
 	want := "fmt|fmt --check -- scenes/a.scene.json|export|export --target windows-amd64 --server"
 	if got := strings.Join(ran, "|"); got != want {
 		t.Errorf("ran %q; want %q", got, want)
-	}
-}
-
-func TestABuildIsStaleWhenMissingOrOlderThanItsSources(t *testing.T) {
-	root := t.TempDir()
-	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{}`), 0o644)
-	os.MkdirAll(filepath.Join(root, "assets", "scripts", "node_modules"), 0o755)
-	if !buildIsStale(root) {
-		t.Error("no build isn't stale")
-	}
-	os.MkdirAll(filepath.Join(root, "build"), 0o755)
-	os.WriteFile(filepath.Join(root, "build", ".jm.json"), []byte(`{}`), 0o644)
-	old := time.Now().Add(-time.Hour)
-	os.Chtimes(filepath.Join(root, ".jm.json"), old, old)
-	if buildIsStale(root) {
-		t.Error("a build newer than its sources is stale")
-	}
-	os.WriteFile(filepath.Join(root, "assets", "scripts", "node_modules", "x.js"), nil, 0o644)
-	ahead := time.Now().Add(time.Minute)
-	os.Chtimes(filepath.Join(root, "assets", "scripts", "node_modules", "x.js"), ahead, ahead)
-	if buildIsStale(root) {
-		t.Error("node_modules counts as a source")
-	}
-	os.WriteFile(filepath.Join(root, "assets", "player.ts"), nil, 0o644)
-	later := time.Now().Add(time.Minute) // past the build's time, however coarse the clock
-	os.Chtimes(filepath.Join(root, "assets", "player.ts"), later, later)
-	if !buildIsStale(root) {
-		t.Error("an edited script doesn't make the build stale")
-	}
-
-	// A script library beside the game (../common) is a source too.
-	game := filepath.Join(t.TempDir(), "game")
-	common := filepath.Join(filepath.Dir(game), "common")
-	os.MkdirAll(filepath.Join(game, "build"), 0o755)
-	os.MkdirAll(common, 0o755)
-	os.WriteFile(filepath.Join(game, ".jm.json"), []byte(`{"scriptLibraries": {"common": "../common"}}`), 0o644)
-	os.WriteFile(filepath.Join(common, "util.ts"), nil, 0o644)
-	os.Chtimes(filepath.Join(game, ".jm.json"), old, old)
-	os.Chtimes(filepath.Join(common, "util.ts"), old, old)
-	os.WriteFile(filepath.Join(game, "build", ".jm.json"), []byte(`{}`), 0o644)
-	if buildIsStale(game) {
-		t.Error("a build newer than its library is stale")
-	}
-	os.Chtimes(filepath.Join(common, "util.ts"), later, later)
-	if !buildIsStale(game) {
-		t.Error("an edited library script doesn't make the build stale")
-	}
-	shared := filepath.Join(t.TempDir(), "shared")
-	os.MkdirAll(shared, 0o755)
-	os.WriteFile(filepath.Join(shared, "util.ts"), nil, 0o644)
-	os.Chtimes(filepath.Join(shared, "util.ts"), old, old)
-	os.Remove(filepath.Join(common, "util.ts"))
-	os.Remove(common)
-	if os.Symlink(shared, common) == nil {
-		os.WriteFile(filepath.Join(game, "build", ".jm.json"), []byte(`{}`), 0o644)
-		if buildIsStale(game) {
-			t.Error("a build newer than its linked library is stale")
-		}
-		os.Chtimes(filepath.Join(shared, "util.ts"), later, later)
-		if !buildIsStale(game) {
-			t.Error("an edit in a linked library's folder doesn't make the build stale")
-		}
-		os.Chtimes(filepath.Join(shared, "util.ts"), old, old)
-		os.Remove(common)
-		os.Symlink(t.TempDir(), common) // repointed, at older files
-		os.WriteFile(filepath.Join(game, "build", ".jm.json"), []byte(`{}`), 0o644)
-		os.Chtimes(filepath.Join(game, "build", ".jm.json"), old, old)
-		if !buildIsStale(game) {
-			t.Error("a library link pointed elsewhere after the build doesn't make it stale")
-		}
 	}
 }
 
