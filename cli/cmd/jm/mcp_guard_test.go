@@ -165,7 +165,9 @@ func TestRelativePathSettingsMeanWhereTheServerStarted(t *testing.T) {
 	os.WriteFile(filepath.Join(start, "engine"), []byte("#!/bin/sh\n"), 0o755)
 	t.Chdir(start)
 	t.Setenv("JM_ENGINE", "engine")
-	t.Setenv("TMPDIR", ".")
+	for _, key := range []string{"TMPDIR", "TMP", "TEMP"} { // Windows reads TMP, TEMP
+		t.Setenv(key, ".")
+	}
 	settlePathSettings()
 	t.Chdir(t.TempDir()) // a tool's work elsewhere
 	if engine, err := resolveEnginePath(); err != nil || evalOrSelf(engine) != evalOrSelf(filepath.Join(start, "engine")) {
