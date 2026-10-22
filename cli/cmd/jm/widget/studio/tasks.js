@@ -7,13 +7,12 @@ studioTabs.push((() => {
   // failed: why the last listing failed (the board then is the one before).
   const fresh = (game) => ({ game, asking: "", seq: 0, board: null, failed: "", draft: "", links: "", confirm: "", picked: null });
   let state = fresh(null);
-  const on = (ctx, args = {}) => ({ ...args, game: ctx.game.path });
   const failure = (e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] });
   const said = (r) => ((r && r.content) || [])[0]?.text || "no answer";
 
   const load = async (ctx) => {
     const n = ++state.seq, mine = state;
-    const r = await ctx.call("tasks", on(ctx)).catch(failure);
+    const r = await ctx.call("tasks", {}).catch(failure);
     if (n !== mine.seq || mine !== state) return;
     state.failed = show(r) ? "" : "Couldn't read the board: " + said(r);
     ctx.rerender();
@@ -29,7 +28,7 @@ studioTabs.push((() => {
   const change = async (ctx, name, args) => {
     state.confirm = "";
     const n = ++state.seq, mine = state;  // a list asked before this is stale; so is this, once another goes
-    const r = await ctx.call(name, on(ctx, args)).catch(failure);
+    const r = await ctx.call(name, args).catch(failure);
     if (n !== mine.seq || mine !== state) return false;
     if (r && r.isError) ctx.say("Couldn't: " + said(r));
     else if (show(r)) state.failed = "";
