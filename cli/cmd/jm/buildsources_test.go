@@ -100,6 +100,24 @@ func TestABuildIsStaleWhenItsSourcesDiffer(t *testing.T) {
 		t.Error("a build of a game that is its own library is stale from its own output")
 	}
 
+	// What a run writes where its JM_* variables say, or in Logs/ however it's cased, isn't a source;
+	// an in-game library's hidden folder is.
+	t.Setenv("JM_NET_TRACE", "net.jsonl")
+	inner := t.TempDir()
+	os.MkdirAll(filepath.Join(inner, "lib", ".internal"), 0o755)
+	os.MkdirAll(filepath.Join(inner, "Logs"), 0o755)
+	os.WriteFile(filepath.Join(inner, ".jm.json"), []byte(`{"scriptLibraries": {"lib": "lib"}}`), 0o644)
+	builtFrom(t, inner)
+	os.WriteFile(filepath.Join(inner, "net.jsonl"), []byte("{}"), 0o644)
+	os.WriteFile(filepath.Join(inner, "Logs", "engine.log"), nil, 0o644)
+	if buildIsStale(inner) {
+		t.Error("a run's trace or log made the build stale")
+	}
+	os.WriteFile(filepath.Join(inner, "lib", ".internal", "x.ts"), nil, 0o644)
+	if !buildIsStale(inner) {
+		t.Error("an in-game library's hidden folder isn't a source")
+	}
+
 	// A script library beside the game (../common), its hidden folders, and what a link to one leads to, are sources too.
 	game := filepath.Join(t.TempDir(), "game")
 	common := filepath.Join(filepath.Dir(game), "common")
@@ -124,9 +142,12 @@ func TestABuildIsStaleWhenItsSourcesDiffer(t *testing.T) {
 	shared := filepath.Join(t.TempDir(), "shared")
 	os.MkdirAll(shared, 0o755)
 	os.WriteFile(filepath.Join(shared, "util.ts"), nil, 0o644)
-	os.Remove(filepath.Join(common, "util.ts"))
-	os.Remove(common)
-	if os.Symlink(shared, common) == nil {
+	if err := os.RemoveAll(common); err != nil {
+		t.Fatal(err)
+	}
+	if os.Symlink(shared, common) != nil {
+		t.Log("no symlinks here")
+	} else {
 		builtFrom(t, game)
 		if buildIsStale(game) {
 			t.Error("a build of its linked library as it is is stale")

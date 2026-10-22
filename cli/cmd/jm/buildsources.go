@@ -27,12 +27,16 @@ import (
 const sourcesFile = ".sources"
 
 // notSources are the game's own folders jm and its runs write: builds and
-// their staging, exports, engine logs, captured frames. And node_modules anywhere: npm's.
+// their staging, exports, engine logs, captured frames.
 var notSources = []string{"build", outDir, outDir + ".modules", "build.old", "dist", "logs", "frames"}
 
-// buildSources are the game at root's sources: its files (not hidden ones, nor
-// archives, nor in notSources), what its manifest names though missing (""),
-// and its script libraries' files, as jm build copies them.
+// runOutputs are the JM_* variables naming where a run writes (as peerEnv
+// gives each peer its own): set in this process (jm run --watch), not sources.
+var runOutputs = []string{"JM_CAPTURE_DIR", "JM_DUMP_DIR", "JM_SAVE_DIR", "JM_RECORD_DIR", "JM_NET_TRACE", "JM_DRIVE_RECORD", "JM_ERRORS", "JM_PROFILE"}
+
+// buildSources are the game at root's sources: its files but hidden ones,
+// archives and what jm and runs write; what its manifest names though missing
+// (""); and its script libraries' files as jm build copies them (all but node_modules).
 func buildSources(root string) map[string]string {
 	out := map[string]string{}
 	stamp := func(key, file string) {
@@ -42,27 +46,48 @@ func buildSources(root string) map[string]string {
 		}
 	}
 	realRoot := evalOrSelf(root)
-	// walk stamps top's files; game: the game's folder (hidden ones, archives and notSources aren't its sources).
-	walk := func(top string, game bool, key func(string) string) {
+	var outputs []string
+	for _, v := range runOutputs {
+		if p := os.Getenv(v); p != "" && p != "-" {
+			if !filepath.IsAbs(p) {
+				p = filepath.Join(realRoot, p)
+			}
+			outputs = append(outputs, filepath.Clean(p))
+		}
+	}
+	// output: file is one jm or a run writes.
+	output := func(file string) bool {
+		rel, err := filepath.Rel(realRoot, file)
+		if err == nil && filepath.IsLocal(rel) {
+			first, _, _ := strings.Cut(filepath.ToSlash(rel), "/")
+			if slices.ContainsFunc(notSources, func(n string) bool { return strings.EqualFold(n, first) }) {
+				return true
+			}
+		}
+		return slices.ContainsFunc(outputs, func(o string) bool { return file == o || strings.HasPrefix(file, o+string(filepath.Separator)) })
+	}
+	// walk stamps top's files; the game's (top is the game) but hidden ones and archives.
+	walk := func(top string, key func(string) string) {
+		game := top == realRoot
 		_ = filepath.WalkDir(top, func(file string, d fs.DirEntry, err error) error {
 			if err != nil || file == top {
 				return nil
 			}
 			name := d.Name()
-			mine := game && (strings.HasPrefix(name, ".") || (filepath.Dir(file) == top && slices.Contains(notSources, name)))
+			skip := output(file) || name == "node_modules" || (game && strings.HasPrefix(name, "."))
 			if d.IsDir() {
-				if mine || name == "node_modules" || file == realRoot {
-					return filepath.SkipDir // file == realRoot: a library holding the game, whose files are the game's
+				if skip || (!game && file == realRoot) { // a library holding the game: the game's files are the game's
+					return filepath.SkipDir
 				}
 				return nil
 			}
-			if !mine && !(game && strings.HasSuffix(name, ".jm")) {
+			if !skip && !(game && strings.HasSuffix(name, ".jm")) {
 				stamp(key(file), file)
 			}
 			return nil
 		})
 	}
-	walk(realRoot, true, func(file string) string { rel, _ := filepath.Rel(realRoot, file); return filepath.ToSlash(rel) })
+	walk(realRoot, func(file string) string { rel, _ := filepath.Rel(realRoot, file); return filepath.ToSlash(rel) })
 	stamp(archive.ManifestEntryKey, filepath.Join(root, archive.ManifestEntryKey))
 	man, err := manifest.LoadManifest(filepath.Join(root, archive.ManifestEntryKey))
 	if err != nil {
@@ -80,11 +105,10 @@ func buildSources(root string) map[string]string {
 			out[src] = ""
 			continue
 		}
-		if top == realRoot || strings.HasPrefix(top, realRoot+string(filepath.Separator)) {
-			continue // in the game: walked as the game's
-		}
 		out[src] = "library " + top // where it leads: pointed elsewhere is a change
-		walk(top, false, func(file string) string { return file })
+		if top != realRoot {
+			walk(top, func(file string) string { return file })
+		}
 	}
 	return out
 }
