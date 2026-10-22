@@ -160,6 +160,32 @@ func TestNotesOfOneTitleAreTwoPlaces(t *testing.T) {
 	}
 }
 
+// A file named Foo.md.md is linked by its name with .md, Foo.md being another.
+func TestARelationToAFileNamedWithItsExtension(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	os.WriteFile(filepath.Join(root, Dir, "Foo.md"), []byte("# Foo\n"), 0o644)
+	os.WriteFile(filepath.Join(root, Dir, "Foo.md.md"), []byte("# Foo.md\n"), 0o644)
+	n, err := Relate(root, "Pillars", Relation{Type: "uses", Target: "design/Foo.md.md"})
+	if err != nil || !slices.ContainsFunc(n.Relations, func(r Relation) bool { return r.Target == "Foo.md.md" }) {
+		t.Errorf("%v %+v", err, n.Relations)
+	}
+}
+
+// A link two notes answer by link rules is a conflict, though a tool's ref of
+// the same text is one note's path (design/Harbor.md).
+func TestALinkTwoNotesAnswerIsAConflict(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	os.MkdirAll(filepath.Join(root, Dir, "design"), 0o755)
+	os.WriteFile(filepath.Join(root, Dir, "Harbor.md"), []byte("---\ntitle: \"design/Harbor\"\n---\n\n# design/Harbor\n"), 0o644)
+	os.WriteFile(filepath.Join(root, Dir, "design", "Harbor.md"), []byte("# Harbor\n"), 0o644)
+	os.WriteFile(filepath.Join(root, Dir, "Map.md"), []byte("# Map\n\nSee [[design/Harbor]].\n"), 0o644)
+	if c := WorldOf(root).Conflicts(); !slices.ContainsFunc(c, func(c Conflict) bool { return strings.Contains(c.Message, "Map's [[design/Harbor]]: it's 2 notes") }) {
+		t.Errorf("%+v", c)
+	}
+}
+
 // A road stated from both ends with two lengths, and a place inside itself.
 func TestTheWorldsConflicts(t *testing.T) {
 	root := warringNations(t)
@@ -337,5 +363,53 @@ func TestTheWorldSaysWhatItCouldntRead(t *testing.T) {
 	defer os.Chmod(locations, 0o755)
 	if w := WorldOf(root); w.Unread == nil || !strings.Contains(w.Unread.Error(), "Locations") {
 		t.Errorf("an unlistable folder: %v", w.Unread)
+	}
+}
+
+// A relation is written as a link that finds its note alone; when none can
+// (two paths differing only in case), it isn't written.
+func TestARelationsLinkFindsItsNoteAlone(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	for _, d := range []string{"North", "South"} {
+		os.MkdirAll(filepath.Join(root, Dir, d), 0o755)
+		os.WriteFile(filepath.Join(root, Dir, d, "Harbor.md"), []byte("---\ntitle: \"Harbor\"\n---\n\n# Harbor\n"), 0o644)
+	}
+	n, err := Relate(root, "Pillars", Relation{Type: "mentions_place", Target: "design/South/Harbor.md"})
+	if err != nil || !slices.ContainsFunc(n.Relations, func(r Relation) bool { return r.Target == "South/Harbor" }) {
+		t.Errorf("%v %+v", err, n.Relations)
+	}
+	w := World{Notes: []Note{{Title: "Harbor", Path: "design/North/Harbor.md"}, {Title: "Harbor", Path: "design/north/Harbor.md"}}}
+	if w.linksOnly("north/Harbor", w.Notes[1]) || NameOf(w.Notes, w.Notes[1]) != "design/north/Harbor.md" {
+		t.Error("a link for one of two paths differing in case")
+	}
+}
+
+// A title a [[link]] can't hold (C#: the link ends at #; `C`: a code span)
+// isn't the name written: the note's file name is.
+func TestARelationToATitleALinkCantHoldUsesItsFileName(t *testing.T) {
+	for file, title := range map[string]string{"csharp": "C#", "c": "`C`"} {
+		root := t.TempDir()
+		Scaffold(root)
+		os.WriteFile(filepath.Join(root, Dir, file+".md"), []byte("---\ntitle: \""+title+"\"\n---\n\n# "+title+"\n"), 0o644)
+		n, err := Relate(root, "Pillars", Relation{Type: "uses", Target: "design/" + file + ".md"})
+		if err != nil || !slices.ContainsFunc(n.Relations, func(r Relation) bool { return r.Target == file }) {
+			t.Errorf("%s: %v %+v", title, err, n.Relations)
+		}
+	}
+}
+
+// A link resolves by link rules, not a tool's: [[design/Harbor]] is
+// design/design/Harbor.md's (a note's path is past design/), so it's written.
+func TestARelationsLinkIsByLinkRules(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	os.MkdirAll(filepath.Join(root, Dir, "design"), 0o755)
+	for _, p := range []string{"Harbor.md", "design/Harbor.md"} {
+		os.WriteFile(filepath.Join(root, Dir, p), []byte("---\ntitle: \"Harbor\"\n---\n\n# Harbor\n"), 0o644)
+	}
+	n, err := Relate(root, "Pillars", Relation{Type: "mentions_place", Target: "design/design/Harbor.md"})
+	if err != nil || !slices.ContainsFunc(n.Relations, func(r Relation) bool { return r.Target == "design/Harbor" }) {
+		t.Errorf("%v %+v", err, n.Relations)
 	}
 }

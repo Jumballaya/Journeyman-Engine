@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,8 +23,8 @@ func TestScaffoldMakesAVaultAndKeepsWhatsThere(t *testing.T) {
 	if data, _ := os.ReadFile(filepath.Join(root, Dir, "Pitch.md")); string(data) != "mine" {
 		t.Errorf("the person's pitch was replaced: %q", data)
 	}
-	design, ok := Find(root, "design")
-	if !ok || design.Type != "index" || strings.Join(design.Links, ",") != "Pitch,Pillars,Levels,Systems,Art,Decisions,Notes" {
+	design, err := Find(root, "design")
+	if err != nil || design.Type != "index" || strings.Join(design.Links, ",") != "Pitch,Pillars,Levels,Systems,Art,Decisions,Notes" {
 		t.Errorf("Design: %+v", design)
 	}
 	if again, _ := Scaffold(root); len(again) != 0 {
@@ -50,7 +51,7 @@ func TestObserveAddsToTheNotesObservations(t *testing.T) {
 	if len(n.Observations) != 2 || n.Observations[0] != (Observation{"feel", "1-1's pit is unfair at the end"}) || strings.Join(n.Links, ",") != "Pillars,Design" {
 		t.Errorf("parsed: %+v", n)
 	}
-	if back := Backlinks(root, mustFind(t, root, "Pillars")); strings.Join(back, ",") != "Design,Levels" {
+	if back := Backlinks(root, mustFind(t, root, "Pillars")); fmt.Sprint(back) != "[{Design design/Design.md} {Levels design/Levels.md}]" {
 		t.Errorf("Pillars' backlinks: %v", back)
 	}
 	made, err := Observe(root, "Boss ideas", "idea", "a mirror boss")
@@ -84,8 +85,8 @@ func TestDecideWritesADecisionNoteListedInDecisions(t *testing.T) {
 
 func mustFind(t *testing.T, root, name string) Note {
 	t.Helper()
-	n, ok := Find(root, name)
-	if !ok {
+	n, err := Find(root, name)
+	if err != nil {
 		t.Fatalf("no note %s", name)
 	}
 	return n
@@ -204,7 +205,7 @@ func TestCodeInANoteIsntMemory(t *testing.T) {
 		t.Errorf("observations %v, links %v", n.Observations, n.Links)
 	}
 	pillars, _ := Find(root, "Pillars")
-	if slices.Contains(Backlinks(root, pillars), "Howto") {
+	if slices.Contains(Backlinks(root, pillars), Ref{"Howto", Dir + "/Howto.md"}) {
 		t.Error("Pillars is linked from code only")
 	}
 }
@@ -217,9 +218,9 @@ func TestASingleQuotedTitleIsFound(t *testing.T) {
 	if _, err := Observe(root, "Rock 'n' roll", "", "loud"); err != nil {
 		t.Fatal(err)
 	}
-	n, ok := Find(root, "Rock 'n' roll")
-	if !ok || n.Path != Dir+"/rock.md" || len(n.Observations) != 1 {
-		t.Errorf("found %v %+v", ok, n)
+	n, err := Find(root, "Rock 'n' roll")
+	if err != nil || n.Path != Dir+"/rock.md" || len(n.Observations) != 1 {
+		t.Errorf("found %v %+v", err, n)
 	}
 	if len(Notes(root)) != len(scaffold)-2+1 {
 		t.Errorf("another note was made: %d notes", len(Notes(root)))
@@ -283,8 +284,8 @@ func TestADesignLinkInTheGameIsTheNotes(t *testing.T) {
 	if !strings.Contains(string(data), "mine") || !strings.Contains(string(data), "- [note] first") || !strings.Contains(string(data), "- [note] second") {
 		t.Errorf("Notes.md:\n%s", data)
 	}
-	if n, ok := Find(root, "Notes"); !ok || n.Path != Dir+"/Notes.md" || len(Notes(root)) < 2 {
-		t.Errorf("found %v %+v; %d notes", ok, n, len(Notes(root)))
+	if n, err := Find(root, "Notes"); err != nil || n.Path != Dir+"/Notes.md" || len(Notes(root)) < 2 {
+		t.Errorf("found %v %+v; %d notes", err, n, len(Notes(root)))
 	}
 }
 
@@ -312,8 +313,8 @@ func TestATitlesCommentIsntItsTitle(t *testing.T) {
 		os.WriteFile(filepath.Join(root, Dir, file), []byte("---\ntitle: "+title+"\n---\n\n# x\n"), 0o644)
 	}
 	for name, file := range map[string]string{"Rock": "a.md", "It's": "b.md", "Plain": "c.md", "C#": "d.md"} {
-		if n, ok := Find(root, name); !ok || n.Path != Dir+"/"+file {
-			t.Errorf("%s: %v %+v", name, ok, n)
+		if n, err := Find(root, name); err != nil || n.Path != Dir+"/"+file {
+			t.Errorf("%s: %v %+v", name, err, n)
 		}
 	}
 	before := len(Notes(root))
@@ -364,15 +365,15 @@ func TestATabbedTitleCommentIsntTheTitle(t *testing.T) {
 	Scaffold(root)
 	os.WriteFile(filepath.Join(root, Dir, "tab.md"), []byte("---\ntitle: Tab title\t# comment\n---\n\n# x\n"), 0o644)
 	os.WriteFile(filepath.Join(root, Dir, "csharp.md"), []byte("---\ntitle: C# # language\n---\n\n# x\n"), 0o644)
-	if n, ok := Find(root, "C#"); !ok || n.Path != Dir+"/csharp.md" {
-		t.Errorf("C#: %v %+v", ok, n)
+	if n, err := Find(root, "C#"); err != nil || n.Path != Dir+"/csharp.md" {
+		t.Errorf("C#: %v %+v", err, n)
 	}
 	before := len(Notes(root))
 	if _, err := Observe(root, "Tab title", "", "x"); err != nil || len(Notes(root)) != before {
 		t.Errorf("observe made another note: %v", err)
 	}
-	if n, ok := Find(root, "Tab title"); !ok || n.Path != Dir+"/tab.md" {
-		t.Errorf("found %v %+v", ok, n)
+	if n, err := Find(root, "Tab title"); err != nil || n.Path != Dir+"/tab.md" {
+		t.Errorf("found %v %+v", err, n)
 	}
 }
 
@@ -475,5 +476,100 @@ func TestARelativeGamesLinkedDesignFolderGetsNothing(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
 		t.Errorf("wrote outside the game: %v", entries)
+	}
+}
+
+// A note is its path: two titled Harbor are each found by theirs, and a
+// change to "Harbor" is refused (asked which) rather than made to the first.
+func TestTwoNotesOfOneTitleAreEachTheirPath(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	for _, side := range []string{"North", "South"} {
+		os.MkdirAll(filepath.Join(root, Dir, side), 0o755)
+		os.WriteFile(filepath.Join(root, Dir, side, "Harbor.md"), []byte("---\ntitle: \"Harbor\"\n---\n\n# Harbor\n"), 0o644)
+	}
+	if _, err := Find(root, "Harbor"); err == nil || errors.Is(err, ErrNoNote) || !strings.Contains(err.Error(), "design/South/Harbor.md") {
+		t.Errorf("Harbor: %v", err)
+	}
+	if _, err := Observe(root, "Harbor", "", "gulls"); err == nil {
+		t.Error("an observation for either Harbor was written")
+	}
+	n, err := Observe(root, "design/South/Harbor.md", "", "gulls")
+	if err != nil || n.Path != "design/South/Harbor.md" {
+		t.Fatalf("South: %+v %v", n, err)
+	}
+	if north, _ := Find(root, "North/Harbor"); len(north.Observations) != 0 {
+		t.Errorf("North got it: %+v", north)
+	}
+	if _, err := Find(root, "Lighthouse"); !errors.Is(err, ErrNoNote) {
+		t.Errorf("no Lighthouse: %v", err)
+	}
+	if _, err := Decide(root, "Harbor", "why"); err == nil {
+		t.Error("a decision took a name two notes have")
+	}
+}
+
+// A path in its own case is one note; in another case, one on a case-blind
+// disk, and several (North/, north/ on a case-keeping one) are asked which.
+func TestAPathInItsCaseIsItsNote(t *testing.T) {
+	all := []Note{{Title: "Harbor", Path: "design/North/Harbor.md"}, {Title: "Harbor", Path: "design/north/Harbor.md"}, {Title: "Inn", Path: "design/Inn.md"}}
+	for ref, want := range map[string]string{"design/North/Harbor.md": "design/North/Harbor.md", "design/north/Harbor": "design/north/Harbor.md", "design/inn.md": "design/Inn.md"} {
+		if got := named(all, ref); len(got) != 1 || got[0].Path != want {
+			t.Errorf("%s: %v", ref, got)
+		}
+	}
+	if got := named(all, "design/NORTH/harbor.md"); len(got) != 2 {
+		t.Errorf("another case of two paths: %v", got)
+	}
+}
+
+// A note's name is the shortest that finds it: a.md titled Harbor beside
+// Harbor.md (titled Port) is "a", its title naming both.
+func TestANotesNameFindsIt(t *testing.T) {
+	all := []Note{{Title: "Harbor", Path: "design/a.md"}, {Title: "Port", Path: "design/Harbor.md"}, {Title: "Gate", Path: "design/North/Gate.md"}, {Title: "Gate", Path: "design/South/Gate.md"}}
+	for i, want := range []string{"a", "Port", "North/Gate", "South/Gate"} {
+		if got := NameOf(all, all[i]); got != want {
+			t.Errorf("%s: %q, want %q", all[i].Path, got, want)
+		}
+	}
+}
+
+// A [[link]] is read by link rules, a tool's ref by its own: [[design/Z]] is
+// the note titled so, the ref design/Z the note at design/Z.md.
+func TestALinkAndARefOfOneTextAreTwoNotes(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	os.WriteFile(filepath.Join(root, Dir, "A.md"), []byte("---\ntitle: \"design/Z\"\n---\n\n# design/Z\n"), 0o644)
+	os.WriteFile(filepath.Join(root, Dir, "Z.md"), []byte("# Z\n"), 0o644)
+	if n, err := FindLink(root, "design/Z"); err != nil || n.Path != "design/A.md" {
+		t.Errorf("the link: %+v %v", n, err)
+	}
+	if n, err := Find(root, "design/Z"); err != nil || n.Path != "design/Z.md" {
+		t.Errorf("the ref: %+v %v", n, err)
+	}
+	if _, err := FindLink(root, "Nowhere"); !errors.Is(err, ErrNoNote) {
+		t.Errorf("no note: %v", err)
+	}
+}
+
+// A ref's .md is taken off once: Foo.md.md is that file, not Foo.md.
+func TestARefsExtensionIsTakenOffOnce(t *testing.T) {
+	all := []Note{{Title: "Foo", Path: "design/Foo.md"}, {Title: "Foo.md", Path: "design/Foo.md.md"}}
+	if found := named(all, "Foo.md.md"); len(found) != 1 || found[0].Path != "design/Foo.md.md" {
+		t.Errorf("%+v", found)
+	}
+}
+
+// The decisions index is the scaffold's Decisions.md, whatever else is titled so.
+func TestADecisionIsIndexedBesideAnotherDecisions(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	os.MkdirAll(filepath.Join(root, Dir, "old"), 0o755)
+	os.WriteFile(filepath.Join(root, Dir, "old", "Decisions.md"), []byte("---\ntitle: \"Decisions\"\n---\n\n# Decisions\n"), 0o644)
+	if _, err := Decide(root, "Coins respawn", "fair"); err != nil {
+		t.Fatal(err)
+	}
+	if index, _ := Find(root, Dir+"/Decisions.md"); !slices.Contains(index.Links, "Coins respawn") {
+		t.Errorf("not indexed: %v", index.Links)
 	}
 }

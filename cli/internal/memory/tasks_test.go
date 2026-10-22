@@ -67,7 +67,7 @@ func TestTheBoardKeepsHandEdits(t *testing.T) {
 	if boardFile(t, root) != got {
 		t.Error("removing a task that isn't changed the file")
 	}
-	if n, ok := Find(root, "Tasks"); !ok || n.Title != "Tasks" {
+	if n, err := Find(root, "Tasks"); err != nil || n.Title != "Tasks" {
 		t.Errorf("the board isn't a note: %+v", n)
 	}
 }

@@ -260,7 +260,7 @@ func TestMCPPromptsAndMemoryTools(t *testing.T) {
 		t.Errorf("prompts: %v %v", replies[1], replies[2])
 	}
 	read := jsonOf(replies[4])
-	if !strings.Contains(read, `- [pillar] jumps feel exact`) || !strings.Contains(read, `"backlinks":["Design"]`) || !strings.Contains(read, "obsidian://open?path=") {
+	if !strings.Contains(read, `- [pillar] jumps feel exact`) || !strings.Contains(read, `"backlinks":[{"path":"design/Design.md","title":"Design"}]`) || !strings.Contains(read, "obsidian://open?path=") {
 		t.Errorf("memory: %s", read)
 	}
 }
@@ -284,7 +284,7 @@ func TestMCPDossiers(t *testing.T) {
 	if list := jsonOf(replies[3]); !strings.Contains(list, "Irongate (design/Locations/Irongate.md)") || strings.Contains(list, "Mara") {
 		t.Errorf("memory kind: %s", list)
 	}
-	if read := jsonOf(replies[4]); !strings.Contains(read, `"backlinks":["Mara Dorne"]`) {
+	if read := jsonOf(replies[4]); !strings.Contains(read, `"backlinks":[{"path":"design/Characters/Mara Dorne.md","title":"Mara Dorne"}]`) {
 		t.Errorf("Mara's home links Irongate: %s", read)
 	}
 	if all := jsonOf(replies[5]); !strings.Contains(all, "character (design/Characters/): role, faction, home, portrait") {
@@ -429,13 +429,13 @@ func TestMCPOnboard(t *testing.T) {
 // given and when not, and the same from the playbook tool.
 func TestPlaybooks(t *testing.T) {
 	p, _ := findPlaybook("new_dossiers")
-	if text, _ := p.fill(map[string]string{"kind": "character"}); !strings.HasPrefix(text, "Make 3 character dossiers. memory with kind character") {
+	if text, _ := p.fill("", map[string]string{"kind": "character"}); !strings.HasPrefix(text, "Make 3 character dossiers. memory with kind character") {
 		t.Errorf("defaults: %s", text)
 	}
-	if text, _ := p.fill(map[string]string{"kind": "item", "count": "5", "theme": "relics of Varn"}); !strings.HasPrefix(text, "Make 5 item dossiers, relics of Varn.") {
+	if text, _ := p.fill("", map[string]string{"kind": "item", "count": "5", "theme": "relics of Varn"}); !strings.HasPrefix(text, "Make 5 item dossiers, relics of Varn.") {
 		t.Errorf("given: %s", text)
 	}
-	if _, err := p.fill(nil); err == nil || !strings.Contains(err.Error(), "kind") {
+	if _, err := p.fill("", nil); err == nil || !strings.Contains(err.Error(), "kind") {
 		t.Errorf("no kind: %v", err)
 	}
 	for _, p := range playbooks {
@@ -443,7 +443,7 @@ func TestPlaybooks(t *testing.T) {
 		for _, a := range p.args {
 			args[a.name] = "X"
 		}
-		if text, err := p.fill(args); err != nil || strings.ContainsAny(text, "{}") {
+		if text, err := p.fill("", args); err != nil || strings.ContainsAny(text, "{}") {
 			t.Errorf("%s: %v %s", p.name, err, text)
 		}
 	}
@@ -481,7 +481,7 @@ func TestPlaybooks(t *testing.T) {
 	}
 }
 
-// Two notes of one title complete by their paths, each one usable.
+// Two notes of one title complete by their folder/titles, each one usable.
 func TestPlaybookCompletionsTellNotesApart(t *testing.T) {
 	root := t.TempDir()
 	for _, f := range []string{"North", "South"} {
@@ -489,16 +489,29 @@ func TestPlaybookCompletionsTellNotesApart(t *testing.T) {
 		os.WriteFile(filepath.Join(root, "design", f, "Harbor.md"), []byte("---\ntype: location\n---\n# Harbor\n"), 0o644)
 	}
 	os.WriteFile(filepath.Join(root, "design", "Pitch.md"), []byte("# Pitch\n"), 0o644)
-	if got := strings.Join(knowledgeValues(root, "note"), ","); got != "Pitch,design/North/Harbor.md,design/South/Harbor.md" {
+	if got := strings.Join(knowledgeValues(root, "note"), ","); got != "North/Harbor,Pitch,South/Harbor" {
 		t.Errorf("notes: %s", got)
 	}
-	if got := strings.Join(knowledgeValues(root, "place"), ","); got != "design/North/Harbor.md,design/South/Harbor.md" {
+	if got := strings.Join(knowledgeValues(root, "place"), ","); got != "North/Harbor,South/Harbor" {
 		t.Errorf("places: %s", got)
 	}
 }
 
-// A prompt asked wrong is an error, not a crash; a note by its path is linked from the vault.
-func TestPromptErrorsAndPathLinks(t *testing.T) {
+// A playbook that links a note in its prose ([[{a}]]) names it to tools by
+// the argument as given ({a}): a link and a ref can be two notes.
+func TestAPlaybookGivesToolsTheRefItLinks(t *testing.T) {
+	for _, p := range playbooks {
+		for _, a := range p.args {
+			link := "[[{" + a.name + "}]]"
+			if strings.Contains(p.text, link) && !strings.Contains(strings.ReplaceAll(p.text, link, ""), "{"+a.name+"}") {
+				t.Errorf("%s links {%s} but gives no tool the ref", p.name, a.name)
+			}
+		}
+	}
+}
+
+// A prompt asked wrong is an error, not a crash.
+func TestPromptErrors(t *testing.T) {
 	replies := mcpSession(t, `{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"canon_check"}}`,
 		`{"jsonrpc":"2.0","id":2,"method":"prompts/get","params":{"name":"nope"}}`, `{"jsonrpc":"2.0","id":3,"method":"ping"}`)
 	for _, id := range []float64{1, 2} {
@@ -509,9 +522,23 @@ func TestPromptErrorsAndPathLinks(t *testing.T) {
 	if replies[3] == nil {
 		t.Error("the server stopped")
 	}
-	p, _ := findPlaybook("canon_check")
-	if text, _ := p.fill(map[string]string{"note": "design/South/Harbor.md"}); !strings.Contains(text, "Check [[South/Harbor]] against") || !strings.Contains(text, "design/South/Harbor.md") && strings.Contains(text, "{note}") {
-		t.Errorf("by path: %s", text)
+}
+
+// A playbook's [[link]] to a note is the one the game's notes write to reach
+// it, whatever the argument named it by: a path, a title, a folder/title.
+func TestAPlaybooksLinkIsTheNotesLink(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "design", "Locations"), 0o755)
+	os.WriteFile(filepath.Join(root, "design", "Locations", "Harbor.md"), []byte("---\ntype: location\n---\n# Harbor\n"), 0o644)
+	os.WriteFile(filepath.Join(root, "design", "A.md"), []byte("# Locations/Harbor\n"), 0o644) // [[Locations/Harbor]] is this one's title
+	p, _ := findPlaybook("level_from_place")
+	for _, ref := range []string{"design/Locations/Harbor.md", "Harbor"} {
+		if text, _ := p.fill(root, map[string]string{"place": ref}); !strings.Contains(text, "Turn [[Harbor]] into a level") || !strings.Contains(text, "note "+ref) {
+			t.Errorf("%s: %s", ref, text)
+		}
+	}
+	if text, _ := p.fill(root, map[string]string{"place": "Nowhere"}); !strings.Contains(text, "Turn [[Nowhere]] into") {
+		t.Errorf("not a note: %s", text)
 	}
 }
 

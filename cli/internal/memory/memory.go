@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -120,25 +121,99 @@ func notes(root string) ([]Note, error) {
 	return out, cmp.Or(unread, walked)
 }
 
-// Find is the note name means: its title or file name (any case), or path.
-func Find(root, name string) (Note, bool) {
-	key := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(name), ".md"))
-	for _, n := range Notes(root) {
-		if strings.ToLower(n.Title) == key || strings.ToLower(strings.TrimSuffix(n.Path, ".md")) == key ||
-			strings.ToLower(strings.TrimSuffix(filepath.Base(n.Path), ".md")) == key {
-			return n, true
+// ErrNoNote: no note is the one named.
+var ErrNoNote = errors.New("no note")
+
+// Find is the one note ref means: the note at its path (design/North/Harbor.md),
+// else the one it names as a [[ref]] would. ErrNoNote when none is; an error
+// naming each by its path when several are (two Harbors: say which).
+func Find(root, ref string) (Note, error) {
+	switch found := named(Notes(root), ref); len(found) {
+	case 0:
+		return Note{}, fmt.Errorf("%w %q (memory lists them)", ErrNoNote, strings.TrimSpace(ref))
+	case 1:
+		return found[0], nil
+	default:
+		var paths []string
+		for _, n := range found {
+			paths = append(paths, n.Path)
 		}
+		return Note{}, fmt.Errorf("%q is %d notes: say which by its path (%s)", strings.TrimSpace(ref), len(found), strings.Join(paths, ", "))
 	}
-	return Note{}, false
 }
 
-// Backlinks are the titles of the notes that link to n.
-func Backlinks(root string, n Note) []string {
-	out := []string{}
+// FindLink is the note [[link]] names, read as the world reads a note's links
+// (link rules: a path doesn't win; of several, the first, which health reports).
+func FindLink(root, link string) (Note, error) {
+	if found := linked(Notes(root), link); len(found) > 0 {
+		return found[0], nil
+	}
+	return Note{}, fmt.Errorf("%w [[%s]] (memory lists them)", ErrNoNote, strings.TrimSpace(link))
+}
+
+// named are the notes ref may mean: the one at its path (.md optional) alone,
+// else those at it in any case (one, on a case-blind disk), else each a
+// [[ref]] names (title, file name or folder/title).
+func named(all []Note, ref string) []Note {
+	ref = strings.TrimSpace(ref)
+	path := strings.TrimSuffix(ref, ".md")
+	var found []Note
+	for _, n := range all {
+		switch p := strings.TrimSuffix(n.Path, ".md"); {
+		case p == path:
+			return []Note{n}
+		case strings.EqualFold(p, path):
+			found = append(found, n)
+		}
+	}
+	if len(found) > 0 {
+		return found
+	}
+	return linked(all, ref)
+}
+
+// linked are the notes a [[link]] names, by link rules (none put first).
+func linked(all []Note, link string) []Note {
+	var found []Note
+	for _, n := range all {
+		if linksTo(link, n) {
+			found = append(found, n)
+		}
+	}
+	return found
+}
+
+// NameOf is the shortest name Find gives n alone by (a tool's note argument):
+// its title, else its file name, else its folder/file, else its path.
+// A [[link]]'s name is World.linkFor's: links resolve by other rules.
+func NameOf(all []Note, n Note) string {
+	for _, name := range shortNames(n) {
+		if found := named(all, name); len(found) == 1 && found[0].Path == n.Path {
+			return name
+		}
+	}
+	return n.Path
+}
+
+// shortNames are n's names, shortest kind first: title, file name, folder/file.
+func shortNames(n Note) []string {
+	stem := strings.TrimSuffix(strings.TrimPrefix(n.Path, Dir+"/"), ".md")
+	return []string{n.Title, path.Base(stem), stem}
+}
+
+// A Ref is a note as another shows it: by its title, found by its path.
+type Ref struct {
+	Title string `json:"title"`
+	Path  string `json:"path"`
+}
+
+// Backlinks are the notes that link to n.
+func Backlinks(root string, n Note) []Ref {
+	out := []Ref{}
 	for _, other := range Notes(root) {
 		for _, l := range other.Links {
 			if other.Path != n.Path && linksTo(l, n) {
-				out = append(out, other.Title)
+				out = append(out, Ref{other.Title, other.Path})
 				break
 			}
 		}
@@ -173,14 +248,17 @@ func Observe(root, note, category, text string) (Note, error) {
 		return Note{}, err
 	}
 	title := fileTitle(note)
-	n, ok := Find(root, note)
-	if !ok {
-		n, ok = Find(root, title)
+	n, err := Find(root, note)
+	if errors.Is(err, ErrNoNote) {
+		n, err = Find(root, title)
 	}
-	if _, unread := notes(root); !ok && unread != nil {
+	if !errors.Is(err, ErrNoNote) && err != nil { // two of that name: the one meant isn't guessed
+		return Note{}, err
+	}
+	if _, unread := notes(root); err != nil && unread != nil {
 		return Note{}, fmt.Errorf("a note can't be read (%v): it may be the one meant, so nothing was written", unread)
 	}
-	if !ok {
+	if err != nil {
 		if title == "" {
 			return Note{}, fmt.Errorf("%q can't be a note's name", note)
 		}
@@ -209,8 +287,12 @@ func Decide(root, title, why string) (Note, error) {
 		return Note{}, err
 	}
 	path := Dir + "/decisions/" + title + ".md"
-	index, indexed := Find(root, "Decisions")
-	if n, ok := Find(root, title); ok {
+	index, err := Find(root, Dir+"/Decisions.md") // the scaffold's: another titled Decisions isn't the index
+	indexed := err == nil
+	if n, err := Find(root, title); !errors.Is(err, ErrNoNote) {
+		if err != nil {
+			return Note{}, err
+		}
 		if n.Path != path || !indexed || slices.ContainsFunc(index.Links, func(l string) bool { return linksTo(l, n) }) {
 			return Note{}, fmt.Errorf("%s already exists: add to it with a note instead", n.Path)
 		}
