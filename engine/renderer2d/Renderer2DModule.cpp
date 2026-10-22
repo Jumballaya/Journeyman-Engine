@@ -804,6 +804,7 @@ void Renderer2DModule::describeState(Engine&, nlohmann::json& state) {
     if (c != glm::vec4(1.0f)) out["color"] = {tidy(c.r), tidy(c.g), tidy(c.b), tidy(c.a)};
     const glm::vec4& r = d.instance.texRect;
     if (r != glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)) out["texRect"] = {tidy(r.x), tidy(r.y), tidy(r.z), tidy(r.w)};
+    if (d.entity != kNoEntityId) out["entity"] = idJson(d.entity);
     return out;
   };
   nlohmann::json world = nlohmann::json::array(), screen = nlohmann::json::array();

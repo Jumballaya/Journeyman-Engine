@@ -38,6 +38,7 @@ class TileMapRenderSystem : public System {
     const Camera2D& camera = _renderer.camera();
     const glm::vec2 half = glm::vec2(_renderer.logicalSize()) * 0.5f / camera.zoom();
     for (auto [entity, map, transform] : world.view<TileMapComponent, TransformComponent>()) {
+      Renderer2D::DrawnFor drawn(_renderer, entity);
       const TileGrid& grid = map->grid;
       View view{camera.position() - half, camera.position() + half, glm::vec2(transform->position),
                 transform->position.z};

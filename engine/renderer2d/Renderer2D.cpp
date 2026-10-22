@@ -74,8 +74,8 @@ void Renderer2D::setLogicalSizeOverride(std::optional<glm::ivec2> size) {
 
 void Renderer2D::drawSprite(const glm::mat4& transform, const glm::vec4& color, const glm::vec4& texRect,
                             TextureHandle texture, float z, Lit lit) {
-  _worldItems.push_back(
-      {SpriteInstance{transform, color, texRect}, texture.isValid() ? texture : _white, z, lit, normalMap(texture)});
+  _worldItems.push_back({SpriteInstance{transform, color, texRect}, texture.isValid() ? texture : _white, z, lit,
+                         normalMap(texture), _drawingFor});
 }
 
 TextureHandle Renderer2D::normalMap(TextureHandle texture) const {
