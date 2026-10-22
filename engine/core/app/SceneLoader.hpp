@@ -31,6 +31,8 @@ class SceneLoader {
   // All or nothing: if an entry fails, the entities made so far are destroyed and it rethrows.
   std::vector<EntityId> loadScene(const std::filesystem::path& scenePath);
   std::vector<EntityId> loadScene(const AssetHandle& sceneHandle);
+  // A scene's JSON, as the scene at path (what its entities' origins name).
+  std::vector<EntityId> loadScene(const nlohmann::json& scene, const std::string& path);
 
   // One scene entry: {"name", "components": {...}} or {"name", "prefab", "overrides"},
   // with the entries in its "children" (and its prefab's) attached to it; an

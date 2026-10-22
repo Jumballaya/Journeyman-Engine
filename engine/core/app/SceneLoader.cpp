@@ -13,10 +13,13 @@ std::vector<EntityId> SceneLoader::loadScene(const std::filesystem::path& sceneP
 
 std::vector<EntityId> SceneLoader::loadScene(const AssetHandle& handle) {
   const RawAsset& asset = _assetManager.getRawAsset(handle);
-  const nlohmann::json scene = nlohmann::json::parse(asset.data.begin(), asset.data.end());
+  return loadScene(nlohmann::json::parse(asset.data.begin(), asset.data.end()), asset.filePath.generic_string());
+}
+
+std::vector<EntityId> SceneLoader::loadScene(const nlohmann::json& scene, const std::string& path) {
   _groups.clear();
   _skipped.clear();
-  _scene = asset.filePath.generic_string();
+  _scene = path;
   std::vector<EntityId> created;
   try {
     size_t index = 0;

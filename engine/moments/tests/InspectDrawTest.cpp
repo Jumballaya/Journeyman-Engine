@@ -72,3 +72,51 @@ TEST(InspectDraw, ParallaxIsByTheShownCamera) {
   ASSERT_EQ(seen["draw"]["world"].size(), 1u) << seen.dump();
   EXPECT_NEAR(seen["draw"]["world"][0]["center"][0].get<float>(), 500.0f, 1.0f);
 }
+
+namespace {
+
+// What the engine shows of entry in the game in dir (its .jm.json listing
+// main.scene.json and kid.prefab.json).
+nlohmann::json inspected(TempDir& game, const std::string& entry) {
+  EngineOptions options;
+  options.dev = DevOptions{};
+  options.dev.renderer = "none";
+  options.dev.entryScene = entry;
+  options.dev.inspectOut = game.path() / "seen.json";
+  options.dev.saveDir = game.path() / "save";
+  {
+    Engine engine(game.path(), ".jm.json", options);
+    engine.initialize();
+    engine.run();
+  }
+  std::ifstream in(options.dev.inspectOut);
+  return nlohmann::json::parse(in);
+}
+
+}  // namespace
+
+// Each entity says where it is in the world: a child placed from its parent,
+// turned with it. A prefab inspected is one of it, at the origin, entry "0".
+TEST(InspectDraw, EachEntityIsWhereTheWorldHasIt) {
+  TempDir game;
+  game.writeFile(".jm.json", R"({"name": "W", "entryScene": "main.scene.json", "scenes": ["main.scene.json"], "assets": ["kid.prefab.json"]})");
+  game.writeFile("kid.prefab.json", R"({"name": "kid", "components": {"TransformComponent": {"position": [3, 0, 0]}},
+    "children": [{"name": "Hat", "components": {"TransformComponent": {"position": [0, 2, 0]}}}]})");
+  game.writeFile("main.scene.json", R"({"name": "main", "entities": [
+    {"name": "Parent", "components": {"TransformComponent": {"position": [10, 0, 0], "rotation": 1.5707964}},
+     "children": [{"name": "Child", "components": {"TransformComponent": {"position": [5, 0, 0]}}}]}]})");
+  const auto seen = inspected(game, "main.scene.json");
+  ASSERT_EQ(seen["entities"].size(), 2u) << seen.dump();
+  const auto& child = seen["entities"][1]["world"];
+  EXPECT_NEAR(child["x"].get<float>(), 10.0f, 1e-3f);
+  EXPECT_NEAR(child["y"].get<float>(), 5.0f, 1e-3f);
+  EXPECT_NEAR(child["rotation"].get<float>(), 1.5707964f, 1e-3f);
+
+  const auto kid = inspected(game, "kid.prefab.json");
+  ASSERT_EQ(kid["entities"].size(), 2u) << kid.dump();
+  EXPECT_EQ(kid["entities"][0]["name"], "kid");
+  EXPECT_EQ(kid["entities"][0]["origin"]["entry"], "0");
+  EXPECT_EQ(kid["entities"][1]["origin"]["entry"], "0/p0");
+  EXPECT_NEAR(kid["entities"][1]["world"]["y"].get<float>(), 2.0f, 1e-3f);
+  EXPECT_FALSE(kid.contains("error"));
+}
