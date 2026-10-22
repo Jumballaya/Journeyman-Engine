@@ -120,3 +120,17 @@ TEST(InspectDraw, EachEntityIsWhereTheWorldHasIt) {
   EXPECT_NEAR(kid["entities"][1]["world"]["y"].get<float>(), 2.0f, 1e-3f);
   EXPECT_FALSE(kid.contains("error"));
 }
+
+// The part of an image drawn is exact to a texel: an atlas region of a 512px sheet crops where it is.
+TEST(InspectDraw, ThePartOfAnImageDrawnIsExact) {
+  TempDir game;
+  game.writeFile(".jm.json", R"({"name": "T", "entryScene": "main.scene.json", "scenes": ["main.scene.json"]})");
+  game.writeFile("main.scene.json", R"({"name": "main", "entities": [{"name": "Hero", "components": {
+    "TransformComponent": {}, "SpriteComponent": {"texRect": [0.78515625, 0.12890625, 0.03125, 0.046875]}}}]})");
+  const auto seen = inspected(game, "main.scene.json");
+  ASSERT_EQ(seen["draw"]["world"].size(), 1u);
+  const auto& part = seen["draw"]["world"][0]["texRect"];
+  for (const auto& [at, texels] : {std::pair{0, 402}, {1, 66}, {2, 16}, {3, 24}}) {
+    EXPECT_NEAR(part[at].get<double>() * 512, texels, 1e-3);
+  }
+}

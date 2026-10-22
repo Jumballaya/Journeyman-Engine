@@ -780,6 +780,8 @@ void Renderer2DModule::writeImageLater(const std::filesystem::path& path, int ma
 namespace {
 
 double tidy(float value) { return std::round(static_cast<double>(value) * 100.0) / 100.0; }
+// A part of an image (0..1) to a texel of a big one: tidy would lose whole texels.
+double tidyFraction(float value) { return std::round(static_cast<double>(value) * 1e6) / 1e6; }
 
 }  // namespace
 
@@ -806,7 +808,7 @@ void Renderer2DModule::describeState(Engine&, nlohmann::json& state) {
     const glm::vec4& c = d.instance.color;
     if (c != glm::vec4(1.0f)) out["color"] = {tidy(c.r), tidy(c.g), tidy(c.b), tidy(c.a)};
     const glm::vec4& r = d.instance.texRect;
-    if (r != glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)) out["texRect"] = {tidy(r.x), tidy(r.y), tidy(r.z), tidy(r.w)};
+    if (r != glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)) out["texRect"] = {tidyFraction(r.x), tidyFraction(r.y), tidyFraction(r.z), tidyFraction(r.w)};
     if (d.entity != kNoEntityId) out["entity"] = idJson(d.entity);
     return out;
   };
