@@ -169,7 +169,7 @@ var codegenOptions = map[string]bool{"exportRuntime": true, "noAssert": true, "o
 
 // plainConfig says whether a config has asc read and write no more than a
 // script, its imports, its wasm and its map: only codegen options (its own,
-// or a target's), a source map by its default name.
+// or a target's) naming no file.
 func plainConfig(config map[string]any) bool {
 	sets := []any{config["options"]}
 	for key, v := range config {
@@ -190,10 +190,23 @@ func plainConfig(config map[string]any) bool {
 			return false
 		}
 		for key, v := range options {
-			if _, named := v.(string); !codegenOptions[key] || key == "sourceMap" && named {
+			if !codegenOptions[key] || !plainOption(key, v) {
 				return false
 			}
 		}
+	}
+	return true
+}
+
+// plainOption says whether an option's value names no file: a source map by
+// its default name, a runtime of asc's own.
+func plainOption(key string, v any) bool {
+	switch key {
+	case "sourceMap":
+		_, named := v.(string)
+		return !named
+	case "runtime":
+		return v == "incremental" || v == "minimal" || v == "stub"
 	}
 	return true
 }

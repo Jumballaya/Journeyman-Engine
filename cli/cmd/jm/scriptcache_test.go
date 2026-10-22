@@ -112,7 +112,8 @@ func TestAScriptCompilesOnceUntilWhatCompilingReadsChanges(t *testing.T) {
 	// What the cache can't follow it doesn't keep: a package's config, an option but codegen's (a file
 	// written but the map, a library read).
 	for _, config := range []string{`{"extends": "@studio/asconfig/base.json"}`, `{"options": {"sourceMap": "custom.map"}}`,
-		`{"targets": {"release": {"bindings": "esm"}}}`, `{"options": {"lib": ["/shared"]}}`, `{"entries": ["x.ts"]}`} {
+		`{"targets": {"release": {"bindings": "esm"}}}`, `{"options": {"lib": ["/shared"]}}`, `{"entries": ["x.ts"]}`,
+		`{"options": {"runtime": "/shared/runtime"}}`} {
 		os.WriteFile(base, []byte(config), 0o644)
 		before := count("a.ts")
 		build()
