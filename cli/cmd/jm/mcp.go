@@ -904,6 +904,9 @@ func jsonResult(v any) toolResult {
 func runSessionTool(root string, a toolArgs) toolResult {
 	peers, frames := int(a.num("peers", 2, 1, 64)), int(a.num("frames", 300, 1, 1e7))
 	work, err := os.MkdirTemp("", "jm-session-")
+	if err == nil {
+		work, err = filepath.Abs(work) // the games run in root: a relative TMPDIR would be found there
+	}
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
