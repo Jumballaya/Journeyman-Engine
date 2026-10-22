@@ -114,6 +114,7 @@ plays do. A server started in no game opens the client's root that's a game
 (roots/list), before the game opened last.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		settlePathSettings()
 		if mcpDir != "" {
 			if err := os.Chdir(mcpDir); err != nil {
 				return fmt.Errorf("--dir: %w", err)
@@ -250,6 +251,22 @@ func newMCPServer() *mcpServer {
 		server.open.Store(evalOrSelf(cwd))
 	}
 	return server
+}
+
+// pathSettings name machine things by path (the engine, the editor, temp
+// folders…); a relative one means from where jm mcp started.
+var pathSettings = []string{"JM_ENGINE", "JM_SERVER", "JM_PLAYER", "JM_PLAYERS", "JM_EDITOR", "JM_GAMES", "JM_TOOLCHAIN_DIR", "TMPDIR", "TMP", "TEMP"}
+
+// settlePathSettings makes each absolute, once at startup: the server's tools
+// and the jm commands they run work in game folders, never where it started.
+func settlePathSettings() {
+	for _, key := range pathSettings {
+		if v := os.Getenv(key); v != "" && !filepath.IsAbs(v) {
+			if abs, err := filepath.Abs(v); err == nil {
+				os.Setenv(key, abs)
+			}
+		}
+	}
 }
 
 func serveMCP(in io.Reader, out io.Writer) error { return newMCPServer().serve(in, out) }
@@ -917,9 +934,6 @@ func jsonResult(v any) toolResult {
 func runSessionTool(root string, a toolArgs) toolResult {
 	peers, frames := int(a.num("peers", 2, 1, 64)), int(a.num("frames", 300, 1, 1e7))
 	work, err := os.MkdirTemp("", "jm-session-")
-	if err == nil {
-		work, err = filepath.Abs(work) // the games run in root: a relative TMPDIR would be found there
-	}
 	if err != nil {
 		return textResult(err.Error(), true)
 	}

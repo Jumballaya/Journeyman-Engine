@@ -132,8 +132,8 @@ func TestDriveStartFromAPlayTakesNothingElse(t *testing.T) {
 	}
 }
 
-// The server's code never reads the working folder: a call's game is the one it
-// names or the open one (prepare). Only startup may: where jm mcp started is its first game.
+// A lint: the server's code calls nothing that reads the working folder (a call's
+// game is prepare's), but at startup. The per-game tests fence what it can't see.
 func TestMCPCodeNeverReadsTheWorkingFolder(t *testing.T) {
 	startup := []string{
 		`if err := os.Chdir(mcpDir); err != nil {`,
@@ -155,5 +155,23 @@ func TestMCPCodeNeverReadsTheWorkingFolder(t *testing.T) {
 				t.Errorf("%s:%d reads the working folder: %s", file, i+1, strings.TrimSpace(line))
 			}
 		}
+	}
+}
+
+// Paths the environment gives relative mean from where jm mcp started, wherever
+// a tool or the jm command it runs works after: the engine and temp folders.
+func TestRelativePathSettingsMeanWhereTheServerStarted(t *testing.T) {
+	start := t.TempDir()
+	os.WriteFile(filepath.Join(start, "engine"), []byte("#!/bin/sh\n"), 0o755)
+	t.Chdir(start)
+	t.Setenv("JM_ENGINE", "engine")
+	t.Setenv("TMPDIR", ".")
+	settlePathSettings()
+	t.Chdir(t.TempDir()) // a tool's work elsewhere
+	if engine, err := resolveEnginePath(); err != nil || evalOrSelf(engine) != evalOrSelf(filepath.Join(start, "engine")) {
+		t.Errorf("engine: %s %v", engine, err)
+	}
+	if tmp := os.TempDir(); evalOrSelf(tmp) != evalOrSelf(start) {
+		t.Errorf("temp: %s", tmp)
 	}
 }
