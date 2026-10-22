@@ -192,6 +192,21 @@ func TestDriveFrameShowsTheGameWithNoFileToManage(t *testing.T) {
 	}
 }
 
+func TestARecordedRunDrawsWhereItCan(t *testing.T) {
+	t.Setenv("JM_RENDERER", "")
+	t.Setenv("DISPLAY", ":0") // linux CI: a display to draw on
+	if !(gameOptions{Record: true}).draws() {
+		t.Error("a recorded run with a display doesn't draw: its play has no pictures")
+	}
+	if (gameOptions{}).draws() {
+		t.Error("a plain driven run draws: it should stay headless unless asked (gl)")
+	}
+	t.Setenv("JM_RENDERER", "none")
+	if (gameOptions{Record: true}).draws() {
+		t.Error("a recorded run draws where nothing can")
+	}
+}
+
 func TestDriveStopNamesThePlayItRecorded(t *testing.T) {
 	s := newMCPServer()
 	fakeDriver(s, t.TempDir(), func(string) string { return `{"ok":true}` })
