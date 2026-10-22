@@ -18,9 +18,12 @@ func TestAToolsArgumentsAreItsSchemas(t *testing.T) {
 		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"forget","arguments":{"id":"f1","scope":"everyone"}}}`,
 		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"memory_note","arguments":{}}}`,
 		`{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"world_context","arguments":{"note":"Design","steps":1.5}}}`,
-		`{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"files_search","arguments":{"text":"x","game":null}}}`)
+		`{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"files_search","arguments":{"text":"x","game":null}}}`,
+		`{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"asset_add","arguments":{"file":{"download_url":"https://x/h.png","file_name":"h.png"}}}}`,
+		`{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"asset_add","arguments":{"file":{"download_url":"https://x/h.png","file_id":"f","file_name":7}}}}`)
 	for id, want := range map[float64]string{1: "argument text must be text", 2: "argument files must be a list whose item 2 is text",
-		3: "argument scope must be one of", 4: "argument text is needed", 5: "argument steps must be a whole number"} {
+		3: "argument scope must be one of", 4: "argument text is needed", 5: "argument steps must be a whole number",
+		7: "argument file must be an object with file_id", 8: "argument file must be an object whose file_name is text"} {
 		result, _ := replies[id]["result"].(map[string]any)
 		if text := jsonOf(replies[id]); result["isError"] != true || !strings.Contains(text, want) {
 			t.Errorf("call %v: want %q: %s", id, want, text)

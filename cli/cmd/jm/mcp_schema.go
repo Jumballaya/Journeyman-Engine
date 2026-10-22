@@ -57,11 +57,10 @@ func schemaError(prop map[string]any, v any) error {
 		if !ok {
 			return errors.New("an object")
 		}
-		of, _ := prop["additionalProperties"].(map[string]any)
-		for _, key := range slices.Sorted(maps.Keys(fields)) {
-			if err := schemaError(of, fields[key]); err != nil {
-				return fmt.Errorf("an object whose %s is %v", key, err)
-			}
+		if key, err := fieldsError(prop, fields); errors.Is(err, errNeeded) {
+			return fmt.Errorf("an object with %s", key)
+		} else if err != nil {
+			return fmt.Errorf("an object whose %s is %v", key, err)
 		}
 	}
 	return nil
@@ -70,23 +69,43 @@ func schemaError(prop map[string]any, v any) error {
 // argsError is why a call's arguments don't fit its tool's schema: one it
 // needs left out, or one given that isn't what it says. nil when they fit.
 func argsError(schema map[string]any, args map[string]any) error {
+	key, err := fieldsError(schema, args)
+	if errors.Is(err, errNeeded) {
+		return fmt.Errorf("argument %s is needed", key)
+	}
+	if err != nil {
+		return fmt.Errorf("argument %s must be %v", key, err)
+	}
+	return nil
+}
+
+var errNeeded = errors.New("needed")
+
+// fieldsError is which of an object's fields doesn't fit its schema, and why
+// (errNeeded: left out). A field the schema doesn't name is its
+// additionalProperties' (none: a host's own, as jm/call); null is left out.
+func fieldsError(schema map[string]any, fields map[string]any) (string, error) {
 	props, _ := schema["properties"].(map[string]any)
 	required, _ := schema["required"].([]string)
 	for _, key := range required {
-		if args[key] == nil {
-			return fmt.Errorf("argument %s is needed", key)
+		if fields[key] == nil {
+			return key, errNeeded
 		}
 	}
-	for _, key := range slices.Sorted(maps.Keys(args)) {
+	rest, _ := schema["additionalProperties"].(map[string]any)
+	for _, key := range slices.Sorted(maps.Keys(fields)) {
 		prop, declared := props[key].(map[string]any)
-		if !declared || args[key] == nil { // a host's own (jm/call, openai/resource), or null: left out
+		if !declared {
+			prop = rest
+		}
+		if prop == nil || fields[key] == nil {
 			continue
 		}
-		if err := schemaError(prop, args[key]); err != nil {
-			return fmt.Errorf("argument %s must be %v", key, err)
+		if err := schemaError(prop, fields[key]); err != nil {
+			return key, err
 		}
 	}
-	return nil
+	return "", nil
 }
 
 // choicesIn are a field's choices: its enum, its oneOf's consts, a form's
