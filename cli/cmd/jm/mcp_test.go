@@ -481,7 +481,7 @@ func TestPlaybooks(t *testing.T) {
 	}
 }
 
-// Two notes of one title complete by their paths, each one usable.
+// Two notes of one title complete by their folder/titles, each one usable.
 func TestPlaybookCompletionsTellNotesApart(t *testing.T) {
 	root := t.TempDir()
 	for _, f := range []string{"North", "South"} {
@@ -489,10 +489,10 @@ func TestPlaybookCompletionsTellNotesApart(t *testing.T) {
 		os.WriteFile(filepath.Join(root, "design", f, "Harbor.md"), []byte("---\ntype: location\n---\n# Harbor\n"), 0o644)
 	}
 	os.WriteFile(filepath.Join(root, "design", "Pitch.md"), []byte("# Pitch\n"), 0o644)
-	if got := strings.Join(knowledgeValues(root, "note"), ","); got != "Pitch,design/North/Harbor.md,design/South/Harbor.md" {
+	if got := strings.Join(knowledgeValues(root, "note"), ","); got != "North/Harbor,Pitch,South/Harbor" {
 		t.Errorf("notes: %s", got)
 	}
-	if got := strings.Join(knowledgeValues(root, "place"), ","); got != "design/North/Harbor.md,design/South/Harbor.md" {
+	if got := strings.Join(knowledgeValues(root, "place"), ","); got != "North/Harbor,South/Harbor" {
 		t.Errorf("places: %s", got)
 	}
 }

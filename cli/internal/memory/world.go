@@ -157,15 +157,8 @@ func (w World) Name(n Note) string {
 func WorldOf(root string) World {
 	all, unread := notes(root)
 	w := World{Notes: all, Unwritten: []string{}, Unread: unread, names: map[string]string{}}
-	titled := map[string]int{}
 	for _, n := range all {
-		titled[strings.ToLower(n.Title)]++
-	}
-	for _, n := range all {
-		w.names[n.Path] = n.Title
-		if titled[strings.ToLower(n.Title)] > 1 {
-			w.names[n.Path] = strings.TrimSuffix(strings.TrimPrefix(n.Path, Dir+"/"), ".md")
-		}
+		w.names[n.Path] = NameOf(all, n)
 	}
 	inverse := map[string]string{}
 	pair := func(a, b string) { // a pairing replaces the ones a and b had

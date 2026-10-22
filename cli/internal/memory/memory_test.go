@@ -508,3 +508,42 @@ func TestTwoNotesOfOneTitleAreEachTheirPath(t *testing.T) {
 		t.Error("a decision took a name two notes have")
 	}
 }
+
+// A path in its own case is one note; in another case, one on a case-blind
+// disk, and several (North/, north/ on a case-keeping one) are asked which.
+func TestAPathInItsCaseIsItsNote(t *testing.T) {
+	all := []Note{{Title: "Harbor", Path: "design/North/Harbor.md"}, {Title: "Harbor", Path: "design/north/Harbor.md"}, {Title: "Inn", Path: "design/Inn.md"}}
+	for ref, want := range map[string]string{"design/North/Harbor.md": "design/North/Harbor.md", "design/north/Harbor": "design/north/Harbor.md", "design/inn.md": "design/Inn.md"} {
+		if got := named(all, ref); len(got) != 1 || got[0].Path != want {
+			t.Errorf("%s: %v", ref, got)
+		}
+	}
+	if got := named(all, "design/NORTH/harbor.md"); len(got) != 2 {
+		t.Errorf("another case of two paths: %v", got)
+	}
+}
+
+// A note's name is the shortest that finds it: a.md titled Harbor beside
+// Harbor.md (titled Port) is "a", its title naming both.
+func TestANotesNameFindsIt(t *testing.T) {
+	all := []Note{{Title: "Harbor", Path: "design/a.md"}, {Title: "Port", Path: "design/Harbor.md"}, {Title: "Gate", Path: "design/North/Gate.md"}, {Title: "Gate", Path: "design/South/Gate.md"}}
+	for i, want := range []string{"a", "Port", "North/Gate", "South/Gate"} {
+		if got := NameOf(all, all[i]); got != want {
+			t.Errorf("%s: %q, want %q", all[i].Path, got, want)
+		}
+	}
+}
+
+// The decisions index is the scaffold's Decisions.md, whatever else is titled so.
+func TestADecisionIsIndexedBesideAnotherDecisions(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	os.MkdirAll(filepath.Join(root, Dir, "old"), 0o755)
+	os.WriteFile(filepath.Join(root, Dir, "old", "Decisions.md"), []byte("---\ntitle: \"Decisions\"\n---\n\n# Decisions\n"), 0o644)
+	if _, err := Decide(root, "Coins respawn", "fair"); err != nil {
+		t.Fatal(err)
+	}
+	if index, _ := Find(root, Dir+"/Decisions.md"); !slices.Contains(index.Links, "Coins respawn") {
+		t.Errorf("not indexed: %v", index.Links)
+	}
+}

@@ -141,23 +141,40 @@ func Find(root, ref string) (Note, error) {
 	}
 }
 
-// named are the notes ref may mean: the one at its path (any case, .md
-// optional) alone, else each a [[ref]] names (title, file name or folder/title).
+// named are the notes ref may mean: the one at its path (.md optional) alone,
+// else those at it in any case (one, on a case-blind disk), else each a
+// [[ref]] names (title, file name or folder/title).
 func named(all []Note, ref string) []Note {
-	ref = strings.TrimSpace(ref)
-	key := strings.ToLower(strings.TrimSuffix(ref, ".md"))
+	ref = strings.TrimSuffix(strings.TrimSpace(ref), ".md")
+	var found []Note
 	for _, n := range all {
-		if strings.ToLower(strings.TrimSuffix(n.Path, ".md")) == key {
+		switch path := strings.TrimSuffix(n.Path, ".md"); {
+		case path == ref:
 			return []Note{n}
+		case strings.EqualFold(path, ref):
+			found = append(found, n)
 		}
 	}
-	var found []Note
+	if len(found) > 0 {
+		return found
+	}
 	for _, n := range all {
 		if linksTo(ref, n) {
 			found = append(found, n)
 		}
 	}
 	return found
+}
+
+// NameOf is the shortest name that finds n among all: its title, else its
+// folder/title, else its path.
+func NameOf(all []Note, n Note) string {
+	for _, name := range []string{n.Title, strings.TrimSuffix(strings.TrimPrefix(n.Path, Dir+"/"), ".md")} {
+		if found := named(all, name); len(found) == 1 && found[0].Path == n.Path {
+			return name
+		}
+	}
+	return n.Path
 }
 
 // A Ref is a note as another shows it: by its title, found by its path.
@@ -246,7 +263,7 @@ func Decide(root, title, why string) (Note, error) {
 		return Note{}, err
 	}
 	path := Dir + "/decisions/" + title + ".md"
-	index, err := Find(root, "Decisions")
+	index, err := Find(root, Dir+"/Decisions.md") // the scaffold's: another titled Decisions isn't the index
 	indexed := err == nil
 	if n, err := Find(root, title); !errors.Is(err, ErrNoNote) {
 		if err != nil {
