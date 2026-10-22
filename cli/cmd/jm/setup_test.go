@@ -21,6 +21,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "jm.test was run as `jm %s`: a test reached a real jm command\n", strings.Join(os.Args[1:], " "))
 		os.Exit(3)
 	}
+	undeclaredArgs = true
 	systemApps = filepath.Join(os.TempDir(), "jm-tests-no-apps")
 	os.Setenv("LOCALAPPDATA", systemApps)
 	home, _ := os.MkdirTemp("", "jm-tests-home")

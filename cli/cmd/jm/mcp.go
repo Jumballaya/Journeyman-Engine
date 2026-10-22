@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -485,6 +486,11 @@ func (s *mcpServer) callTool(ctx context.Context, params json.RawMessage, round 
 			if call.Arguments == nil {
 				call.Arguments = map[string]any{}
 			}
+			if err := argsError(tool.InputSchema, call.Arguments); err != nil {
+				return textResult(err.Error()+" ("+tool.Name+")", true).reply(), nil // the model can call it again, fixed
+			}
+			maps.DeleteFunc(call.Arguments, func(_ string, v any) bool { return v == nil }) // null: left out
+			call.Arguments[schemaKey] = tool.InputSchema
 			if path := call.Meta.Resource.Path; path != "" {
 				call.Arguments[resourceKey] = resourcePath(path)
 			}

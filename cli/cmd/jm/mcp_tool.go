@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"maps"
 )
 
 // A tool as the server knows it (mcpTool), the arguments a call gives it, its result, and the pieces its input schema is made of.
@@ -71,8 +72,8 @@ func btoi(b bool) int {
 	return 0
 }
 
-// toolArgs are a tool call's arguments, read leniently: a missing or
-// mistyped one is its zero value, and the tool's default applies.
+// toolArgs are a tool call's arguments, checked against its schema as the
+// call came in (argsError): a missing one is its zero value, the tool's default.
 type toolArgs map[string]any
 
 // resourcePath is the file a host's file entrypoint opened, as the host says
@@ -88,18 +89,18 @@ func (a toolArgs) resource() string {
 }
 
 func (a toolArgs) str(key string) string {
-	v, _ := a[key].(string)
+	v, _ := a.read(key).(string)
 	return v
 }
 
 func (a toolArgs) flag(key string) bool {
-	v, _ := a[key].(bool)
+	v, _ := a.read(key).(bool)
 	return v
 }
 
 // num is a numeric argument: fallback when absent, else clamped to [lo, hi].
 func (a toolArgs) num(key string, fallback, lo, hi float64) float64 {
-	v, ok := a[key].(float64)
+	v, ok := number(a.read(key))
 	if !ok {
 		return fallback
 	}
@@ -107,7 +108,7 @@ func (a toolArgs) num(key string, fallback, lo, hi float64) float64 {
 }
 
 func (a toolArgs) list(key string) []string {
-	items, _ := a[key].([]any)
+	items, _ := a.read(key).([]any)
 	out := []string{}
 	for _, item := range items {
 		out = append(out, fmt.Sprint(item))
@@ -117,7 +118,7 @@ func (a toolArgs) list(key string) []string {
 
 // Schemas for tool arguments.
 func object(properties map[string]any, required ...string) map[string]any {
-	schema := map[string]any{"type": "object", "properties": properties}
+	schema := map[string]any{"type": "object", "properties": maps.Clone(properties)} // its own: the game argument is added to it
 	if len(required) > 0 {
 		schema["required"] = required
 	}
