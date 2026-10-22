@@ -14,6 +14,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/examples"
+	"github.com/Jumballaya/Journeyman-Engine/internal/formats"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 )
@@ -214,18 +215,13 @@ func preferenceValue(key string) string {
 	return v
 }
 
-// pickKinds are the files pick offers, by kind.
-var pickKinds = map[string][]string{
-	"scene": {".scene.json"}, "prefab": {".prefab.json"}, "texture": {".png", ".jpg", ".jpeg"},
-	"script": {".ts"}, "sound": {".wav", ".ogg", ".mp3"}, "ui": {".ui.html"}, "map": {".tmj"},
-}
-
 func pickTool(s *mcpServer) mcpTool {
 	kinds := []string{}
-	for kind := range pickKinds {
-		kinds = append(kinds, kind)
+	for _, f := range formats.All(func(f formats.Format) bool { return f.Pick != "" }) {
+		kinds = append(kinds, f.Pick)
 	}
 	slices.Sort(kinds)
+	kinds = slices.Compact(kinds)
 	return mcpTool{Name: "pick", Title: "Ask the person to pick", Meta: callableMeta("", ""),
 		Description: "Ask the person to point at files of a game (scenes, prefabs, textures, scripts, sounds, UI, maps) in a picker with previews, " +
 			"when \"this one\" or \"that level\" is unclear. Gives the picked files' paths. Hosts without forms: lists the choices to ask about in chat.",
@@ -235,13 +231,11 @@ func pickTool(s *mcpServer) mcpTool {
 			"many":    boolArg("let them pick several"),
 		}, "kind"),
 		onGame: func(game string, a toolArgs) toolResult {
-			suffixes, ok := pickKinds[a.str("kind")]
-			if !ok {
+			kind := a.str("kind")
+			if !slices.Contains(kinds, kind) {
 				return textResult("kind: one of "+strings.Join(kinds, ", "), true)
 			}
-			files := gameFiles(game, func(rel string) bool {
-				return slices.ContainsFunc(suffixes, func(suffix string) bool { return strings.HasSuffix(rel, suffix) })
-			})
+			files := gameFiles(game, func(rel string) bool { f, _ := formats.Of(rel); return f.Pick == kind }) // a .spec.ts isn't a script
 			if len(files) == 0 {
 				return textResult("The game has no "+a.str("kind")+" files.", false)
 			}
@@ -282,7 +276,7 @@ func pickField(game string, files []string, many bool) map[string]any {
 		if strings.HasSuffix(f, ".scene.json") {
 			meta["openai/preview"] = map[string]any{"target": map[string]any{"type": "mcp_app_tool", "name": "scene_view", "arguments": map[string]any{"scene": f, "game": game}}} // stays this game's when another opens
 		}
-		if slices.Contains(pickKinds["texture"], filepath.Ext(f)) {
+		if format, _ := formats.Of(f); format.Kind == "texture" {
 			if thumb := dataURI(abs, 160); thumb != "" {
 				meta["openai/thumbnail"] = map[string]any{"src": thumb}
 			}

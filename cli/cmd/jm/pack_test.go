@@ -478,3 +478,22 @@ func TestSlugify(t *testing.T) {
 		}
 	}
 }
+
+// A data table (assets/data/items.json, read by scripts) ships: it was
+// copied into build/ and then left out of every export.
+func TestPackShipsDataFiles(t *testing.T) {
+	tmp := t.TempDir()
+	buildDir := filepath.Join(tmp, "build")
+	writeManifest(t, buildDir, "Test Game")
+	writeFile(t, filepath.Join(buildDir, "assets/data/items.json"), []byte(`{"sword": 3}`))
+	out := filepath.Join(tmp, "out.jm")
+	if err := runPack(buildDir, out, true); err != nil {
+		t.Fatalf("strict pack: %v", err)
+	}
+	data, _ := os.ReadFile(out)
+	for _, want := range []string{`"assets/data/items.json"`, `"type":"data"`} {
+		if !bytes.Contains(data, []byte(want)) {
+			t.Errorf("archive lacks %s", want)
+		}
+	}
+}

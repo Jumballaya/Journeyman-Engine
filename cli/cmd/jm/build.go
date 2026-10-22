@@ -21,6 +21,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/art"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
+	"github.com/Jumballaya/Journeyman-Engine/internal/formats"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/schema"
@@ -277,8 +278,7 @@ func writeBuiltPNG(rel string, img image.Image) error {
 func withNormalMaps(assets []string) []string {
 	out := slices.Clone(assets)
 	for _, a := range assets {
-		ext := strings.ToLower(filepath.Ext(a))
-		if ext != ".png" && ext != ".jpg" && ext != ".jpeg" || atlas.IsNormalMap(a) {
+		if f, _ := formats.Of(strings.ToLower(a)); f.Archive != "image" || atlas.IsNormalMap(a) {
 			continue
 		}
 		if n := atlas.NormalPath(a); !slices.Contains(out, n) && fileExists(n) {

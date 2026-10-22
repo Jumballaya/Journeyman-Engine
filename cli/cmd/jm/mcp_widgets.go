@@ -14,8 +14,8 @@ import (
 // Widgets: the HTML pages jm's tools show in hosts that render them. Each is
 // served twice: as an MCP App (ui://…-app.html, the standard) and as ChatGPT's
 // older skybridge widget. Pages get widget/bridge.js and the UI kit
-// (widget/kit.js) inlined at the __JM_BRIDGE__ comment and this jm's version
-// for __JM_VERSION__.
+// (widget/kit.js) inlined at the __JM_BRIDGE__ comment, this jm's version
+// for __JM_VERSION__ and asset_add's file endings for __JM_UPLOADS__.
 
 //go:embed widget/bridge.js
 var widgetBridge string
@@ -47,10 +47,11 @@ func (w widget) stamp() string {
 	return s.(string)
 }
 
-// page is w's HTML as served: the bridge, kit and version filled in.
+// page is w's HTML as served: the bridge, kit, version and the files a
+// person may add (asset_add's) filled in.
 func (w widget) page() string {
 	page := strings.Replace(w.html, "/*__JM_BRIDGE__*/", widgetBridge+"\n"+widgetKit, 1)
-	return strings.ReplaceAll(page, "__JM_VERSION__", version)
+	return strings.NewReplacer("__JM_VERSION__", version, "__JM_UPLOADS__", assetExtensions(",")).Replace(page)
 }
 
 // toolMeta marks a tool whose result w renders, with what the host says

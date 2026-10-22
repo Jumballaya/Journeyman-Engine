@@ -93,7 +93,7 @@ studioTabs.push((() => {
   // bytes (asset_add's data, up to 8 MB).
   const addFile = (ctx) => {
     const { el } = ctx.kit;
-    const input = el("input", { type: "file", hidden: true, "data-key": "files-add", accept: ".png,.jpg,.jpeg,.aseprite,.ase,.tmj,.tsj,.json,.wav,.ogg,.mp3,.ttf,.otf",
+    const input = el("input", { type: "file", hidden: true, "data-key": "files-add", accept: "__JM_UPLOADS__", // asset_add's, filled in as served
       onchange: (e) => { const file = e.target.files && e.target.files[0]; e.target.value = ""; if (file) upload(ctx, file); } });
     return [input, el("button", { disabled: ctx.busy, onclick: () => input.click() }, "Add file")];
   };
