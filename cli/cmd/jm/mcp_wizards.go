@@ -14,6 +14,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/examples"
+	"github.com/Jumballaya/Journeyman-Engine/internal/formats"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 )
@@ -215,10 +216,13 @@ func preferenceValue(key string) string {
 }
 
 // pickKinds are the files pick offers, by kind.
-var pickKinds = map[string][]string{
-	"scene": {".scene.json"}, "prefab": {".prefab.json"}, "texture": {".png", ".jpg", ".jpeg"},
-	"script": {".ts"}, "sound": {".wav", ".ogg", ".mp3"}, "ui": {".ui.html"}, "map": {".tmj"},
-}
+var pickKinds = func() map[string][]string {
+	kinds := map[string][]string{}
+	for _, f := range formats.All(func(f formats.Format) bool { return f.Pick != "" }) {
+		kinds[f.Pick] = append(kinds[f.Pick], f.Suffix)
+	}
+	return kinds
+}()
 
 func pickTool(s *mcpServer) mcpTool {
 	kinds := []string{}
@@ -282,7 +286,7 @@ func pickField(game string, files []string, many bool) map[string]any {
 		if strings.HasSuffix(f, ".scene.json") {
 			meta["openai/preview"] = map[string]any{"target": map[string]any{"type": "mcp_app_tool", "name": "scene_view", "arguments": map[string]any{"scene": f, "game": game}}} // stays this game's when another opens
 		}
-		if slices.Contains(pickKinds["texture"], filepath.Ext(f)) {
+		if format, _ := formats.Of(f); format.Kind == "texture" {
 			if thumb := dataURI(abs, 160); thumb != "" {
 				meta["openai/thumbnail"] = map[string]any{"src": thumb}
 			}

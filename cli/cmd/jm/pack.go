@@ -15,6 +15,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
+	"github.com/Jumballaya/Journeyman-Engine/internal/formats"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/spf13/cobra"
 )
@@ -171,23 +172,6 @@ func serverManifest(entries []archive.AssetEntry) error {
 // Hidden files are skipped unless they end in one of these.
 var hiddenKeepSuffixes = []string{archive.ManifestEntryKey, ".bindings.json", ".scene.json", ".prefab.json", ".atlas.json"}
 
-// assetTypes maps a file suffix to its archive entry type.
-var assetTypes = []struct{ suffix, kind string }{
-	{".atlas.json", "atlas"},
-	{".scene.json", "scene"},
-	{".prefab.json", "prefab"},
-	{".bindings.json", "bindings"},
-	{".tmj", "tilemap"}, {".tsj", "tileset"}, // Tiled JSON maps and tilesets
-	{archive.ManifestEntryKey, "manifest"},
-	{".ts", "script"}, // jm build leaves compiled wasm at each script's .ts path
-	{".png", "image"}, {".jpg", "image"}, {".jpeg", "image"},
-	{".wav", "audio"}, {".ogg", "audio"}, {".mp3", "audio"}, {".flac", "audio"},
-	{".ui.html", "ui"},
-	{".css", "stylesheet"},
-	{".frag", "shader"},
-	{".ttf", "font"}, {".otf", "font"},
-}
-
 // classify returns nil for skipped files: hidden ones, earlier archives, and
 // (unless strict, which errors) unrecognized extensions, with a warning.
 func classify(key, absPath, buildDir string, strict bool) (*archive.AssetEntry, error) {
@@ -201,8 +185,8 @@ func classify(key, absPath, buildDir string, strict bool) (*archive.AssetEntry, 
 	if filepath.ToSlash(filepath.Dir(key)) == scriptsPkgDir && slices.Contains(manifest.ScriptToolingFiles, filepath.Base(key)) {
 		return nil, nil // the compiler's, not the game's
 	}
-	i := slices.IndexFunc(assetTypes, func(t struct{ suffix, kind string }) bool { return hasSuffix(t.suffix) })
-	if i < 0 {
+	format, _ := formats.Of(key)
+	if format.Archive == "" {
 		if strict {
 			return nil, fmt.Errorf("pack: unrecognized extension %q at %s", filepath.Ext(key), key)
 		}
@@ -213,7 +197,7 @@ func classify(key, absPath, buildDir string, strict bool) (*archive.AssetEntry, 
 	if err != nil {
 		return nil, err
 	}
-	e := &archive.AssetEntry{SourcePath: key, Type: assetTypes[i].kind, Payload: data}
+	e := &archive.AssetEntry{SourcePath: key, Type: format.Archive, Payload: data}
 	if e.Type == "atlas" {
 		if e.Metadata, err = atlasMetadata(key, data, buildDir); err != nil {
 			return nil, err

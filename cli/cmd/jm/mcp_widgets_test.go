@@ -114,3 +114,17 @@ func TestAWidgetIsServedAtAnOlderStamp(t *testing.T) {
 		}
 	}
 }
+
+// Every page is served whole: no placeholder left for the host to show.
+func TestWidgetsAreServedFilledIn(t *testing.T) {
+	for _, w := range widgets {
+		for _, placeholder := range []string{"__JM_VERSION__", "__JM_UPLOADS__", "/*__JM_BRIDGE__*/"} {
+			if strings.Contains(w.page(), placeholder) {
+				t.Errorf("%s still says %s", w.name, placeholder)
+			}
+		}
+	}
+	if !strings.Contains(studio.page(), `accept: ".ase,.aseprite,.flac,`) {
+		t.Error("the studio's Add file doesn't take what asset_add does")
+	}
+}

@@ -30,8 +30,8 @@ func main() {
 
 func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:     "jm",
-		Short:   "Journeyman CLI",
+		Use:   "jm",
+		Short: "Journeyman CLI",
 		Long: `Journeyman CLI for managing, building and running games.
 
 Agents: no play_show, drive_start, ... among your tools? Run ` + "`jm setup`" + ` first (ask the

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
+	"github.com/Jumballaya/Journeyman-Engine/internal/formats"
 	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
 )
 
@@ -38,14 +39,10 @@ const (
 	inlineLimit = 8 << 20
 )
 
-// assetKinds: the extensions a game asset may have, each with the content
-// types a host may serve it as (a generic binary type is always taken).
-var assetKinds = map[string][]string{
-	".png": {"image/png"}, ".jpg": {"image/jpeg"}, ".jpeg": {"image/jpeg"},
-	".aseprite": nil, ".ase": nil,
-	".tmj": {"application/json", "text/plain"}, ".tsj": {"application/json", "text/plain"}, ".json": {"application/json", "text/plain"},
-	".wav": {"audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"}, ".ogg": {"audio/ogg", "application/ogg"}, ".mp3": {"audio/mpeg"},
-	".ttf": {"font/ttf", "application/x-font-ttf"}, ".otf": {"font/otf", "application/x-font-otf"},
+// uploadFormat is the format asset_add takes rel as (any case), false for none.
+func uploadFormat(rel string) (formats.Format, bool) {
+	f, ok := formats.Of(rel)
+	return f, ok && f.Upload
 }
 
 // assetClient fetches files for asset_add: https only, never to this machine
@@ -159,8 +156,9 @@ func addAsset(ctx context.Context, root string, fetch func(context.Context, []st
 	if err != nil {
 		return "", false, 0, err
 	}
+	format, _ := uploadFormat(rel)
 	ext := strings.ToLower(filepath.Ext(rel))
-	data, err := fetch(ctx, assetKinds[ext])
+	data, err := fetch(ctx, format.MIME)
 	if err != nil {
 		return "", false, 0, err
 	}
@@ -211,8 +209,8 @@ func assetPath(root, target string) (string, string, error) {
 	if !strings.HasPrefix(rel, "assets/") {
 		return "", "", fmt.Errorf("%s isn't in the game's assets folder", target)
 	}
-	if _, known := assetKinds[strings.ToLower(filepath.Ext(rel))]; !known {
-		return "", "", fmt.Errorf("%s isn't a game asset jm takes (%s)", rel, assetExtensions())
+	if _, known := uploadFormat(rel); !known {
+		return "", "", fmt.Errorf("%s isn't a game asset jm takes (%s)", rel, assetExtensions(" "))
 	}
 	return abs, rel, nil
 }
@@ -289,11 +287,12 @@ func checkAsset(ext string, data []byte) error {
 	return nil
 }
 
-func assetExtensions() string {
+// assetExtensions are the endings asset_add takes, joined by sep.
+func assetExtensions(sep string) string {
 	list := []string{}
-	for ext := range assetKinds {
-		list = append(list, ext)
+	for _, f := range formats.All(func(f formats.Format) bool { return f.Upload }) {
+		list = append(list, f.Suffix)
 	}
 	slices.Sort(list)
-	return strings.Join(list, " ")
+	return strings.Join(list, sep)
 }

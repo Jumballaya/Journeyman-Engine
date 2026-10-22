@@ -9,10 +9,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
+	"github.com/Jumballaya/Journeyman-Engine/internal/formats"
 )
 
 // Build is a project's build as plays see it: Game fingerprints what decides
@@ -72,11 +72,8 @@ func ReadBuild(dir string) Build {
 // game plays: scripts, data, and UI (its layout decides what a click hits).
 // Images, sounds and shaders only change how it looks or sounds.
 func playsDifferently(path string) bool {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".ts", ".json", ".tmj", ".tsj", ".html", ".css", ".ttf", ".otf", ".fnt":
-		return true
-	}
-	return false
+	f, ok := formats.Of(path)
+	return ok && !f.Look
 }
 
 func short(sum []byte) string { return hex.EncodeToString(sum)[:16] }
