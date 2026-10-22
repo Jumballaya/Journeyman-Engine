@@ -657,6 +657,7 @@ void Renderer2DModule::step(Engine& app, float dt) {
 
 void Renderer2DModule::draw(Engine& app, float dt) {
   World& world = app.getWorld();
+  if (!app.simulating()) _cameras.update(world, 0.0f, glm::vec2(gameSize()));  // no steps: the shown camera's view still
   const float fraction = app.drawFraction();
   const float viewSize = static_cast<float>(std::min(_renderer.logicalSize().x, _renderer.logicalSize().y));
   const StepBlend::Camera camera = _blend.blend(world, {_cameras.view().center, _cameras.view().zoom}, fraction, viewSize);

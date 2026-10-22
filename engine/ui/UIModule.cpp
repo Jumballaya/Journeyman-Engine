@@ -309,7 +309,7 @@ void UIModule::describeState(Engine& app, nlohmann::json& state) {
   nlohmann::json documents = nlohmann::json::array();
   for (auto [entity, c] : app.getWorld().view<UIDocumentComponent>()) {
     if (const LayoutBox* root = layoutOf(c->document)) {
-      documents.push_back({{"entity", {entity.index, entity.generation}}, {"root", boxJson(*root)}});
+      documents.push_back({{"entity", idJson(entity)}, {"root", boxJson(*root)}});
     }
   }
   if (!documents.empty()) state["ui"] = std::move(documents);
@@ -426,18 +426,20 @@ float UIModule::textWidth(const ComputedStyle& style, std::string_view text) {
 
 void UIModule::paintWorldText(Renderer2D& renderer) {
   struct Placed {
+    EntityId entity;
     const TextComponent* text;
     glm::vec3 position;
   };
   std::vector<Placed> texts;
   for (auto [entity, text, transform] : _app->getWorld().view<TextComponent, TransformComponent>()) {
-    if (!text->text.empty() && text->style.color.a > 0.0f) texts.push_back({text, transform->position});
+    if (!text->text.empty() && text->style.color.a > 0.0f) texts.push_back({entity, text, transform->position});
   }
   std::stable_sort(texts.begin(), texts.end(), [](const Placed& a, const Placed& b) { return a.position.z < b.position.z; });
 
   const Camera2D& camera = renderer.camera();
   const glm::vec2 half = glm::vec2(renderer.logicalSize()) * 0.5f;
   for (const Placed& placed : texts) {
+    Renderer2D::DrawnFor drawn(renderer, placed.entity);
     const TextComponent& text = *placed.text;
     ComputedStyle style = text.style;
     style.fontSize *= camera.zoom();
@@ -456,12 +458,15 @@ void UIModule::paint(Renderer2D& renderer) {
   _glyphs->beginFrame();
   paintWorldText(renderer);
   if (const auto placement = _renderer->uiPlacement(); placement && !_documents.empty()) {
-    std::vector<LiveDocument*> ordered;
-    for (auto& [id, doc] : _documents) ordered.push_back(&doc);
-    std::stable_sort(ordered.begin(), ordered.end(),
-                     [](const LiveDocument* a, const LiveDocument* b) { return a->order < b->order; });
+    std::unordered_map<uint32_t, EntityId> owners;  // a document an entity's UIDocumentComponent opened (a script's has none)
+    for (auto [entity, c] : _app->getWorld().view<UIDocumentComponent>()) owners[c->document] = entity;
+    std::vector<std::pair<uint32_t, LiveDocument*>> ordered;
+    for (auto& [id, doc] : _documents) ordered.emplace_back(id, &doc);
+    std::stable_sort(ordered.begin(), ordered.end(), [](const auto& a, const auto& b) { return a.second->order < b.second->order; });
     renderer.setScreenTransform(placement->transform);
-    for (LiveDocument* doc : ordered) {
+    for (const auto& [id, doc] : ordered) {
+      const auto owner = owners.find(id);
+      Renderer2D::DrawnFor drawn(renderer, owner == owners.end() ? kNoEntityId : owner->second);
       paintBox(renderer, doc->document.layout(placement->layoutSize, *_metrics), 1.0f);
     }
     renderer.setScreenTransform({});

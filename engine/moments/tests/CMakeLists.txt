@@ -1,6 +1,7 @@
 # Picking with the engine and its renderer (none: no GPU).
 add_executable(test_engine_moments
     MomentsTest.cpp
+    InspectDrawTest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
 )
 target_link_libraries(test_engine_moments PRIVATE
