@@ -16,7 +16,6 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/filelock"
-	"github.com/Jumballaya/Journeyman-Engine/internal/gametree"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 )
@@ -98,6 +97,10 @@ func Scan(root string) ([]string, error) { return scan(root, 6) }
 // Developer…), up to 4 folders down, and gives back the new ones.
 func FindGames(home string) ([]string, error) { return scan(home, 4) }
 
+// holdNoGames are folders a search for games doesn't look in: builds,
+// exports, logs, npm installs, Unity's Library.
+var holdNoGames = []string{"build", "dist", "node_modules", "logs", "Library"}
+
 func scan(root string, maxDepth int) ([]string, error) {
 	var found []string
 	root = canonical(root)
@@ -109,7 +112,7 @@ func scan(root string, maxDepth int) ([]string, error) {
 			return nil // an unreadable folder below the root holds no games we can see
 		}
 		name := d.Name()
-		if path != root && (gametree.Skip(name) || name == "Library") { // each folder as a game's top; Library: Unity's
+		if path != root && (strings.HasPrefix(name, ".") || slices.Contains(holdNoGames, name)) {
 			return filepath.SkipDir
 		}
 		if isGame(path) {

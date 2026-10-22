@@ -2,6 +2,7 @@ package manifest
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 	"testing/fstest"
 )
@@ -67,5 +68,22 @@ func TestGlobsSkipTheScriptsToolingFiles(t *testing.T) {
 	}
 	if want := []string{"assets/data/levels.json", "assets/scripts/player.ts"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+// A glob of everything takes the game's files, not what jm makes at its top.
+func TestAGlobOfEverythingLeavesWhatJmMakes(t *testing.T) {
+	game := fstest.MapFS{}
+	for _, f := range []string{"assets/frames/run.png", "assets/build/a.png", "assets/dist/b.png", "scenes/a.scene.json",
+		"build/x.png", "BUILD/y.png", "build.next/z.png", "logs/engine.log", "Frames/f.png", "dist/game.jm", ".jm/plays/p", "assets/scripts/node_modules/m.ts"} {
+		game[f] = &fstest.MapFile{Data: []byte("x")}
+	}
+	got, err := ExpandAssets(game, []string{"**"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(got)
+	if want := []string{"assets/build/a.png", "assets/dist/b.png", "assets/frames/run.png", "scenes/a.scene.json"}; !slices.Equal(got, want) {
+		t.Errorf("** = %v, want %v", got, want)
 	}
 }
