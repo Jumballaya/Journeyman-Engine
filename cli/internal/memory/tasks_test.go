@@ -224,12 +224,12 @@ func TestRemovingATaskLeavesItsCopyItsOwn(t *testing.T) {
 	}
 }
 
-// lastTask is raised as the frontmatter is written: indented alike, an anchor left be.
+// lastTask is raised as the frontmatter is written: indented alike; one it
+// can't be (an anchor others use) refuses the change rather than lose count.
 func TestLastTaskKeepsTheFrontmattersShape(t *testing.T) {
 	for front, want := range map[string]string{
 		"  title: Tasks\n  lastTask: t7":   "  title: Tasks\n  lastTask: t8\n",
 		"  title: Tasks":                   "---\n  lastTask: t8\n  title: Tasks\n",
-		"lastTask: &n t7\nnext: *n":        "lastTask: &n t7\nnext: *n\n",
 		"lastTask: |-\n  t7\ntitle: Tasks": "\nlastTask: t8\ntitle: Tasks\n",
 	} {
 		root := t.TempDir()
@@ -242,5 +242,18 @@ func TestLastTaskKeepsTheFrontmattersShape(t *testing.T) {
 		if _, _, err := frontmatter(got); err != nil || !strings.Contains(got, want) {
 			t.Errorf("%q: %v\n%s", front, err, got)
 		}
+	}
+}
+
+func TestALastTaskThatCantBeRaisedRefusesTheChange(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "design"), 0o755)
+	board := "---\nlastTask: &n t7\nnext: *n\n---\n\n## To do\n"
+	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte(board), 0o644)
+	if a, err := AddTask(root, "A", "", nil); err == nil {
+		t.Errorf("added %s with lastTask kept at t7", a.ID)
+	}
+	if got := boardFile(t, root); got != board {
+		t.Errorf("written:\n%s", got)
 	}
 }

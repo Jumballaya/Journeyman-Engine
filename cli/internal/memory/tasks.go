@@ -182,22 +182,27 @@ func (b *board) find(id string) int {
 
 func (b *board) text() string { return strings.Join(b.lines, "\n") + "\n" }
 
-// save writes the board, its lastTask raised to the highest id given.
+// save writes the board, its lastTask raised to the highest id given; not at
+// all when that can't be kept (an id given now could be given again).
 func (b *board) save(root string) error {
 	text := b.text()
 	if b.last > b.kept {
-		text = withLastTask(text, b.last)
+		var err error
+		if text, err = withLastTask(text, b.last); err != nil {
+			return err
+		}
 	}
 	return write(root, tasksPath, text)
 }
 
 // withLastTask is text with lastTask: t<last> in its frontmatter (made for it
-// if it has none), indented as the frontmatter is; text as it was when YAML
-// wouldn't read it back so (its frontmatter unreadable, an anchor others use).
-func withLastTask(text string, last int) string {
+// if it has none), indented as the frontmatter is; an error when YAML wouldn't
+// read it back so (its frontmatter unreadable, an anchor others use).
+func withLastTask(text string, last int) (string, error) {
+	refused := fmt.Errorf("%s's frontmatter can't take lastTask: t%d (the highest task id given): make lastTask a plain value, then try again", tasksPath, last)
 	front, _, err := frontmatter(text)
 	if err != nil {
-		return text
+		return "", fmt.Errorf("%w: %v", refused, err)
 	}
 	mark := "lastTask: t" + strconv.Itoa(last)
 	if len(front) > 0 {
@@ -210,9 +215,9 @@ func withLastTask(text string, last int) string {
 		out = "---\n" + mark + "\n" + text[4:]
 	}
 	if after, _, err := frontmatter(out); err != nil || lastTaskOf(after) != last {
-		return text
+		return "", refused
 	}
-	return out
+	return out, nil
 }
 
 // lastTaskOf is the frontmatter's lastTask (0: none, or not an id).
