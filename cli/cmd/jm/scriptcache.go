@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -91,9 +92,9 @@ type scriptCache struct {
 
 const scriptCacheDir = "cache/scripts" // in the game's .jm/
 
-// openScriptCache is the game at root's cache for its sources now, the
-// others it kept dropped (their scripts changed since).
-func openScriptCache(root string, sources map[string]string, tc toolchain.Toolchain) scriptCache {
+// openScriptCache is the game at root's cache for its sources and the files
+// its compiles import now, the others it kept dropped (their scripts changed since).
+func openScriptCache(root string, sources map[string]string, tc toolchain.Toolchain, compiles []compile) scriptCache {
 	ascPackage, _ := os.ReadFile(filepath.Join(tc.ASC, "package.json")) // its version: a compiler replaced in place
 	read := map[string]string{"jm/entry": entryTemplate,
 		"jm/compiler": fmt.Sprint(tc.Node, "\x00", tc.NodeVer, "\x00", tc.ASC, "\x00", string(ascPackage))}
@@ -101,6 +102,9 @@ func openScriptCache(root string, sources map[string]string, tc toolchain.Toolch
 		if f, known := formats.Of(key); !known || f.Compiled { // a library's files too, by their paths
 			read[key] = stamp
 		}
+	}
+	for file, text := range importsOf(root, compiles) {
+		read["import "+file] = text
 	}
 	configs, known := ascConfigs(scriptsPath(root, "asconfig.json")) // a base it extends may be anywhere
 	if !known {
@@ -122,6 +126,50 @@ func openScriptCache(root string, sources map[string]string, tc toolchain.Toolch
 		}
 	}
 	return scriptCache{filepath.Join(top, key), true}
+}
+
+// importSpec is a module an import or export names, in quotes.
+var importSpec = regexp.MustCompile(`(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']`)
+
+// importsOf is each file compiles' scripts import by a relative or absolute
+// path, however far (hidden, outside the game), by its path: "none" for one
+// not there (asc says why). A package's are its library's, in sources.
+func importsOf(root string, compiles []compile) map[string]string {
+	out := map[string]string{}
+	var follow func(file string)
+	follow = func(file string) {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			return
+		}
+		for _, m := range importSpec.FindAllSubmatch(data, -1) {
+			base := filepath.FromSlash(string(m[1]))
+			switch {
+			case strings.HasPrefix(base, "."):
+				base = filepath.Join(filepath.Dir(file), base)
+			case !filepath.IsAbs(base):
+				continue
+			}
+			found := ""
+			for _, f := range []string{base, base + ".ts", filepath.Join(base, "index.ts")} {
+				if strings.HasSuffix(f, ".ts") && exists(f) {
+					found = f
+					break
+				}
+			}
+			if found == "" {
+				out[base] = "none"
+			} else if _, seen := out[found]; !seen {
+				text, _ := os.ReadFile(found)
+				out[found] = string(text)
+				follow(found)
+			}
+		}
+	}
+	for _, c := range compiles {
+		follow(filepath.Join(root, filepath.FromSlash(c.script)))
+	}
+	return out
 }
 
 // ascConfigs are the asconfig at file and each it extends, by their paths;
@@ -203,8 +251,8 @@ func plainConfig(config map[string]any) bool {
 func plainOption(key string, v any) bool {
 	switch key {
 	case "sourceMap":
-		_, named := v.(string)
-		return !named
+		_, on := v.(bool) // anything else names the map's file
+		return on
 	case "runtime":
 		return v == "incremental" || v == "minimal" || v == "stub"
 	}

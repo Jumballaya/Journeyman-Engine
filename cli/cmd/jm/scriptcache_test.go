@@ -45,14 +45,15 @@ func TestAScriptCompilesOnceUntilWhatCompilingReadsChanges(t *testing.T) {
 	sources := map[string]string{"assets/scripts/a.ts": "1", "assets/scripts/say.ts": "1", "scenes/main.scene.json": "1",
 		"assets/hero.png": "1", "asconfig.base.json": "1", ".jm.json": "1"}
 	out := filepath.Join(root, "build.next")
+	compiles := []compile{
+		{script: "assets/scripts/a.ts", out: filepath.Join(out, "a.ts")},
+		{script: "assets/scripts/mapped.ts", out: filepath.Join(out, "mapped.ts")},
+		{script: "assets/scripts/say.ts", out: filepath.Join(out, "say.ts")},
+		{script: "assets/scripts/fail.ts", out: filepath.Join(out, "fail.ts"), module: true}}
 	build := func() *report {
 		os.RemoveAll(out)
 		r := &report{category: "build"}
-		compileScripts(r, tc, root, openScriptCache(root, sources, tc), []compile{
-			{script: "assets/scripts/a.ts", out: filepath.Join(out, "a.ts")},
-			{script: "assets/scripts/mapped.ts", out: filepath.Join(out, "mapped.ts")},
-			{script: "assets/scripts/say.ts", out: filepath.Join(out, "say.ts")},
-			{script: "assets/scripts/fail.ts", out: filepath.Join(out, "fail.ts"), module: true}})
+		compileScripts(r, tc, root, openScriptCache(root, sources, tc, compiles), compiles)
 		return r
 	}
 	count := func(name string) int {
@@ -86,6 +87,20 @@ func TestAScriptCompilesOnceUntilWhatCompilingReadsChanges(t *testing.T) {
 			t.Errorf("%s changed: compiled %v", changed, compiled())
 		}
 	}
+	// What a script imports by its path, wherever it is: no source of it (hidden), or not there yet.
+	scripts := filepath.Join(root, "assets", "scripts")
+	os.MkdirAll(filepath.Join(scripts, ".internal"), 0o755)
+	os.WriteFile(filepath.Join(scripts, "a.ts"), []byte(`import { step } from "./.internal/logic";
+export * from './later';`), 0o644)
+	os.WriteFile(filepath.Join(scripts, ".internal", "logic.ts"), []byte("export const step = 1;"), 0o644)
+	build()
+	for i, edit := range []string{".internal/logic.ts", "later.ts"} {
+		os.WriteFile(filepath.Join(scripts, filepath.FromSlash(edit)), []byte("export const step = 2;"), 0o644)
+		build()
+		if count("a.ts") != i+6 {
+			t.Errorf("%s changed: compiled %v", edit, compiled())
+		}
+	}
 	base := filepath.Join(t.TempDir(), "shared.json") // beside the game: no source of it
 	os.MkdirAll(filepath.Join(root, "assets", "scripts"), 0o755)
 	os.WriteFile(filepath.Join(root, "assets", "scripts", "asconfig.json"), []byte(`{"extends": "`+filepath.ToSlash(base)+`"}`), 0o644)
@@ -93,7 +108,7 @@ func TestAScriptCompilesOnceUntilWhatCompilingReadsChanges(t *testing.T) {
 	build()
 	os.WriteFile(base, []byte(`{"options": {"noAssert": false}}`), 0o644)
 	build()
-	if count("a.ts") != 6 {
+	if count("a.ts") != 9 {
 		t.Errorf("the asconfig's base changed: compiled %v", compiled())
 	}
 	// A chain of bases, however long: its last one changed compiles again.
@@ -106,14 +121,14 @@ func TestAScriptCompilesOnceUntilWhatCompilingReadsChanges(t *testing.T) {
 	build()
 	os.WriteFile(filepath.Join(chain, "k.json"), []byte(`{"options": {"noAssert": true}}`), 0o644)
 	build()
-	if count("a.ts") != 8 {
+	if count("a.ts") != 11 {
 		t.Errorf("the chain's last base changed: compiled %v", compiled())
 	}
 	// What the cache can't follow it doesn't keep: a package's config, an option but codegen's (a file
 	// written but the map, a library read).
 	for _, config := range []string{`{"extends": "@studio/asconfig/base.json"}`, `{"options": {"sourceMap": "custom.map"}}`,
 		`{"targets": {"release": {"bindings": "esm"}}}`, `{"options": {"lib": ["/shared"]}}`, `{"entries": ["x.ts"]}`,
-		`{"options": {"runtime": "/shared/runtime"}}`} {
+		`{"options": {"runtime": "/shared/runtime"}}`, `{"options": {"sourceMap": ["shared.map"]}}`} {
 		os.WriteFile(base, []byte(config), 0o644)
 		before := count("a.ts")
 		build()

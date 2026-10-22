@@ -706,7 +706,7 @@ func buildGame(r *report) error {
 	}
 	// Every script, then the content, before failing: one build reports all the problems it can.
 	stage("Building scripts")
-	compileScripts(r, tc, projectRoot, openScriptCache(projectRoot, sources, tc), compiles)
+	compileScripts(r, tc, projectRoot, openScriptCache(projectRoot, sources, tc, compiles), compiles)
 	if err := os.RemoveAll(checked); err != nil {
 		return fmt.Errorf("Failed to clean up checked modules: %w", err)
 	}
