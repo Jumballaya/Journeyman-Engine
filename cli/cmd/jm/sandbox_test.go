@@ -139,7 +139,10 @@ func TestSandboxLinksDontLeadOut(t *testing.T) {
 	}
 	os.Symlink(filepath.Join(game, "scenes"), filepath.Join(sb.Dir, "away"))
 	os.Symlink(filepath.Join(game, "nothing.json"), filepath.Join(sb.Dir, "dangling.json"))
-	for _, args := range [][]string{{"fmt", "theirs.json"}, {"fmt", "away/main.scene.json"}, {"fmt", "dangling.json"}, {"editor"}, {"variant", "play", "x"}} {
+	os.MkdirAll(filepath.Join(sb.Dir, "deep", "deeper"), 0o755)
+	os.Symlink(filepath.Join(sb.Dir, "deep", "deeper"), filepath.Join(sb.Dir, "inner")) // inner/../.. is the copy itself, but Clean says beside it
+	for _, args := range [][]string{{"fmt", "theirs.json"}, {"fmt", "away/main.scene.json"}, {"fmt", "dangling.json"}, {"editor"}, {"variant", "play", "x"},
+		{"export", "--out", "inner/../../victim"}, {"test", "inner/../../outside.spec.ts"}} {
 		if _, err := runInSandbox(nil, game, "s", args, time.Second); err == nil {
 			t.Errorf("%v ran", args)
 		}

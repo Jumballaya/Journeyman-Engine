@@ -16,6 +16,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
+	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 )
 
 // Report is the game's art against its art note: each dossier's sprite, how
@@ -131,22 +132,7 @@ func readGame(root, rel string) ([]byte, error) {
 // gamePath is a game file's path on disk; one leading out of the game (by
 // .. or a link) is none.
 func gamePath(root, rel string) string {
-	rel = filepath.Clean(filepath.FromSlash(rel))
-	if !filepath.IsLocal(rel) {
-		return ""
-	}
-	path := filepath.Join(root, rel)
-	realRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		return ""
-	}
-	real, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return path // not there: reading it fails
-	}
-	if within, err := filepath.Rel(realRoot, real); err != nil || !filepath.IsLocal(within) {
-		return ""
-	}
+	real, _, _ := realpath.Rel(root, filepath.Clean(filepath.FromSlash(rel)))
 	return real
 }
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 	"github.com/Jumballaya/Journeyman-Engine/internal/stdlib"
 )
 
@@ -57,7 +58,7 @@ func buildSources(root string) map[string]string {
 			p = filepath.Join(realRoot, p)
 		}
 		p = filepath.Join(evalOrSelf(filepath.Dir(p)), filepath.Base(p)) // named as the walk names files (it may not be there yet)
-		if rel, err := filepath.Rel(p, realRoot); err == nil && (rel == "." || filepath.IsLocal(rel)) {
+		if realpath.In(p, realRoot) {
 			continue // the game, or a folder holding it: its outputs can't be told from its sources
 		}
 		outputs = append(outputs, p)

@@ -363,21 +363,12 @@ type prefabFile struct {
 // the game's own file.
 func readPrefab(root, prefab string) prefabFile {
 	var p prefabFile
-	if real, ok := gameFile(root, prefab); ok {
+	if real, err := contentFile(root, prefab); err == nil {
 		if data, err := os.ReadFile(real); err == nil {
 			_ = json.Unmarshal(data, &p)
 		}
 	}
 	return p
-}
-
-// gameFile is rel (a path from root) where it really is, links followed;
-// false when that isn't inside the game at root.
-func gameFile(root, rel string) (string, bool) {
-	real, err := realPath(filepath.Join(root, filepath.FromSlash(rel)))
-	rootReal, rootErr := realPath(root)
-	inside, relErr := filepath.Rel(rootReal, real)
-	return real, err == nil && rootErr == nil && relErr == nil && filepath.IsLocal(inside)
 }
 
 func numbers(v any) []float64 {
