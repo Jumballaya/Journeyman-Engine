@@ -81,3 +81,10 @@ test('a save too large, or failing, says so', async () => {
     assert.equal(o.f.file.doc.n, 1);
   }
 });
+
+test('pages save files through kit.jsonFile only', () => {
+  const pages = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? pages(path.join(dir, e.name))
+    : /\.(html|js)$/.test(e.name) && !['kit.js', 'bridge.js'].includes(e.name) ? [path.join(dir, e.name)] : []);
+  const writers = pages(__dirname).filter((p) => /\.writeResource\(/.test(fs.readFileSync(p, 'utf8')));
+  assert.deepEqual(writers.map((p) => path.relative(__dirname, p)), []);
+});
