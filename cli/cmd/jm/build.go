@@ -21,6 +21,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/art"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
+	"github.com/Jumballaya/Journeyman-Engine/internal/filelock"
 	"github.com/Jumballaya/Journeyman-Engine/internal/formats"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
@@ -52,7 +53,18 @@ func init() {
 	buildCmd.Flags().BoolVar(&jsonOutput, "json", false, "problems as JSON lines, no progress (for tools)")
 }
 
-// swapBuild makes the finished staging folder the build.
+// holdBuild blocks until this process alone builds the game at root (jm run
+// --watch, the build tool and drive_start each run jm build), then gives back
+// the release: builds share the staging folder, script packages and build/.
+func holdBuild(root string) (release func(), err error) {
+	if err := os.MkdirAll(filepath.Join(root, ".jm"), 0o755); err != nil {
+		return nil, err
+	}
+	return filelock.Hold(filepath.Join(root, ".jm", "build"))
+}
+
+// swapBuild makes the finished staging folder the build; the last build
+// stays when it can't.
 func swapBuild() error {
 	if err := os.RemoveAll("build.old"); err != nil {
 		return err
@@ -61,6 +73,9 @@ func swapBuild() error {
 		return err
 	}
 	if err := os.Rename(outDir, "build"); err != nil {
+		if exists("build.old") {
+			_ = os.Rename("build.old", "build")
+		}
 		return err
 	}
 	return os.RemoveAll("build.old")
@@ -680,6 +695,11 @@ func buildGame(r *report) error {
 	if err != nil {
 		return fmt.Errorf("Failed to resolve project root: %w", err)
 	}
+	release, err := holdBuild(projectRoot)
+	if err != nil {
+		return fmt.Errorf("Failed to take the game's build lock: %w", err)
+	}
+	defer release()
 	warnAboutEditorEdits(r, projectRoot)
 
 	// Toolchain errors are already actionable; print them as-is.

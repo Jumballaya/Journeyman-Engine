@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/toolchain"
@@ -461,5 +462,45 @@ func TestScriptLibrariesCantReplaceJmsPackages(t *testing.T) {
 	}
 	if after, _ := os.ReadFile(stock); string(after) != string(before) {
 		t.Fatal("the stock pickup.ts was replaced")
+	}
+}
+
+// Two builds of a game take turns: they share its staging folder and build/.
+func TestBuildsOfAGameTakeTurns(t *testing.T) {
+	root := t.TempDir()
+	release, err := holdBuild(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := make(chan struct{})
+	go func() {
+		if release, err := holdBuild(root); err == nil {
+			release()
+		}
+		close(second)
+	}()
+	select {
+	case <-second:
+		t.Fatal("a second build began while the first held the game")
+	case <-time.After(200 * time.Millisecond):
+	}
+	release()
+	select {
+	case <-second:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the second build never began")
+	}
+}
+
+// A swap that can't finish leaves the last build where it was.
+func TestAFailedSwapKeepsTheLastBuild(t *testing.T) {
+	t.Chdir(t.TempDir())
+	os.MkdirAll("build", 0o755)
+	os.WriteFile(filepath.Join("build", "last"), nil, 0o644)
+	if err := swapBuild(); err == nil { // no staging folder: the rename fails
+		t.Fatal("swapped in nothing")
+	}
+	if !exists(filepath.Join("build", "last")) {
+		t.Error("the last build is gone")
 	}
 }
