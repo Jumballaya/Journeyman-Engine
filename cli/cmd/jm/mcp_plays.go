@@ -130,7 +130,7 @@ func playShow(root string, a toolArgs) toolResult {
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
-	o, err := overviewOf(p, b)
+	o, err := overviewOf(root, p, b)
 	if err != nil {
 		return textResult(err.Error(), true)
 	}

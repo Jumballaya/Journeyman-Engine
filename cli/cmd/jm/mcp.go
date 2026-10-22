@@ -182,6 +182,9 @@ type mcpTool struct {
 	// A tool that works on a game gives onGame instead of run: it gets the game's
 	// root (the call's "game", else the open game) and the "game" argument is added.
 	onGame func(root string, a toolArgs) toolResult
+	// A tool on the driven game (one runs at a time) gives onDriven: its game is
+	// the run's, and a call that names another is refused (drivenArg is added).
+	onDriven func(a toolArgs) toolResult
 }
 
 // toolResult is a tool's answer: text (and images) for the model, structured
@@ -227,17 +230,17 @@ func newMCPServer() *mcpServer {
 		if _, entry := tool.Meta["openai/ui"]; entry { // opened from the host's sidebar or tabs: jm's mark there
 			server.tools[i].Icons = serverIcons()
 		}
-		if (tool.run == nil) == (tool.onGame == nil) {
-			panic("tool " + tool.Name + ": give run or onGame, one of them")
+		if given := btoi(tool.run != nil) + btoi(tool.onGame != nil) + btoi(tool.onDriven != nil); given != 1 {
+			panic("tool " + tool.Name + ": give one of run, onGame and onDriven")
 		}
-		if tool.onGame != nil {
+		if tool.run == nil {
 			server.tools[i].run = func(a toolArgs) toolResult { _, run := server.prepare(tool, a); return run() }
 			props, _ := tool.InputSchema["properties"].(map[string]any)
 			if props == nil {
 				props = map[string]any{}
 				tool.InputSchema["properties"] = props
 			}
-			props["game"] = gameOfTool
+			props["game"] = map[bool]map[string]any{true: gameOfTool, false: drivenArg}[tool.onGame != nil]
 		}
 	}
 	if cwd, err := os.Getwd(); err == nil && exists(archive.ManifestEntryKey) { // started in a game (or --dir)
@@ -571,14 +574,36 @@ func (s *mcpServer) callTool(ctx context.Context, params json.RawMessage, round 
 // A tool on a game gets the game the call names, else the open one; it's
 // resolved here, once, so the call's forms, log and work all agree on it.
 func (s *mcpServer) prepare(tool mcpTool, args toolArgs) (game string, run func() toolResult) {
-	if tool.onGame == nil {
-		return s.opened(), func() toolResult { return tool.run(args) }
+	failed := func(err error) func() toolResult { return func() toolResult { return textResult(err.Error(), true) } }
+	switch {
+	case tool.onGame != nil:
+		root, err := s.gameRoot(args)
+		if err != nil {
+			return s.opened(), failed(err)
+		}
+		return root, func() toolResult { return tool.onGame(root, args) }
+	case tool.onDriven != nil && s.game != nil:
+		if v, named := args["game"]; named && v != "" {
+			root, err := s.gameRoot(args)
+			if err == nil && root != s.game.root {
+				err = fmt.Errorf("the game driven is %s, not %s: drive_start {game} to drive that one", s.game.root, root)
+			}
+			if err != nil {
+				return s.game.root, failed(err)
+			}
+		}
+		return s.game.root, func() toolResult { return s.driving(args, tool.onDriven) }
+	case tool.onDriven != nil:
+		return s.opened(), func() toolResult { return tool.onDriven(args) } // nothing runs: it says so
 	}
-	root, err := s.gameRoot(args)
-	if err != nil {
-		return s.opened(), func() toolResult { return textResult(err.Error(), true) }
+	return s.opened(), func() toolResult { return tool.run(args) }
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
 	}
-	return root, func() toolResult { return tool.onGame(root, args) }
+	return 0
 }
 
 // mcpCapabilities: extensions (MCP Apps, OpenAI's) both where current
@@ -827,9 +852,8 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"command":  strArg(`e.g. "step 60", "press Enter", "state"`),
 				"commands": listArg("several commands in order, instead of command"),
 				"repeat":   intArg("run commands this many times over (default 1, at most 1000)"),
-				"game":     drivenArg,
 			}),
-			run: s.driving(func(a toolArgs) toolResult {
+			onDriven: func(a toolArgs) toolResult {
 				commands := a.list("commands")
 				if len(commands) == 0 && a.str("command") != "" {
 					commands = []string{a.str("command")}
@@ -838,28 +862,24 @@ func (s *mcpServer) makeTools() []mcpTool {
 					return textResult(`give a command, e.g. "step 60", or commands`, true)
 				}
 				return s.driveBatch(a.call(), commands, int(a.num("repeat", 1, 1, 1000)), driveReplyLimit)
-			})},
+			}},
 		{Name: "drive_frame", Title: "See the driven game", Description: "An image of the driven game as it is now (the last frame it ran). " +
 			"Needs a game started with gl: true. Use it to see what your commands did, e.g. after step 60 or a click.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"game": drivenArg}), run: s.driving(s.driveFrame)},
+			Annotations: readOnly(), InputSchema: object(map[string]any{}), onDriven: s.driveFrame},
 		{Name: "drive_profile", Title: "Where the driven game's time goes", Description: "Call when the game feels slow or you changed something costly: " +
 			"where the driven game's last frames (up to 120) went: each system's, script's and module's average and worst ms, " +
 			"and counts (entities, scripts, draw calls, sprites). Step to the moment you care about first. " +
 			"Without gl there's no GPU work, so the CPU's share is what it measures.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"game": drivenArg}), run: s.driving(s.driveProfile)},
+			Annotations: readOnly(), InputSchema: object(map[string]any{}), onDriven: s.driveProfile},
 		{Name: "drive_stop", Description: "Stop the driven game; a recorded run's play id (and its game) comes back.", Annotations: writes(),
-			InputSchema: object(map[string]any{"game": drivenArg}),
-			run: s.driving(func(toolArgs) toolResult {
-				root := ""
-				if s.game != nil {
-					root = s.game.root
-				}
-				play := s.stopDriver()
+			InputSchema: object(map[string]any{}),
+			onDriven: func(toolArgs) toolResult {
+				play, game := s.endRun()
 				if play == "" {
 					return textResult(`{"ok":true}`, false)
 				}
-				return jsonResult(map[string]any{"ok": true, "play": play, "game": root, "next": "play_show {play, game} shows it, as it does the person's plays"})
-			})},
+				return jsonResult(map[string]any{"ok": true, "play": play, "game": game, "next": "play_show {play, game} shows it, as it does the person's plays"})
+			}},
 		{Name: "session", Description: "Play a multiplayer session on this machine (jm run --peers), headless with no GL, " +
 			"in real time: the game's server if it has one, and N games. Each game can replay its own input. " +
 			"Returns each peer's state when it ended: its net section (role, player, players, shared entities), " +
@@ -879,29 +899,14 @@ func (s *mcpServer) makeTools() []mcpTool {
 // checks the call means it (an agent driving one game, another opened since).
 var drivenArg = strArg("the game whose run this is (default: the one driven); another game's is refused")
 
-// driving is a tool on the driven game, which its call's cancel kills, mid-step or not.
-// A call that names a game must name the driven one: it's refused before anything's done.
-func (s *mcpServer) driving(run func(toolArgs) toolResult) func(toolArgs) toolResult {
-	return func(a toolArgs) toolResult {
-		if v, named := a["game"]; named && v != "" && s.game != nil {
-			root, err := s.gameRoot(a)
-			if err != nil {
-				return textResult(err.Error(), true)
-			}
-			if root != s.game.root {
-				return textResult(fmt.Sprintf("the game driven is %s, not %s: drive_start {game} to drive that one", s.game.root, root), true)
-			}
-		}
-		release := func() bool { return false }
-		if s.game != nil {
-			release = s.game.stopOn(a.call().context())
-		}
-		result := run(a)
-		if release(); a.call().context().Err() != nil {
-			s.stopDriver() // killed (or about to be): reaped, its folder gone
-		}
-		return result
+// driving runs a tool on the driven game, which its call's cancel kills, mid-step or not.
+func (s *mcpServer) driving(a toolArgs, run func(toolArgs) toolResult) toolResult {
+	release := s.game.stopOn(a.call().context())
+	result := run(a)
+	if release(); a.call().context().Err() != nil {
+		s.stopDriver() // killed (or about to be): reaped, its folder gone
 	}
+	return result
 }
 
 // jsonResult is a value as compact JSON for the model and as structured
@@ -1155,12 +1160,20 @@ func (s *mcpServer) driveBatch(call *toolCall, commands []string, repeat, limit 
 	return result(false)
 }
 
-// ended stops a game that has ended, adding the play it recorded to reply.
+// ended stops a game that has ended, adding the play it recorded (and its game) to reply.
 func (s *mcpServer) ended(reply string) string {
-	if play := s.stopDriver(); play != "" {
-		return reply + "\n" + fmt.Sprintf(`{"play":%q,"next":"play_show shows it"}`, play)
+	if play, game := s.endRun(); play != "" {
+		return reply + "\n" + fmt.Sprintf(`{"play":%q,"game":%q,"next":"play_show {play, game} shows it"}`, play, game)
 	}
 	return reply
+}
+
+// endRun stops the driven game: the play it recorded ("" for none) and its game.
+func (s *mcpServer) endRun() (play, game string) {
+	if s.game != nil {
+		game = s.game.root
+	}
+	return s.stopDriver(), game
 }
 
 // stopDriver ends the driven game, if one runs: the id of the play it

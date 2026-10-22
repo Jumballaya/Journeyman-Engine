@@ -80,7 +80,7 @@ func init() {
 		if err != nil {
 			return err
 		}
-		o, err := overviewOf(p, b)
+		o, err := overviewOf(root, p, b)
 		return printResult(cmd.OutOrStdout(), o, err)
 	}))
 	sub("state [play] [moment] [part...]", "The game's state at a moment (replayed)", 64, rooted(func(root string, cmd *cobra.Command, args []string) error {
@@ -308,19 +308,20 @@ func (l playListings) text() string {
 // (the timeline widget reads it, and checks JM against its own version).
 type playOverview struct {
 	plays.Summary
+	Game  string `json:"game"` // its folder: what follow-up calls name
 	Dir   string `json:"dir"`
 	Stale bool   `json:"stale"` // made with a build that plays differently
 	JM    string `json:"jm"`
 }
 
-func overviewOf(p *plays.Play, b plays.Build) (playOverview, error) {
+func overviewOf(root string, p *plays.Play, b plays.Build) (playOverview, error) {
 	s, err := p.Summarize()
-	return playOverview{s, p.Dir, p.DriftFrom(b) == plays.GameChanged, version}, err
+	return playOverview{s, evalOrSelf(root), p.Dir, p.DriftFrom(b) == plays.GameChanged, version}, err
 }
 
 func (o playOverview) text() string {
 	var out strings.Builder
-	fmt.Fprintf(&out, "%s: %s of %s (%d frames), %s\n", o.ID, clock(o.Seconds), o.Game, o.Frames, endedText(o.Ended))
+	fmt.Fprintf(&out, "%s: %s of %s (%d frames), %s\n", o.ID, clock(o.Seconds), o.Name, o.Frames, endedText(o.Ended))
 	if o.Stale {
 		fmt.Fprintln(&out, "(made with an older build: replays may go differently; verify says)")
 	}

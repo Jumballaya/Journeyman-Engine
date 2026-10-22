@@ -113,6 +113,14 @@ func TestPlaysAndTheDriverAreTheGameNamed(t *testing.T) {
 	if got := toolOf(t, s, "drive").run(toolArgs{"game": "alpha", "command": "step"}); got.Failed {
 		t.Errorf("alpha's run: %s", got.Text)
 	}
+	if game, _ := s.prepare(toolOf(t, s, "drive"), toolArgs{"command": "step"}); game != s.game.root {
+		t.Errorf("a drive call runs in %q, not the run's game", game) // its log is that game's
+	}
+	s.openGame(filepath.Join(home, "alpha")) // opening a game leaves the run be
+	s.openGame(filepath.Join(home, "beta"))
+	if s.game == nil {
+		t.Fatal("opening a game stopped the run")
+	}
 	if got := toolOf(t, s, "drive_stop").run(toolArgs{}); s.game != nil || got.Failed {
 		t.Errorf("drive_stop: %s", got.Text)
 	}

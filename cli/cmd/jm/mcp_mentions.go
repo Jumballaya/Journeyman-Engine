@@ -255,7 +255,7 @@ func readPlayMention(uri, rest string) ([]map[string]any, error) {
 	if p.ID != id {
 		return nil, fmt.Errorf("no play %s", id) // a prefix finds a play: a link names one
 	}
-	o, err := overviewOf(p, b)
+	o, err := overviewOf(root, p, b)
 	if err != nil {
 		return nil, err
 	}

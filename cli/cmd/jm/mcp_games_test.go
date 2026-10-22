@@ -214,14 +214,12 @@ func TestOpenGameTakesAListedNameOrAnAbsolutePath(t *testing.T) {
 	}
 }
 
-// Every tool says which game it works on: onGame gives it the call's game, or
-// it's listed here. A new tool that's on neither list fails this.
+// Every tool says which game it works on: onGame gives it the call's game,
+// onDriven the driven run's, or it's listed here. A new tool that's on neither list fails this.
 func TestEveryToolSaysWhichGameItWorksOn(t *testing.T) {
 	noGame := map[string]bool{ // they choose a game, or need none
 		"games": true, "games_find": true, "new_game": true, "open_game": true, "doctor": true, "schema": true,
 		"companions": true, "studio": true, "playbook": true,
-		// on the driven game (there's one): a game named must be its game (driving)
-		"drive": true, "drive_frame": true, "drive_profile": true, "drive_stop": true,
 	}
 	// Design debt: these still find their game themselves (their own "game", or the
 	// working folder). Each moves to onGame (todos: Design debt, G2–G6), then off this list.
@@ -232,9 +230,9 @@ func TestEveryToolSaysWhichGameItWorksOn(t *testing.T) {
 	for _, tool := range newMCPServer().tools {
 		listed := noGame[tool.Name] || ownWay[tool.Name]
 		switch {
-		case tool.onGame != nil && listed:
+		case (tool.onGame != nil || tool.onDriven != nil) && listed:
 			t.Errorf("%s works on the call's game now: take it off the list", tool.Name)
-		case tool.onGame == nil && !listed:
+		case tool.onGame == nil && tool.onDriven == nil && !listed:
 			t.Errorf("%s: give it onGame (it works on a game), or list it", tool.Name)
 		}
 	}
