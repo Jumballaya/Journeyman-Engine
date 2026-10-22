@@ -31,24 +31,30 @@ var stores = map[Kind]string{Variant: "variants", Sandbox: "sandboxes"}
 func Store(game string, kind Kind) string { return filepath.Join(game, ".jm", stores[kind]) }
 
 // OpenStore is game's Store of kind, made when create (else "" when there's
-// none); each step its own folder: a link is refused, never followed.
+// none); each step its own folder, checked before anything is made in it: a
+// link is refused, never followed.
 func OpenStore(game string, kind Kind, create bool) (string, error) {
-	if create {
-		if _, err := jmfolder.Make(game, stores[kind]); err != nil {
-			return "", err
-		}
-	}
 	dir := game
 	for _, step := range []string{".jm", stores[kind]} {
 		dir = filepath.Join(dir, step)
 		info, err := os.Lstat(dir)
+		if errors.Is(err, fs.ErrNotExist) && create {
+			if err = os.Mkdir(dir, 0o755); err == nil {
+				info, err = os.Lstat(dir)
+			}
+		}
 		switch {
-		case errors.Is(err, fs.ErrNotExist) && !create:
+		case errors.Is(err, fs.ErrNotExist):
 			return "", nil
 		case err != nil:
 			return "", err
 		case !info.IsDir():
 			return "", fmt.Errorf("%s isn't a folder of the game's own (a link?): %ss are kept only there", dir, kind)
+		}
+	}
+	if create {
+		if _, err := jmfolder.Make(game); err != nil { // .jm ignores itself
+			return "", err
 		}
 	}
 	return dir, nil
@@ -66,21 +72,14 @@ type Copy struct {
 // needn't be there still (a dropped one is its game's); its game must be.
 func Of(dir string) (Copy, bool) {
 	dir = filepath.Clean(dir)
-	parts := strings.Split(filepath.ToSlash(dir), "/")
-	for i := len(parts) - 3; i >= 1; i-- {
-		if parts[i] != ".jm" {
-			continue
-		}
-		for kind, store := range stores {
-			if parts[i+1] != store {
-				continue
-			}
-			game := filepath.FromSlash(strings.Join(parts[:i], "/"))
-			if game == "" {
-				game = string(filepath.Separator)
-			}
-			if c := (Copy{game, kind, parts[i+2]}); isGame(game) && dir == c.gameFolder() {
-				return c, true
+	for name := dir; filepath.Dir(name) != name; name = filepath.Dir(name) { // name: a copy's folder in a store?
+		store := filepath.Dir(name)
+		if jm := filepath.Dir(store); filepath.Base(jm) == ".jm" {
+			for kind, folder := range stores {
+				c := Copy{filepath.Dir(jm), kind, filepath.Base(name)}
+				if filepath.Base(store) == folder && isGame(c.Game) && dir == c.gameFolder() {
+					return c, true
+				}
 			}
 		}
 	}

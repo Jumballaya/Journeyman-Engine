@@ -98,6 +98,20 @@ func TestAStoreIsTheGamesOwn(t *testing.T) {
 	}
 }
 
+// A game whose .jm is a link: nothing is made where it leads.
+func TestALinkedJMGetsNothingMade(t *testing.T) {
+	game, elsewhere := t.TempDir(), t.TempDir()
+	if err := os.Symlink(elsewhere, filepath.Join(game, ".jm")); err != nil {
+		t.Skip(err)
+	}
+	if dir, err := OpenStore(game, Variant, true); err == nil {
+		t.Errorf("a store through a linked .jm: %q", dir)
+	}
+	if made, _ := os.ReadDir(elsewhere); len(made) != 0 {
+		t.Errorf("made where .jm leads: %v", made)
+	}
+}
+
 // In a repository, a variant's game is where the game sits in it: a variant of
 // games/a, opened at its games/a, is a's; its games/b is not.
 func TestAVariantsGameIsWhereTheGameSits(t *testing.T) {
