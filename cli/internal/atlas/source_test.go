@@ -97,3 +97,10 @@ func TestASourceOutsideTheGameIsntRead(t *testing.T) {
 		t.Error("a region from outside the game")
 	}
 }
+
+func TestASheetsImageOutsideTheGameIsntRead(t *testing.T) {
+	game := files{"../outside.png": pngOf(2, 2), "art/out.json": sheetOf(`..\\..\\outside.png`, 1)}
+	if _, _, err := (AtlasConfig{Sources: []string{"art/out.json"}}).Read(game.read, 0); err == nil || !strings.Contains(err.Error(), "in the game") {
+		t.Errorf("a sheet's Windows-written image outside the game: %v", err)
+	}
+}

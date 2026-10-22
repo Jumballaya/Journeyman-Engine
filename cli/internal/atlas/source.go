@@ -25,10 +25,9 @@ type Source struct {
 	Sheet bool
 }
 
-// SourceOf is the source the atlas path names; a backslash separates its
-// parts, as on Windows (where the atlas was written isn't known).
+// SourceOf is the source the atlas path names.
 func SourceOf(p string) Source {
-	p = strings.ReplaceAll(p, `\`, "/")
+	p = slash(p)
 	base := path.Base(p)
 	return Source{Path: p, Name: strings.TrimSuffix(base, path.Ext(base)), Sheet: strings.EqualFold(path.Ext(base), ".json")}
 }
@@ -148,12 +147,16 @@ func (s Source) sheet(read ReadFunc) (Sheet, string, error) {
 	if err != nil {
 		return Sheet{}, "", fmt.Errorf("%q: %w", s.Path, err)
 	}
-	picture := path.Join(path.Dir(s.Path), sheet.Image)
+	picture := path.Join(path.Dir(s.Path), slash(sheet.Image))
 	if !local(picture) {
 		return Sheet{}, "", fmt.Errorf("%q: its image %q isn't in the game", s.Path, sheet.Image)
 	}
 	return sheet, picture, nil
 }
+
+// slash is p with a backslash separating its parts, as on Windows: where an
+// atlas or sheet was written isn't known.
+func slash(p string) string { return strings.ReplaceAll(p, `\`, "/") }
 
 // local says whether the slash path p is in the folder it's read from: not
 // empty, absolute, on a drive ("C:x") or led out of by "..".
