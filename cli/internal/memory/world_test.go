@@ -339,3 +339,22 @@ func TestTheWorldSaysWhatItCouldntRead(t *testing.T) {
 		t.Errorf("an unlistable folder: %v", w.Unread)
 	}
 }
+
+// A relation is written as a link that finds its note alone; when none can
+// (two paths differing only in case), it isn't written.
+func TestARelationsLinkFindsItsNoteAlone(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	for _, d := range []string{"North", "South"} {
+		os.MkdirAll(filepath.Join(root, Dir, d), 0o755)
+		os.WriteFile(filepath.Join(root, Dir, d, "Harbor.md"), []byte("---\ntitle: \"Harbor\"\n---\n\n# Harbor\n"), 0o644)
+	}
+	n, err := Relate(root, "Pillars", Relation{Type: "mentions_place", Target: "design/South/Harbor.md"})
+	if err != nil || !slices.ContainsFunc(n.Relations, func(r Relation) bool { return r.Target == "South/Harbor" }) {
+		t.Errorf("%v %+v", err, n.Relations)
+	}
+	w := World{Notes: []Note{{Title: "Harbor", Path: "design/North/Harbor.md"}, {Title: "Harbor", Path: "design/north/Harbor.md"}}}
+	if w.linksOnly("north/Harbor", w.Notes[1]) || NameOf(w.Notes, w.Notes[1]) != "design/north/Harbor.md" {
+		t.Error("a link for one of two paths differing in case")
+	}
+}
