@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,8 +23,8 @@ func TestScaffoldMakesAVaultAndKeepsWhatsThere(t *testing.T) {
 	if data, _ := os.ReadFile(filepath.Join(root, Dir, "Pitch.md")); string(data) != "mine" {
 		t.Errorf("the person's pitch was replaced: %q", data)
 	}
-	design, ok := Find(root, "design")
-	if !ok || design.Type != "index" || strings.Join(design.Links, ",") != "Pitch,Pillars,Levels,Systems,Art,Decisions,Notes" {
+	design, err := Find(root, "design")
+	if err != nil || design.Type != "index" || strings.Join(design.Links, ",") != "Pitch,Pillars,Levels,Systems,Art,Decisions,Notes" {
 		t.Errorf("Design: %+v", design)
 	}
 	if again, _ := Scaffold(root); len(again) != 0 {
@@ -50,7 +51,7 @@ func TestObserveAddsToTheNotesObservations(t *testing.T) {
 	if len(n.Observations) != 2 || n.Observations[0] != (Observation{"feel", "1-1's pit is unfair at the end"}) || strings.Join(n.Links, ",") != "Pillars,Design" {
 		t.Errorf("parsed: %+v", n)
 	}
-	if back := Backlinks(root, mustFind(t, root, "Pillars")); strings.Join(back, ",") != "Design,Levels" {
+	if back := Backlinks(root, mustFind(t, root, "Pillars")); fmt.Sprint(back) != "[{Design design/Design.md} {Levels design/Levels.md}]" {
 		t.Errorf("Pillars' backlinks: %v", back)
 	}
 	made, err := Observe(root, "Boss ideas", "idea", "a mirror boss")
@@ -84,8 +85,8 @@ func TestDecideWritesADecisionNoteListedInDecisions(t *testing.T) {
 
 func mustFind(t *testing.T, root, name string) Note {
 	t.Helper()
-	n, ok := Find(root, name)
-	if !ok {
+	n, err := Find(root, name)
+	if err != nil {
 		t.Fatalf("no note %s", name)
 	}
 	return n
@@ -204,7 +205,7 @@ func TestCodeInANoteIsntMemory(t *testing.T) {
 		t.Errorf("observations %v, links %v", n.Observations, n.Links)
 	}
 	pillars, _ := Find(root, "Pillars")
-	if slices.Contains(Backlinks(root, pillars), "Howto") {
+	if slices.Contains(Backlinks(root, pillars), Ref{"Howto", Dir + "/Howto.md"}) {
 		t.Error("Pillars is linked from code only")
 	}
 }
@@ -217,9 +218,9 @@ func TestASingleQuotedTitleIsFound(t *testing.T) {
 	if _, err := Observe(root, "Rock 'n' roll", "", "loud"); err != nil {
 		t.Fatal(err)
 	}
-	n, ok := Find(root, "Rock 'n' roll")
-	if !ok || n.Path != Dir+"/rock.md" || len(n.Observations) != 1 {
-		t.Errorf("found %v %+v", ok, n)
+	n, err := Find(root, "Rock 'n' roll")
+	if err != nil || n.Path != Dir+"/rock.md" || len(n.Observations) != 1 {
+		t.Errorf("found %v %+v", err, n)
 	}
 	if len(Notes(root)) != len(scaffold)-2+1 {
 		t.Errorf("another note was made: %d notes", len(Notes(root)))
@@ -283,8 +284,8 @@ func TestADesignLinkInTheGameIsTheNotes(t *testing.T) {
 	if !strings.Contains(string(data), "mine") || !strings.Contains(string(data), "- [note] first") || !strings.Contains(string(data), "- [note] second") {
 		t.Errorf("Notes.md:\n%s", data)
 	}
-	if n, ok := Find(root, "Notes"); !ok || n.Path != Dir+"/Notes.md" || len(Notes(root)) < 2 {
-		t.Errorf("found %v %+v; %d notes", ok, n, len(Notes(root)))
+	if n, err := Find(root, "Notes"); err != nil || n.Path != Dir+"/Notes.md" || len(Notes(root)) < 2 {
+		t.Errorf("found %v %+v; %d notes", err, n, len(Notes(root)))
 	}
 }
 
@@ -312,8 +313,8 @@ func TestATitlesCommentIsntItsTitle(t *testing.T) {
 		os.WriteFile(filepath.Join(root, Dir, file), []byte("---\ntitle: "+title+"\n---\n\n# x\n"), 0o644)
 	}
 	for name, file := range map[string]string{"Rock": "a.md", "It's": "b.md", "Plain": "c.md", "C#": "d.md"} {
-		if n, ok := Find(root, name); !ok || n.Path != Dir+"/"+file {
-			t.Errorf("%s: %v %+v", name, ok, n)
+		if n, err := Find(root, name); err != nil || n.Path != Dir+"/"+file {
+			t.Errorf("%s: %v %+v", name, err, n)
 		}
 	}
 	before := len(Notes(root))
@@ -364,15 +365,15 @@ func TestATabbedTitleCommentIsntTheTitle(t *testing.T) {
 	Scaffold(root)
 	os.WriteFile(filepath.Join(root, Dir, "tab.md"), []byte("---\ntitle: Tab title\t# comment\n---\n\n# x\n"), 0o644)
 	os.WriteFile(filepath.Join(root, Dir, "csharp.md"), []byte("---\ntitle: C# # language\n---\n\n# x\n"), 0o644)
-	if n, ok := Find(root, "C#"); !ok || n.Path != Dir+"/csharp.md" {
-		t.Errorf("C#: %v %+v", ok, n)
+	if n, err := Find(root, "C#"); err != nil || n.Path != Dir+"/csharp.md" {
+		t.Errorf("C#: %v %+v", err, n)
 	}
 	before := len(Notes(root))
 	if _, err := Observe(root, "Tab title", "", "x"); err != nil || len(Notes(root)) != before {
 		t.Errorf("observe made another note: %v", err)
 	}
-	if n, ok := Find(root, "Tab title"); !ok || n.Path != Dir+"/tab.md" {
-		t.Errorf("found %v %+v", ok, n)
+	if n, err := Find(root, "Tab title"); err != nil || n.Path != Dir+"/tab.md" {
+		t.Errorf("found %v %+v", err, n)
 	}
 }
 
@@ -475,5 +476,35 @@ func TestARelativeGamesLinkedDesignFolderGetsNothing(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
 		t.Errorf("wrote outside the game: %v", entries)
+	}
+}
+
+// A note is its path: two titled Harbor are each found by theirs, and a
+// change to "Harbor" is refused (asked which) rather than made to the first.
+func TestTwoNotesOfOneTitleAreEachTheirPath(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	for _, side := range []string{"North", "South"} {
+		os.MkdirAll(filepath.Join(root, Dir, side), 0o755)
+		os.WriteFile(filepath.Join(root, Dir, side, "Harbor.md"), []byte("---\ntitle: \"Harbor\"\n---\n\n# Harbor\n"), 0o644)
+	}
+	if _, err := Find(root, "Harbor"); err == nil || errors.Is(err, ErrNoNote) || !strings.Contains(err.Error(), "design/South/Harbor.md") {
+		t.Errorf("Harbor: %v", err)
+	}
+	if _, err := Observe(root, "Harbor", "", "gulls"); err == nil {
+		t.Error("an observation for either Harbor was written")
+	}
+	n, err := Observe(root, "design/South/Harbor.md", "", "gulls")
+	if err != nil || n.Path != "design/South/Harbor.md" {
+		t.Fatalf("South: %+v %v", n, err)
+	}
+	if north, _ := Find(root, "North/Harbor"); len(north.Observations) != 0 {
+		t.Errorf("North got it: %+v", north)
+	}
+	if _, err := Find(root, "Lighthouse"); !errors.Is(err, ErrNoNote) {
+		t.Errorf("no Lighthouse: %v", err)
+	}
+	if _, err := Decide(root, "Harbor", "why"); err == nil {
+		t.Error("a decision took a name two notes have")
 	}
 }

@@ -172,8 +172,10 @@ func NewDossier(root, kind, name, summary string, props map[string]string) (Note
 	if info, err := os.Lstat(filepath.Join(root, Dir, file.folder)); err == nil && info.Mode()&os.ModeSymlink != 0 {
 		return Note{}, fmt.Errorf("%s/%s is a link: the notes there aren't read, so none is written there", Dir, file.folder)
 	}
-	if n, ok := Find(root, title); ok {
+	if n, err := Find(root, title); err == nil {
 		return Note{}, fmt.Errorf("%s already exists: add to it instead", n.Path)
+	} else if !errors.Is(err, ErrNoNote) {
+		return Note{}, fmt.Errorf("%v: a dossier can't take that name", err)
 	}
 	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(path))); !errors.Is(err, os.ErrNotExist) {
 		return Note{}, fmt.Errorf("%s is there already (or can't be checked): nothing was written", path) // a folder through a link isn't listed

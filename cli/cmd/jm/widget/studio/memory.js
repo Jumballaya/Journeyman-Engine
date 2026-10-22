@@ -5,7 +5,8 @@
 studioTabs.push((() => {
   "use strict";
   // listed: the memory answer ({ path, notes } or { path, error }), asked each visit.
-  // read: { title, note: memory's answer for it | null, world: world_context's | null }. found: a search's { text, hits }.
+  // read: { ref (a note's path, or a [[link]]'s name), note: memory's answer for it | null, world: world_context's | null }.
+  // A note is its path: two may share a title (North/Harbor, South/Harbor). found: a search's { text, hits }.
   // facts: recall's facts (the person's and the game's), asked each visit.
   // form: "note" | "decide" while that form is open; draft: its fields.
   // game: whose these are (another game's start over).
@@ -13,6 +14,9 @@ studioTabs.push((() => {
   let state = fresh(null);
 
   const { said } = kit;
+  // The note being read, once memory answered for it; its path.
+  const readNote = () => state.read && state.read.note && !state.read.note.error && state.read.note.note || null;
+  const readPath = () => (readNote() || {}).path || "";
   const listing = kit.latest(() => state), searching = kit.latest(() => state), recalling = kit.latest(() => state);  // an older answer, or another game's, is dropped
 
   const list = async (ctx, path) => {
@@ -21,7 +25,7 @@ studioTabs.push((() => {
     const s = r.structuredContent;
     state.listed = { path, notes: s && Array.isArray(s.notes) ? s.notes : [], error: r.isError ? said(r) : "" };
     recall(ctx);
-    if (!state.read && state.listed.notes.length) open(ctx, (state.listed.notes.find((n) => n.title === "Design") || state.listed.notes[0]).title);
+    if (!state.read && state.listed.notes.length) open(ctx, (state.listed.notes.find((n) => n.path === "design/Design.md") || state.listed.notes[0]).path);
     ctx.rerender();
   };
 
@@ -32,14 +36,14 @@ studioTabs.push((() => {
     ctx.rerender();
   };
 
-  const open = async (ctx, title) => {
-    const read = state.read = { title, note: null, world: null };
+  const open = async (ctx, ref) => {
+    const read = state.read = { ref, note: null, world: null };
     state.form = null;
     ctx.rerender();
-    const [r, w] = await Promise.all([ctx.call("memory", { note: title }).catch(() => null),
-      ctx.call("world_context", { note: title, steps: 1 }).catch(() => null)]);
+    const [r, w] = await Promise.all([ctx.call("memory", { note: ref }).catch(() => null),
+      ctx.call("world_context", { note: ref, steps: 1 }).catch(() => null)]);
     if (state.read === read) {
-      read.note = r && !r.isError && r.structuredContent ? r.structuredContent : { error: said(r) || `No note ${title}.` };
+      read.note = r && !r.isError && r.structuredContent ? r.structuredContent : { error: said(r) || `No note ${ref}.` };
       read.world = w && !w.isError && w.structuredContent ? w.structuredContent : null;
       ctx.rerender();
     }
@@ -84,7 +88,7 @@ studioTabs.push((() => {
       const mine = state;
       if (!(await ctx.act("Forgetting", "forget", { id: f.id, scope: f.scope }, (t) => t)) || mine !== state) return;
       recall(ctx);
-      if (f.scope === "game" && state.read && state.read.note && state.read.note.note && state.read.note.note.path === "design/Memory.md") open(ctx, state.read.title);  // the page it was on
+      if (f.scope === "game" && readPath() === "design/Memory.md") open(ctx, readPath());  // the page it was on
     };
     return section("Keep in mind", all.length ? el("ul", { class: "mem-list mem-facts" }, all.map((f) => el("li", {},
       el("span", { class: "badge" }, f.category), el("span", {}, inline(ctx, f.text), f.scope === "you" ? el("span", { class: "meta" }, " (yours)") : null),
@@ -148,31 +152,33 @@ studioTabs.push((() => {
     return input;
   };
 
-  // Saved: reopen, else the note as the tool named it (a title can lose a ? or :). Not: the form stays, to try again.
+  // Saved: reopen, else the note the tool wrote (by its path: a title can lose a ? or :). Not: the form stays, to try again.
   const save = async (ctx, label, name, args, done, reopen) => {
     let saved = null;
     const mine = state;  // another game shown meanwhile: its tab isn't this one's to touch
     const ok = await ctx.act(label, name, args, (text) => {
-      try { saved = JSON.parse(text).note || null; } catch (e) {}
-      return done(saved);
+      let answer = {};
+      try { answer = JSON.parse(text) || {}; } catch (e) {}
+      saved = answer.path || null;
+      return done(typeof answer.note === "string" ? answer.note : answer.note && answer.note.title);
     });
     if (!ok || mine !== state) return;
     state.form = null;
     state.draft = {};
     await list(ctx, ctx.game.path);
     if (mine !== state) return;
-    open(ctx, reopen || saved || args.title || args.note);  // a host that gave no text: as typed
+    open(ctx, reopen || saved || args.note || args.title);  // a host that gave no text: as typed
   };
 
-  const forms = (ctx, title) => {
+  const forms = (ctx, note) => {
     const { el } = ctx.kit, d = state.draft;
     const buttons = [el("button", { class: "primary", type: "submit", disabled: ctx.busy }, state.form === "note" ? "Note it" : "Record"),
       el("button", { type: "button", onclick: () => { state.form = null; ctx.rerender(); } }, "Cancel")];
     if (state.form === "note") {
       return el("form", { class: "head", onsubmit: (e) => {
         e.preventDefault();
-        if ((d.text || "").trim()) save(ctx, "Noting", "memory_note", { note: title, text: d.text.trim(), category: (d.category || "").trim() }, (note) => `Noted in ${note || title}.`);
-      } }, field(ctx, "category", "kind (feel, idea…)"), field(ctx, "text", `Something to note in ${title}`), buttons);
+        if ((d.text || "").trim()) save(ctx, "Noting", "memory_note", { note: note.path, text: d.text.trim(), category: (d.category || "").trim() }, (title) => `Noted in ${title || note.title}.`);
+      } }, field(ctx, "category", "kind (feel, idea…)"), field(ctx, "text", `Something to note in ${note.title}`), buttons);
     }
     return el("form", { class: "head", onsubmit: (e) => {
       e.preventDefault();
@@ -183,11 +189,9 @@ studioTabs.push((() => {
 
   const reader = (ctx) => {
     const { el } = ctx.kit, kit = ctx.kit, r = state.read, n = r.note;
-    if (!n) return kit.section(r.title, el("div", { class: "meta" }, "Reading…"));
-    if (n.error) return kit.section(r.title, el("div", { class: "meta" }, n.error));
-    const note = n.note || {}, host = ctx.host;
-    // The note as a playbook names it: its title, or its path when another note has that title.
-    const shared = ((state.listed && state.listed.notes) || []).filter((o) => o.title.toLowerCase() === note.title.toLowerCase()).length > 1, which = shared ? note.path : note.title;
+    if (!n) return kit.section(r.ref, el("div", { class: "meta" }, "Reading…"));
+    if (n.error) return kit.section(r.ref, el("div", { class: "meta" }, n.error));
+    const note = n.note || {}, host = ctx.host, which = note.path;  // a playbook names it by its path, as every tool takes it
     return el("section", { class: "section mem-note" },
       el("div", { class: "head" }, el("h1", {}, note.title), note.type ? el("span", { class: "badge" }, note.type) : null,
         el("span", { class: "meta" }, note.path)),
@@ -204,12 +208,12 @@ studioTabs.push((() => {
         note.type === "location" ? playbook(ctx, "level_from_place", { place: which }, "Make it a level") : null,
         ["character", "item", "location", "faction"].includes(note.type) ? playbook(ctx, "art_pass", { note: which }, "Draw it") : null,
         playbook(ctx, "canon_check", { note: which }, "Check canon")),
-      state.form ? forms(ctx, note.title) : null,
+      state.form ? forms(ctx, note) : null,
       props(ctx, note.props),
       body(ctx, n.text || ""),
       world(ctx, note.path, r.world),
       (n.backlinks || []).length ? el("div", { class: "meta mem-back" }, "Linked from ", n.backlinks.flatMap((b, i) =>
-        [i ? ", " : "", el("button", { class: "mem-link", onclick: () => open(ctx, b) }, b)])) : null);
+        [i ? ", " : "", el("button", { class: "mem-link", title: b.path, onclick: () => open(ctx, b.path) }, b.title)])) : null);
   };
 
   const styled = (el) => {
@@ -248,9 +252,8 @@ studioTabs.push((() => {
         el("button", { class: "primary", onclick: () => ctx.host.message("Plan the game I want to make with me, a question at a time (onboard).", { send: false }) }, "Plan it with the agent"),
         el("button", { disabled: ctx.busy, onclick: () => { state.read = null; save(ctx, "Making the notes", "memory_note", { note: "Notes", text: "Started the design notes." }, () => "The design notes are made.", "Design"); } }, "Start the notes"), facts(ctx));
     }
-    if (state.read && state.read.note && !state.read.note.error) {
-      ctx.share(`The person is reading the design note ${state.read.title} of ${game.name}.`, { note: state.read.title, path: state.read.note.note && state.read.note.note.path });
-    }
+    const reading = readNote();
+    if (reading) ctx.share(`The person is reading the design note ${reading.title} (${reading.path}) of ${game.name}.`, { note: reading.title, path: reading.path });
     // The scaffold's notes in its order (Design's), then the person's own; dossiers by their folder; decisions last.
     const rank = (n) => { const i = ["Design", "Pitch", "Pillars", "Levels", "Systems", "Decisions", "Notes"].indexOf(n.title); return i < 0 ? 99 : i; };
     const groups = new Map([["Design", []]]);  // a folder may be named anything (constructor, too)
@@ -262,15 +265,15 @@ studioTabs.push((() => {
     const decisions = groups.get("Decisions");
     if (decisions) { groups.delete("Decisions"); groups.set("Decisions", decisions); }
     const items = [...groups].map(([label, notes]) => ({ id: "group:" + label, label, meta: String(notes.length),
-      children: notes.map((n) => ({ id: n.title, label: n.title, title: n.path, meta: n.observations.length ? `${n.observations.length} noted` : "" })) }));
+      children: notes.map((n) => ({ id: n.path, label: n.title, title: n.path, meta: n.observations.length ? `${n.observations.length} noted` : "" })) }));
     const box = el("input", { type: "search", placeholder: "Search the notes", "aria-label": "Search the notes", "data-key": "mem-search", class: "mem-grow",
       onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); search(ctx, e.target.value); } else if (e.key === "Escape") search(ctx, ""); } });
     box.value = state.query;
     const left = el("div", { class: "pane" }, el("div", { class: "head" }, box),
       state.found ? kit.section(`Search: ${state.found.text}`, state.found.hits.length ? kit.tree({ label: "Found", items: state.found.hits.map((h, i) => ({
-        id: "hit:" + i, label: h.text || h.title, title: h.path, meta: h.line ? h.title : "" })), onPick: (item) => open(ctx, state.found.hits[Number(item.id.slice(4))].title) })
+        id: "hit:" + i, label: h.text || h.title, title: h.path, meta: h.line ? h.title : "" })), onPick: (item) => open(ctx, state.found.hits[Number(item.id.slice(4))].path) })
         : el("div", { class: "meta" }, "Nothing found.")) : null,
-      kit.section("Design notes", kit.tree({ label: "Design notes", items, selected: state.read && state.read.title, onPick: (item) => item.children ? false : open(ctx, item.id) })),
+      kit.section("Design notes", kit.tree({ label: "Design notes", items, selected: readPath() || (state.read && state.read.ref), onPick: (item) => item.children ? false : open(ctx, item.id) })),
       facts(ctx));
     return el("div", {}, kit.split("memory", left, state.read ? reader(ctx) : kit.section("Note", el("div", { class: "meta" }, "Pick a note.")), { ratio: 0.3 }));
   };

@@ -260,7 +260,7 @@ func TestMCPPromptsAndMemoryTools(t *testing.T) {
 		t.Errorf("prompts: %v %v", replies[1], replies[2])
 	}
 	read := jsonOf(replies[4])
-	if !strings.Contains(read, `- [pillar] jumps feel exact`) || !strings.Contains(read, `"backlinks":["Design"]`) || !strings.Contains(read, "obsidian://open?path=") {
+	if !strings.Contains(read, `- [pillar] jumps feel exact`) || !strings.Contains(read, `"backlinks":[{"path":"design/Design.md","title":"Design"}]`) || !strings.Contains(read, "obsidian://open?path=") {
 		t.Errorf("memory: %s", read)
 	}
 }
@@ -284,7 +284,7 @@ func TestMCPDossiers(t *testing.T) {
 	if list := jsonOf(replies[3]); !strings.Contains(list, "Irongate (design/Locations/Irongate.md)") || strings.Contains(list, "Mara") {
 		t.Errorf("memory kind: %s", list)
 	}
-	if read := jsonOf(replies[4]); !strings.Contains(read, `"backlinks":["Mara Dorne"]`) {
+	if read := jsonOf(replies[4]); !strings.Contains(read, `"backlinks":[{"path":"design/Characters/Mara Dorne.md","title":"Mara Dorne"}]`) {
 		t.Errorf("Mara's home links Irongate: %s", read)
 	}
 	if all := jsonOf(replies[5]); !strings.Contains(all, "character (design/Characters/): role, faction, home, portrait") {

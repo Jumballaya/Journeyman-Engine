@@ -10,7 +10,13 @@ const texts = {
   Design: '---\ntitle: "Design"\ntype: index\n---\n\n# Design\n\nWhat it is.\n\n## Relations\n- includes [[Levels]]\n',
   Levels: '---\ntitle: "Levels"\n---\n\n# Levels\n\nSee `scenes/main.scene.json` and `assets/data/x.json`.\n\n## Observations\n- [feel] the pit is unfair\n',
 };
-const read = ({ note: t }) => t ? { structuredContent: { note: { title: t, path: `design/${t}.md`, type: 'note' }, text: texts[t] || '', backlinks: t === 'Levels' ? ['Design'] : [], obsidian: 'obsidian://open?path=%2Fg%2Fpip%2Fdesign%2F' + t + '.md' } } : notes;
+// memory as jm answers it: a note by its path or its title.
+const read = ({ note: t }) => {
+  if (!t) return notes;
+  const n = notes.structuredContent.notes.find((o) => o.path === t || o.title === t) || { title: t, path: `design/${t}.md` };
+  return { structuredContent: { note: { title: n.title, path: n.path, type: 'note' }, text: texts[n.title] || '',
+    backlinks: n.title === 'Levels' ? [{ title: 'Design', path: 'design/Design.md' }] : [], obsidian: 'obsidian://open?path=' + encodeURIComponent('/g/pip/' + n.path) } };
+};
 const open = async (answers = {}, context) => {
   const s = await studio(listing, { answers: { memory: read, ...answers }, context });
   s.tab('Memory').fire('click');
@@ -21,7 +27,7 @@ const open = async (answers = {}, context) => {
 test('the notes are listed, Design read first; [[links]] open notes, backlinks show', async () => {
   const s = await open();
   assert.match(s.app.text, /What it is\./);
-  assert.ok(s.find((e) => e.attributes['data-key'] === 'tree:Jumps are variable')[0], 'decisions listed');
+  assert.ok(s.find((e) => e.attributes['data-key'] === 'tree:design/decisions/Jumps are variable.md')[0], 'decisions listed');
   s.button('Levels').fire('click');
   await settle(6);
   assert.match(s.app.text, /feel\s+the pit is unfair/);
@@ -45,7 +51,7 @@ test('note and decide go through the tools; Obsidian opens outside the page', as
   s.find((e) => e.attributes['data-key'] === 'mem-category')[0].fire('input', { target: { value: 'feel' } });
   s.find((e) => e.tag === 'form')[0].fire('submit');
   await settle(10);
-  assert.deepEqual(s.calls().find((c) => c.name === 'memory_note').arguments, { note: 'Design', text: 'too floaty', category: 'feel', game: '/g/pip' });
+  assert.deepEqual(s.calls().find((c) => c.name === 'memory_note').arguments, { note: 'design/Design.md', text: 'too floaty', category: 'feel', game: '/g/pip' });
   s.button('Decide').fire('click');
   s.find((e) => e.attributes['data-key'] === 'mem-title')[0].fire('input', { target: { value: 'Coins respawn' } });
   s.find((e) => e.attributes['data-key'] === 'mem-why')[0].fire('input', { target: { value: 'serves [[Pillars]]' } });
@@ -82,7 +88,7 @@ test('a decision saved opens as the tool named it; a failed one keeps its form',
   s.find((e) => e.attributes['data-key'] === 'mem-why')[0].fire('input', { target: { value: 'fair' } });
   s.find((e) => e.tag === 'form')[0].fire('submit');
   await settle(12);
-  assert.equal(s.calls().filter((c) => c.name === 'memory' && c.arguments.note).at(-1).arguments.note, 'Can enemies jump');
+  assert.equal(s.calls().filter((c) => c.name === 'memory' && c.arguments.note).at(-1).arguments.note, 'design/decisions/Can enemies jump.md');
   s.button('Note').fire('click');
   s.find((e) => e.attributes['data-key'] === 'mem-text')[0].fire('input', { target: { value: 'keep me' } });
   s.find((e) => e.tag === 'form')[0].fire('submit');
@@ -159,9 +165,9 @@ test("a note saved after another game opened leaves that game's tab alone", asyn
 test('a dossier: its properties, its world, playbooks on it; the facts kept, one forgotten', async () => {
   const listed = { structuredContent: { notes: [note('Design', 'design/Design.md', 'index'), note('Irongate', 'design/Locations/Irongate.md', 'location'), note('Odd', 'design/constructor/Odd.md', 'thing')] } };
   const s = await open({
-    memory: ({ note: t }) => t === 'Irongate' ? { structuredContent: { note: { title: 'Irongate', path: 'design/Locations/Irongate.md', type: 'location', props: { region: '[[Ashvale]]', tags: [] } },
+    memory: ({ note: t }) => t === 'Irongate' || t === 'design/Locations/Irongate.md' ? { structuredContent: { note: { title: 'Irongate', path: 'design/Locations/Irongate.md', type: 'location', props: { region: '[[Ashvale]]', tags: [] } },
       text: '# Irongate\n\nVarn\'s capital.\n', backlinks: [] } } : t ? read({ note: t }) : listed,
-    world_context: ({ note: t }) => t === 'Irongate' ? { structuredContent: { edges: [{ from: 'Irongate', type: 'road_to', to: 'Duskhold', attrs: { distance: '120 km' } }], unwritten: ['Ost'] } } : { structuredContent: { edges: [] } },
+    world_context: ({ note: t }) => t === 'Irongate' || t === 'design/Locations/Irongate.md' ? { structuredContent: { edges: [{ from: 'Irongate', type: 'road_to', to: 'Duskhold', attrs: { distance: '120 km' } }], unwritten: ['Ost'] } } : { structuredContent: { edges: [] } },
     recall: () => ({ structuredContent: { facts: [{ id: 'f1', category: 'canon', text: 'Varn and Ost are at war.', scope: 'game' }, { id: 'f2', category: 'preference', text: 'Small changes.', scope: 'you' }] } }),
     forget: () => ({ content: [{ type: 'text', text: 'Forgot f2' }] }),
   });
@@ -174,7 +180,7 @@ test('a dossier: its properties, its world, playbooks on it; the facts kept, one
   assert.match(s.app.text, /Linked, no note yet:\s*Ost/);
   s.button('Make it a level').fire('click');
   await settle();
-  assert.match(s.sent.filter((m) => m.method === 'ui/message').at(-1).params.content[0].text, /level_from_place.*"place":"Irongate"/);
+  assert.match(s.sent.filter((m) => m.method === 'ui/message').at(-1).params.content[0].text, /level_from_place.*"place":"design\/Locations\/Irongate\.md"/);
   s.find((e) => e.attributes['aria-label'] === 'Forget: Small changes.')[0].fire('click');
   await settle(6);
   assert.deepEqual(s.calls().find((c) => c.name === 'forget').arguments, { id: 'f2', scope: 'you', game: '/g/pip' });
@@ -221,4 +227,10 @@ test('a world end opens by its note path: two notes may share a title', async ()
   s.button('Grow the world').fire('click');
   await settle();
   assert.match(s.sent.filter((m) => m.method === 'ui/message').at(-1).params.content[0].text, /"note":"design\/South\/Harbor\.md"/);
+  s.button('Note').fire('click');
+  s.find((e) => e.attributes['data-key'] === 'mem-text')[0].fire('input', { target: { value: 'gulls' } });
+  s.find((e) => e.tag === 'form')[0].fire('submit');
+  await settle(10);
+  assert.equal(s.calls().find((c) => c.name === 'memory_note').arguments.note, 'design/South/Harbor.md', 'noted in the Harbor read, not the first');
+  assert.ok(s.find((e) => e.attributes['data-key'] === 'tree:design/North/Harbor.md')[0] && s.find((e) => e.attributes['data-key'] === 'tree:design/South/Harbor.md')[0], 'each Harbor its own row');
 });

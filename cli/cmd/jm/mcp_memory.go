@@ -13,20 +13,20 @@ import (
 // The game's memory (design/) as tools: what the agent reads before a change
 // and adds to after one, so the next conversation knows why the game is so.
 func (s *mcpServer) memoryTools() []mcpTool {
-	noteArg := strArg(`a note's title, e.g. "Pillars" (memory lists them)`)
+	noteArg := strArg(`a note's title or path, e.g. "Pillars" or "design/North/Harbor.md" (memory lists them)`)
 	return []mcpTool{
 		{Name: "memory", Meta: callableMeta("", ""), Title: "The game's design notes", Description: "Read before you change how the game plays: the game's design notes (design/: Pitch, Pillars, Levels, Systems, Decisions, Notes), " +
 			"or one note with what it links and what links it. [[Note]] links a note; game files are named in backticks.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"note": strArg(`one note to read, e.g. "Pillars" (default: the list)`),
+			Annotations: readOnly(), InputSchema: object(map[string]any{"note": strArg(`one note to read, by title or path, e.g. "Pillars" (default: the list)`),
 				"kind": strArg(`only the dossiers of a kind, e.g. "character", with their properties`)}),
 			onGame: func(root string, a toolArgs) toolResult {
 				if a.str("note") != "" {
-					n, ok := memory.Find(root, a.str("note"))
-					if !ok {
-						return textResult(fmt.Sprintf("no note %q: memory lists them", a.str("note")), true)
+					n, err := memory.Find(root, a.str("note"))
+					if err != nil {
+						return textResult(err.Error(), true)
 					}
-					v := noteView(root, n)
-					return toolResult{Text: n.Text + "\nLinked from: " + strings.Join(v["backlinks"].([]string), ", "), Structured: v}
+					back := memory.Backlinks(root, n)
+					return toolResult{Text: n.Text + "\nLinked from: " + refTitles(back), Structured: noteView(root, n, back)}
 				}
 				notes, kinds := memory.Notes(root), memory.Kinds(root)
 				if kind := a.str("kind"); kind != "" {

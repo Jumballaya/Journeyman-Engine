@@ -295,15 +295,7 @@ func (w World) node(name string) (Note, error) {
 }
 
 // named are the notes name may mean.
-func (w World) named(name string) []Note {
-	var found []Note
-	for _, n := range w.Notes {
-		if linksTo(name, n) || strings.EqualFold(strings.TrimSuffix(n.Path, ".md"), strings.TrimSuffix(name, ".md")) {
-			found = append(found, n)
-		}
-	}
-	return found
-}
+func (w World) named(name string) []Note { return named(w.Notes, name) }
 
 // at is the node an edge's end is.
 func (w World) at(path, name string) Note {
