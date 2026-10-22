@@ -173,7 +173,7 @@ studioTabs.push((() => {
     if (live === undefined) return kit.empty("Looking for the game…");
     if (!live) {
       return kit.empty("The game isn't running. Play it in its own window and follow it here.",
-        el("button", { class: "primary", "data-key": "start", disabled: ctx.busy, onclick: () => ctx.act("Starting the game", "project_play", { game: ctx.game.path },
+        el("button", { class: "primary", "data-key": "start", disabled: ctx.busy, onclick: () => ctx.act("Starting the game", "project_play", {},
           () => "The game is open in its own window: what you play is recorded.") }, "Play"));
     }
     const s = live.status || {};

@@ -12,13 +12,12 @@ studioTabs.push((() => {
   const marks = { M: "changed", A: "added", "?": "new", D: "deleted", U: "conflict" };
 
   // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
-  const on = (ctx, args = {}) => ({ ...args, game: ctx.game.path });
   const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
 
   const list = async (ctx, path) => {
     const n = ++state.seq, mine = state;
     try {
-      const r = await ctx.call("files", on(ctx, {}));
+      const r = await ctx.call("files", {});
       if (n !== mine.seq || mine !== state) return;
       const s = r && r.structuredContent;
       state.listed = s && Array.isArray(s.files) ? { path, game: s.game, files: s.files } : { path, error: said(r) || "No files." };
@@ -32,7 +31,7 @@ studioTabs.push((() => {
     state.line = line;
     state.draft = null;
     ctx.rerender();
-    const r = await ctx.call("file_read", on(ctx, { path })).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
+    const r = await ctx.call("file_read", { path }).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
     if (state.picked === picked) {
       picked.file = r && !r.isError ? { ...(r.structuredContent || {}), image: r._meta && r._meta["jm/image"] } : { error: said(r) || "Couldn't read it." };
       ctx.rerender();
@@ -43,7 +42,7 @@ studioTabs.push((() => {
     state.query = text;
     if (!text.trim()) { state.searchSeq++; state.found = null; ctx.rerender(); return; }
     const n = ++state.searchSeq, mine = state;
-    const r = await ctx.call("files_search", on(ctx, { text })).catch(() => null);
+    const r = await ctx.call("files_search", { text }).catch(() => null);
     if (mine !== state || n !== state.searchSeq) return;  // another game's, or an older search
     state.found = { text, ...(r && r.structuredContent ? r.structuredContent : { hits: [] }) };
     ctx.rerender();
@@ -83,7 +82,7 @@ studioTabs.push((() => {
   // Runs a file tool; then the list and the quick look are read again.
   const change = async (ctx, label, name, args, done, then) => {
     const mine = state;  // another game shown meanwhile: its tab isn't this one's to touch
-    const ok = await ctx.act(label, name, on(ctx, args), done);
+    const ok = await ctx.act(label, name, args, done);
     if (mine !== state) return;
     if (ok) { state.draft = null; if (then) then(); }
     await list(ctx, ctx.game.path);
@@ -117,7 +116,7 @@ studioTabs.push((() => {
       try { args = { data: base64(await file.arrayBuffer()), path: "assets/" + file.name }; } catch (e) { ctx.say("Couldn't read it: " + (e && e.message || e)); return; }
     }
     // Still to the game it was picked for; another game shown since keeps its own tab.
-    if (mine !== state) await ctx.act("Adding the file", "asset_add", on(ctx, args), (t) => t);
+    if (mine !== state) await ctx.act("Adding the file", "asset_add", args, (t) => t);
     else await change(ctx, "Adding the file", "asset_add", args, (t) => t, () => pick(ctx, "assets/" + file.name));
   };
 
@@ -177,11 +176,11 @@ studioTabs.push((() => {
     const name = p.path.split("/").pop();
     return [
       scene && ctx.has("scene") ? el("button", { class: "primary", onclick: () => ctx.go(ctx.link("scene", { scene: p.path })) }, "Scene") : null,
-      el("button", { disabled: busy, onclick: () => ctx.act("Opening the editor", "project_open_editor", on(ctx), () => `${ctx.game.name} is open in the editor.`) }, "Open in editor"),
-      el("button", { disabled: busy, onclick: () => ctx.act("Opening", "file_open", on(ctx, { path: p.path }), (t) => t) }, "Code editor"),
+      el("button", { disabled: busy, onclick: () => ctx.act("Opening the editor", "project_open_editor", {}, () => `${ctx.game.name} is open in the editor.`) }, "Open in editor"),
+      el("button", { disabled: busy, onclick: () => ctx.act("Opening", "file_open", { path: p.path }, (t) => t) }, "Code editor"),
       root && host.can("openai/files") ? el("button", { onclick: () => host.openFile(root + "/" + p.path).catch((e) => ctx.say("Couldn't: " + (e && e.message || e))) }, "File viewer") : null,
       el("button", { disabled: busy, onclick: () => { state.draft = { kind: "rename", value: p.path }; ctx.rerender(); } }, "Rename"),
-      ctx.confirm({ key: "delete:" + p.path, label: "Delete", ask: `Delete ${name}?`, tool: "file_delete", args: on(ctx, { path: p.path }),
+      ctx.confirm({ key: "delete:" + p.path, label: "Delete", ask: `Delete ${name}?`, tool: "file_delete", args: { path: p.path },
         armed: !!(state.draft && state.draft.kind === "delete"), arm: () => { state.draft = { kind: "delete", value: "" }; ctx.rerender(); },
         go: () => change(ctx, "Deleting", "file_delete", { path: p.path }, () => `${name} is deleted.`, () => { state.picked = null; }) }),
       el("button", { onclick: () => host.message([host.text(`About ${p.path} in ${ctx.game.name}: `)], { send: false }) }, "Ask about this"),

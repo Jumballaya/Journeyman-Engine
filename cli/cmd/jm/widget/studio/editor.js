@@ -29,7 +29,7 @@ studioTabs.push((() => {
     if (document.visibilityState !== "hidden") {
       const game = forGame(ctx);
       try {
-        const r = await ctx.call("editor_state", { game: ctx.game.path });
+        const r = await ctx.call("editor_state", {});
         const editors = r && r.structuredContent && r.structuredContent.editors;
         if (forGame(state.ctx) === game) {  // else: asked for a game no longer shown
           if (!Array.isArray(editors)) throw new Error((r && r.content && r.content[0] && r.content[0].text) || "no answer");
@@ -57,7 +57,7 @@ studioTabs.push((() => {
   };
 
   const show = (ctx, args, label) =>
-    ctx.act("Showing it in the editor", "editor_show", { ...args, game: ctx.game.path }, () => `${label} is shown in the editor.`);
+    ctx.act("Showing it in the editor", "editor_show", args, () => `${label} is shown in the editor.`);
 
   const sceneEntities = (ctx, scene) => {
     const game = forGame(ctx);
@@ -66,7 +66,7 @@ studioTabs.push((() => {
       const visit = ctx.visit;
       state.scenes[scene] = { ...known, visit };  // the last answer shows meanwhile
       const answer = (value) => { if (state.game === game) { state.scenes[scene] = { ...value, visit }; ctx.rerender(); } };
-      ctx.call("scene_view", { scene, game: ctx.game.path }).then((r) => {
+      ctx.call("scene_view", { scene }).then((r) => {
         const s = r && r.structuredContent;
         answer(s && Array.isArray(s.entities) ? { entities: s.entities } : { error: "Couldn't read it." });
       }, () => answer({ error: "Couldn't read it." }));
@@ -81,7 +81,7 @@ studioTabs.push((() => {
     ctx.rerender();
     let picture;
     try {
-      const r = await ctx.call("scene_render", { scene, game: ctx.game.path });
+      const r = await ctx.call("scene_render", { scene });
       const src = r && r._meta && r._meta["jm/image"];
       picture = src ? { src } : { error: (r && r.content && r.content[0] && r.content[0].text) || "No picture." };
     } catch (e) { picture = { error: String(e && e.message || e) }; }
@@ -149,7 +149,7 @@ studioTabs.push((() => {
       el("span", { class: "meta" }, !editors ? state.error || "Looking for the editor…" : e ? "open on your screen" : "not open"),
       el("span", { class: "spacer" }),
       editors && !e ? el("button", { class: "primary", disabled: ctx.busy,
-        onclick: () => ctx.act("Opening the editor", "project_open_editor", { game: ctx.game.path }, () => "The editor is opening.") }, "Open in editor") : null);
+        onclick: () => ctx.act("Opening the editor", "project_open_editor", {}, () => "The editor is opening.") }, "Open in editor") : null);
     return el("div", {}, head,
       kit.split("editor", el("div", { class: "pane" }, e ? live(ctx, e) : kit.empty(editors ? "Open the editor to see what's open there and point things out." : "")),
         showPane(ctx, e && e.scene), { ratio: 0.45 }));
