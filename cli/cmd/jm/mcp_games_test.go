@@ -426,6 +426,13 @@ func TestAnOpenedFileIsInItsGameOrNone(t *testing.T) {
 	if got := toolOf(t, s, "scene_view").run(named); !got.Failed {
 		t.Errorf("A's file, called as B's: %s", got.Text)
 	}
+	// A page's own call carries its game too (Studio's tab): the file's, so it goes through.
+	for _, game := range []string{"A", filepath.Join(home, "A"), filepath.Join(evalOrSelf(home), "A")} { // by name, path, real path
+		agreed := toolArgs{resourceKey: resourcePath(link), "game": game}
+		if got := toolOf(t, s, "scene_view").run(agreed); got.Failed || !strings.Contains(got.Text, "FromA") {
+			t.Errorf("A's file, called as A's (%s): %s", game, got.Text)
+		}
+	}
 }
 
 // A picked link is the option offered, under its own name.
