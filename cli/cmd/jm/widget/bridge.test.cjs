@@ -94,6 +94,12 @@ test('tool input, results and host context reach the widget', async () => {
   assert.ok(changes >= 3);
 });
 
+test('a window.openai call that throws at once is a failed call, not a throw', async () => {
+  const { host } = mount({ callTool: () => { throw new Error('hiccup'); } });
+  const called = host.callTool('editor_state', {});  // doesn't throw
+  await assert.rejects(called, /hiccup/);
+});
+
 test('in ChatGPT, window.openai serves until the MCP Apps host answers', async () => {
   const calls = [];
   const openai = {

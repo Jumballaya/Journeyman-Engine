@@ -224,8 +224,8 @@ const kit = (() => {
   // said is what a tool's answer says (its text parts, joined).
   const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
 
-  // answer is what a tool call came to: its answer, or a throw as an isError one.
-  const answer = (call) => Promise.resolve(call).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
+  // answer is what call() came to: its answer, or a throw (now or later) as an isError one.
+  const answer = (call) => Promise.resolve().then(call).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
 
   // latest(owner) is a channel of calls of which only the newest counts:
   // ask(call) is what call() came to (answer), or null once another ask began
@@ -234,7 +234,7 @@ const kit = (() => {
     let asked = 0;
     return async (call) => {
       const n = ++asked, mine = owner();
-      const r = await answer(Promise.resolve().then(call));
+      const r = await answer(call);
       return n === asked && owner() === mine ? r : null;
     };
   };

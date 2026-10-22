@@ -13,7 +13,7 @@ studioTabs.push((() => {
   const loading = kit.latest(() => state);  // an older answer, or another game's, is dropped
 
   const load = async (ctx) => {
-    const both = await loading(() => Promise.all([ctx.call("vcs_status", {}), ctx.call("vcs_log", { count: 200 })].map(kit.answer)));
+    const both = await loading(() => Promise.all([() => ctx.call("vcs_status", {}), () => ctx.call("vcs_log", { count: 200 })].map(kit.answer)));
     if (!both) return;
     const [s, l] = both;
     state.changes = (s && s.structuredContent && s.structuredContent.changes) || [];

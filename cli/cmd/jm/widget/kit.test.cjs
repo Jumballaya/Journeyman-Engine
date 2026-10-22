@@ -24,7 +24,8 @@ test('kit.latest answers its newest call only, and none once its owner changes',
 });
 
 test('kit.answer makes a failed call an error answer', async () => {
-  const r = await kit.answer(Promise.reject(new Error('no host')));
+  const r = await kit.answer(() => Promise.reject(new Error('no host')));
+  assert.equal(kit.said(await kit.answer(() => { throw new Error('at once'); })), 'at once');
   assert.equal(r.isError, true);
   assert.equal(kit.said(r), 'no host');
   assert.equal(kit.said(await kit.latest(() => 1)(() => { throw new Error('thrown'); })), 'thrown');

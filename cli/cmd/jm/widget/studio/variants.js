@@ -16,7 +16,7 @@ studioTabs.push((() => {
   // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
 
   const load = async (ctx) => {
-    const all = await loading(() => Promise.all(["variants", "sandboxes", "plays_list"].map((tool) => kit.answer(ctx.call(tool, {})))));
+    const all = await loading(() => Promise.all(["variants", "sandboxes", "plays_list"].map((tool) => kit.answer(() => ctx.call(tool, {})))));
     if (!all) return;
     const [v, s, p] = all;
     state.plays = (p && !p.isError && p.structuredContent && p.structuredContent.plays) || [];

@@ -28,7 +28,7 @@ studioTabs.push((() => {
     const ctx = state.ctx;
     if (document.visibilityState !== "hidden") {
       const game = forGame(ctx);
-      const r = await kit.answer(ctx.call("editor_state", {}));
+      const r = await kit.answer(() => ctx.call("editor_state", {}));
       const editors = !r.isError && r.structuredContent && r.structuredContent.editors;
       if (forGame(state.ctx) === game && !Array.isArray(editors)) state.error = kit.said(r) || "no answer";
       else if (forGame(state.ctx) === game) {  // else: asked for a game no longer shown
