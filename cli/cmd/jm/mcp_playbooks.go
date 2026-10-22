@@ -14,7 +14,7 @@ import (
 type playbook struct {
 	name, title, description string
 	args                     []playArg
-	text                     string // {arg} is the argument; {arg?...} is the text when it's given
+	text                     string // {arg} is the argument (a tool's ref); [[{arg}]] its link; {arg?...} is the text when it's given
 }
 
 // playArg is a playbook's argument; name is also what completion suggests
@@ -48,7 +48,7 @@ var playbooks = []playbook{
 			"props linking existing notes, and world_link the ties stated. End with the list and what they connect to."},
 	{"level_from_place", "Turn a place into a level", "Write a level brief from a location's dossier, then build the scene.",
 		[]playArg{{"place", "the location dossier", true}},
-		"Turn [[{place}]] into a level. Read it (memory with note {place}) and world_context on it; recall the art and scope facts; " +
+		"Turn [[{place}]] into a level. Read it (memory with note {place}) and world_context on {place}; recall the art and scope facts; " +
 			"read Levels and Pillars. Write a level brief and show it to me: the idea, what it teaches, its beats, " +
 			"who and what is there (their dossiers), how it should feel, which pillar it serves. After I agree: memory_note it " +
 			"(note Levels, category level, linking [[{place}]]); generate a scene for it and lay it out from the brief (schema lists " +
@@ -63,8 +63,8 @@ var playbooks = []playbook{
 			"End with the outline as a list of acts and quests."},
 	{"canon_check", "Check against canon", "Check a note against the game's facts and the rest of the world, and settle what disagrees.",
 		[]playArg{{"note", "the note or dossier to check", true}},
-		"Check [[{note}]] against the canon. Read it (memory with note), recall with its name and what it's about, " +
-			"world_context on it, and health (checks world). List each contradiction or drift: quote its line and the fact or note it " +
+		"Check [[{note}]] against the canon. Read it (memory with note {note}), recall with its name and what it's about, " +
+			"world_context on {note}, and health (checks world). List each contradiction or drift: quote its line and the fact or note it " +
 			"disagrees with. Ask me which holds; then fix the note (file_write), update the fact (remember with replaces) or forget it. " +
 			"Report what changed; nothing found is a fine answer."},
 	{"art_direction", "Set the look", "From a brief or setting doc: the art note's locks, the palette, each place's look, the dossiers to draw.",
@@ -79,7 +79,7 @@ var playbooks = []playbook{
 			"with art: planned (and art_set where it isn't its type's set). End with the list to draw, in the order they'd be played."},
 	{"art_pass", "Draw it", "Draw a dossier's sprite to the art note's locks: brief, draw, validate, critique, export, in the game.",
 		[]playArg{{"note", "the dossier: a character, creature, item or place", true}},
-		"Make the art for [[{note}]]. Read it and the game's art note (health, checks art, names it: art.bible.path): its properties answer the sprite brief (palette, grid, " +
+		"Make the art for [[{note}]]. Read it (memory with note {note}) and the game's art note (health, checks art, names it: art.bible.path): its properties answer the sprite brief (palette, grid, " +
 			"view, light, outline, its frame size, its animation set's tags and timings), so don't ask them again; no art note, or no palette or grid? Run the art_direction " +
 			"playbook first. Write a short brief (silhouette, its colours by palette name, what it shares with the references) and confirm it with me. " +
 			"In Aseprite (companions lists the Aseprite companion): a new sprite at its size with the palette loaded from the art note's palette file; " +

@@ -497,6 +497,19 @@ func TestPlaybookCompletionsTellNotesApart(t *testing.T) {
 	}
 }
 
+// A playbook that links a note in its prose ([[{a}]]) names it to tools by
+// the argument as given ({a}): a link and a ref can be two notes.
+func TestAPlaybookGivesToolsTheRefItLinks(t *testing.T) {
+	for _, p := range playbooks {
+		for _, a := range p.args {
+			link := "[[{" + a.name + "}]]"
+			if strings.Contains(p.text, link) && !strings.Contains(strings.ReplaceAll(p.text, link, ""), "{"+a.name+"}") {
+				t.Errorf("%s links {%s} but gives no tool the ref", p.name, a.name)
+			}
+		}
+	}
+}
+
 // A prompt asked wrong is an error, not a crash.
 func TestPromptErrors(t *testing.T) {
 	replies := mcpSession(t, `{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"canon_check"}}`,
