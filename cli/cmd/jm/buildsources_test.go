@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -20,8 +22,8 @@ func builtFrom(t *testing.T, root string) {
 func TestBuildSourcesAreWhatTheBuildReadsNotWhatRunsWrite(t *testing.T) {
 	root := t.TempDir()
 	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{"name": "T", "entryScene": "scenes/main.scene.json", "scenes": ["scenes/main.scene.json"], "assets": ["assets/game/**"]}`), 0o644)
-	for _, f := range []string{"scenes/main.scene.json", "assets/sources/ship.png", "assets/scripts/package.json", "build/a.png", "logs/engine.log",
-		"frames/frame_00060.png", ".jm/plays/x", "assets/scripts/node_modules/m.js"} {
+	for _, f := range []string{"scenes/main.scene.json", "assets/sources/ship.png", "assets/scripts/package.json", "art/hero.png", "assets/frames/run.png",
+		"build/a.png", "build.next/a.png", "logs/engine.log", "frames/frame_00060.png", ".jm/plays/x", ".git/HEAD", "assets/scripts/node_modules/m.js", "old.jm"} {
 		os.MkdirAll(filepath.Dir(filepath.Join(root, f)), 0o755)
 		os.WriteFile(filepath.Join(root, f), []byte("x"), 0o644)
 	}
@@ -31,8 +33,9 @@ func TestBuildSourcesAreWhatTheBuildReadsNotWhatRunsWrite(t *testing.T) {
 			there = append(there, key)
 		}
 	}
-	if got := len(there); got != 4 {
-		t.Errorf("sources there: %v, want the manifest, the scene, the atlas source image and the scripts' package.json", there)
+	slices.Sort(there)
+	if got := strings.Join(there, " "); got != ".jm.json art/hero.png assets/frames/run.png assets/scripts/package.json assets/sources/ship.png scenes/main.scene.json" {
+		t.Errorf("sources there: %s", got)
 	}
 }
 
@@ -44,6 +47,11 @@ func TestABuildIsStaleWhenItsSourcesDiffer(t *testing.T) {
 	os.WriteFile(filepath.Join(root, "extra", "a.json"), nil, 0o644)
 	if !buildIsStale(root) {
 		t.Error("no build isn't stale")
+	}
+	builtFrom(t, root)
+	os.Remove(filepath.Join(root, "build", ".jm.json"))
+	if !buildIsStale(root) {
+		t.Error("a build without its manifest isn't stale")
 	}
 	builtFrom(t, root)
 	if buildIsStale(root) {
@@ -66,10 +74,12 @@ func TestABuildIsStaleWhenItsSourcesDiffer(t *testing.T) {
 		}},
 		{"a new asset", func() { os.WriteFile(filepath.Join(root, "assets", "new.json"), nil, 0o644) }},
 		{"an asset gone that a glob outside assets/ matched", func() { os.Remove(filepath.Join(root, "extra", "a.json")) }},
-		{"a normal map made for an image", func() {
-			os.WriteFile(filepath.Join(root, "assets", "ship.png"), nil, 0o644)
+		{"a normal map made for an image", func() { os.WriteFile(filepath.Join(root, "assets", "ship_n.png"), nil, 0o644) }},
+		{"an edited image an atlas outside assets/ names", func() {
+			os.MkdirAll(filepath.Join(root, "art"), 0o755)
+			os.WriteFile(filepath.Join(root, "art", "hero.png"), nil, 0o644)
 			builtFrom(t, root)
-			os.WriteFile(filepath.Join(root, "assets", "ship_n.png"), nil, 0o644)
+			os.Chtimes(filepath.Join(root, "art", "hero.png"), later, later)
 		}},
 	} {
 		builtFrom(t, root)
@@ -79,7 +89,18 @@ func TestABuildIsStaleWhenItsSourcesDiffer(t *testing.T) {
 		}
 	}
 
-	// A script library beside the game (../common), and what a link to one leads to, are sources too.
+	// A library that is the game itself: what a build writes doesn't make it stale.
+	self := t.TempDir()
+	os.WriteFile(filepath.Join(self, ".jm.json"), []byte(`{"scriptLibraries": {"me": "."}}`), 0o644)
+	builtFrom(t, self)
+	os.WriteFile(filepath.Join(self, "build", "out.wasm"), nil, 0o644)
+	os.MkdirAll(filepath.Join(self, "logs"), 0o755)
+	os.WriteFile(filepath.Join(self, "logs", "engine.log"), nil, 0o644)
+	if buildIsStale(self) {
+		t.Error("a build of a game that is its own library is stale from its own output")
+	}
+
+	// A script library beside the game (../common), its hidden folders, and what a link to one leads to, are sources too.
 	game := filepath.Join(t.TempDir(), "game")
 	common := filepath.Join(filepath.Dir(game), "common")
 	os.MkdirAll(game, 0o755)
@@ -93,6 +114,12 @@ func TestABuildIsStaleWhenItsSourcesDiffer(t *testing.T) {
 	os.Chtimes(filepath.Join(common, "util.ts"), later, later)
 	if !buildIsStale(game) {
 		t.Error("an edited library script doesn't make the build stale")
+	}
+	os.MkdirAll(filepath.Join(common, ".internal"), 0o755)
+	builtFrom(t, game)
+	os.WriteFile(filepath.Join(common, ".internal", "x.ts"), nil, 0o644)
+	if !buildIsStale(game) {
+		t.Error("a library's hidden folder (copied with it) isn't a source")
 	}
 	shared := filepath.Join(t.TempDir(), "shared")
 	os.MkdirAll(shared, 0o755)

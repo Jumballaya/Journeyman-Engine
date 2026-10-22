@@ -59,9 +59,9 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 			fail(Diagnostic{Category: "toolchain", Message: err.Error()})
 		}
 
+		sources := buildSources(projectRoot) // before reading any: one changed meanwhile makes this build stale
 		man, err := manifest.LoadManifest(archive.ManifestEntryKey)
 		exitOnError("Error loading manifest", err)
-		sources := buildSources(projectRoot) // before reading them: one changed meanwhile makes this build stale
 
 		// npm install prunes @jm/runtime and libraries (they aren't in package.json), so re-extract them.
 		exitOnError("Failed to sync script packages", syncScriptPackages(projectRoot, man, tc))
