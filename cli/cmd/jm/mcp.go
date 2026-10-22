@@ -813,7 +813,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"seed":    intArg("the run's random seed (default: a new one; a play replays its own)"),
 				"visible": boolArg("show the game in a window as you drive it, so the person can watch (implies gl)"),
 			}),
-			run: s.startDriver},
+			onGame: s.startDriver},
 		{Name: "drive", Description: "Driver commands, each answered as JSON: step [n], state [part...] [tag=Name...] [Component...] (e.g. state session tag=Player), get [tag=Name] <path> (get tag=Ball TransformComponent.x), " +
 			"down|up|press <Key>, move x y, click [x y], wheel dy, set <key> <json>, scene <path>, marker [note] (marks the moment in a recorded run, as F8 does), " +
 			"until [tag=Name] <path> <op> <value> [max n] (steps until it's true, e.g. until tag=Lift TransformComponent.y < -270), echo <text>, " +
@@ -827,6 +827,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"command":  strArg(`e.g. "step 60", "press Enter", "state"`),
 				"commands": listArg("several commands in order, instead of command"),
 				"repeat":   intArg("run commands this many times over (default 1, at most 1000)"),
+				"game":     drivenArg,
 			}),
 			run: s.driving(func(a toolArgs) toolResult {
 				commands := a.list("commands")
@@ -840,20 +841,25 @@ func (s *mcpServer) makeTools() []mcpTool {
 			})},
 		{Name: "drive_frame", Title: "See the driven game", Description: "An image of the driven game as it is now (the last frame it ran). " +
 			"Needs a game started with gl: true. Use it to see what your commands did, e.g. after step 60 or a click.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driving(s.driveFrame)},
+			Annotations: readOnly(), InputSchema: object(map[string]any{"game": drivenArg}), run: s.driving(s.driveFrame)},
 		{Name: "drive_profile", Title: "Where the driven game's time goes", Description: "Call when the game feels slow or you changed something costly: " +
 			"where the driven game's last frames (up to 120) went: each system's, script's and module's average and worst ms, " +
 			"and counts (entities, scripts, draw calls, sprites). Step to the moment you care about first. " +
 			"Without gl there's no GPU work, so the CPU's share is what it measures.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driving(s.driveProfile)},
-		{Name: "drive_stop", Description: "Stop the driven game; a recorded run's play id comes back.", Annotations: writes(), InputSchema: object(map[string]any{}),
-			run: func(toolArgs) toolResult {
+			Annotations: readOnly(), InputSchema: object(map[string]any{"game": drivenArg}), run: s.driving(s.driveProfile)},
+		{Name: "drive_stop", Description: "Stop the driven game; a recorded run's play id (and its game) comes back.", Annotations: writes(),
+			InputSchema: object(map[string]any{"game": drivenArg}),
+			run: s.driving(func(toolArgs) toolResult {
+				root := ""
+				if s.game != nil {
+					root = s.game.root
+				}
 				play := s.stopDriver()
 				if play == "" {
 					return textResult(`{"ok":true}`, false)
 				}
-				return jsonResult(map[string]any{"ok": true, "play": play, "next": "play_show shows it, as it does the person's plays"})
-			}},
+				return jsonResult(map[string]any{"ok": true, "play": play, "game": root, "next": "play_show {play, game} shows it, as it does the person's plays"})
+			})},
 		{Name: "session", Description: "Play a multiplayer session on this machine (jm run --peers), headless with no GL, " +
 			"in real time: the game's server if it has one, and N games. Each game can replay its own input. " +
 			"Returns each peer's state when it ended: its net section (role, player, players, shared entities), " +
@@ -869,9 +875,23 @@ func (s *mcpServer) makeTools() []mcpTool {
 	}
 }
 
+// drivenArg is a driving tool's game: there's one driven game, so it only
+// checks the call means it (an agent driving one game, another opened since).
+var drivenArg = strArg("the game whose run this is (default: the one driven); another game's is refused")
+
 // driving is a tool on the driven game, which its call's cancel kills, mid-step or not.
+// A call that names a game must name the driven one: it's refused before anything's done.
 func (s *mcpServer) driving(run func(toolArgs) toolResult) func(toolArgs) toolResult {
 	return func(a toolArgs) toolResult {
+		if v, named := a["game"]; named && v != "" && s.game != nil {
+			root, err := s.gameRoot(a)
+			if err != nil {
+				return textResult(err.Error(), true)
+			}
+			if root != s.game.root {
+				return textResult(fmt.Sprintf("the game driven is %s, not %s: drive_start {game} to drive that one", s.game.root, root), true)
+			}
+		}
 		release := func() bool { return false }
 		if s.game != nil {
 			release = s.game.stopOn(a.call().context())
@@ -1009,16 +1029,12 @@ func jmCommand(ctx context.Context, dir string, args ...string) *exec.Cmd {
 	return cmd
 }
 
-func (s *mcpServer) startDriver(a toolArgs) toolResult {
+func (s *mcpServer) startDriver(root string, a toolArgs) toolResult {
 	s.stopDriver()
-	root, err := projectRoot()
-	if err != nil {
-		return textResult(err.Error(), true)
-	}
 	// The build is jm's, not the person's files: one that's missing or older
 	// than the sources is made first, so the game driven is the game as it is.
 	if buildIsStale(root) {
-		if out, failed := runJM(a.call(), "", "build", "--json"); failed {
+		if out, failed := runJM(a.call(), root, "build", "--json"); failed {
 			return textResult("the build failed, so there's no game to run:\n"+out, true)
 		}
 	}
@@ -1046,10 +1062,11 @@ func (s *mcpServer) startDriver(a toolArgs) toolResult {
 		o.Play, o.Until = p, from+1
 	}
 	o.Stop = a.call().context() // while it starts and replays: then it outlives the call
-	s.game, err = startGame(root, o)
-	if err != nil {
+	var err error
+	if s.game, err = startGame(root, o); err != nil {
 		return textResult(err.Error(), true)
 	}
+	s.game.root = root
 	if o.Play != nil {
 		// Replay the play up to the moment: the game is then where the person was.
 		err = s.game.runTo(a.call(), from, 0, float64(from+1))

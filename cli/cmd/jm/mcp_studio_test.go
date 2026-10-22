@@ -83,3 +83,37 @@ func TestAServerOutsideAGameWorksOnTheLastOpened(t *testing.T) {
 		t.Errorf("mentions of the last game: %s", text)
 	}
 }
+
+// A play tool reads the plays of the game the call names; the driving tools
+// act only on the driven game: one naming another game is refused, untouched.
+func TestPlaysAndTheDriverAreTheGameNamed(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"alpha", "beta"} {
+		dir := filepath.Join(home, g, ".jm", "plays", g+"-play")
+		os.MkdirAll(dir, 0o755)
+		os.WriteFile(filepath.Join(home, g, ".jm.json"), []byte(`{"name":"`+g+`"}`), 0o644)
+		os.WriteFile(filepath.Join(dir, "session.json"), []byte(`{"format":1,"frames":60,"seconds":1,"started":"2000-01-01T00:00:00"}`), 0o644)
+	}
+	t.Chdir(filepath.Join(home, "beta"))
+	s := newMCPServer()
+	if got := toolOf(t, s, "play_inputs").run(toolArgs{"game": "alpha"}); !strings.Contains(got.Text, "alpha-play") {
+		t.Errorf("alpha's latest play: %s", got.Text) // found, though it has no frames
+	}
+	if got := toolOf(t, s, "play_inputs").run(toolArgs{"game": "alpha", "play": "beta-play"}); !got.Failed {
+		t.Errorf("beta's play found in alpha: %s", got.Text)
+	}
+
+	fakeDriver(s, t.TempDir(), func(string) string { return `{"ok":true,"frame":1}` })
+	s.game.root = evalOrSelf(filepath.Join(home, "alpha"))
+	if got := toolOf(t, s, "drive").run(toolArgs{"game": "beta", "command": "step"}); !got.Failed || !strings.Contains(got.Text, "driven is") || s.game == nil {
+		t.Errorf("beta drove alpha's run: %s", got.Text)
+	}
+	if got := toolOf(t, s, "drive").run(toolArgs{"game": "alpha", "command": "step"}); got.Failed {
+		t.Errorf("alpha's run: %s", got.Text)
+	}
+	if got := toolOf(t, s, "drive_stop").run(toolArgs{}); s.game != nil || got.Failed {
+		t.Errorf("drive_stop: %s", got.Text)
+	}
+}

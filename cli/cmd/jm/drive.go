@@ -43,6 +43,7 @@ var (
 // (JM_DRIVE): a command in, a JSON line out, and nothing moves in between.
 // Replays, `jm plays` and the MCP driver all run the game this way.
 type drivenGame struct {
+	root     string // the game it's a run of, as the server resolved it
 	cmd      *exec.Cmd
 	in       io.WriteCloser
 	out      *bufio.Scanner

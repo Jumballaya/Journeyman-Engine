@@ -124,7 +124,8 @@ func TestDriveStartFromAPlayTakesNothingElse(t *testing.T) {
 	os.WriteFile(".jm.json", []byte(`{}`), 0o644)
 	os.MkdirAll("build", 0o755)
 	os.WriteFile("build/.jm.json", []byte(`{}`), 0o644)
-	r := newMCPServer().startDriver(toolArgs{"play": "latest", "scene": "scenes/x.scene.json"})
+	s := newMCPServer()
+	r := toolOf(t, s, "drive_start").run(toolArgs{"play": "latest", "scene": "scenes/x.scene.json"})
 	if !r.Failed || !strings.Contains(r.Text, "brings its own") {
 		t.Errorf("drive_start: %s", r.Text)
 	}

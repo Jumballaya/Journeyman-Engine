@@ -220,12 +220,12 @@ func TestEveryToolSaysWhichGameItWorksOn(t *testing.T) {
 	noGame := map[string]bool{ // they choose a game, or need none
 		"games": true, "games_find": true, "new_game": true, "open_game": true, "doctor": true, "schema": true,
 		"companions": true, "studio": true, "playbook": true,
+		// on the driven game (there's one): a game named must be its game (driving)
+		"drive": true, "drive_frame": true, "drive_profile": true, "drive_stop": true,
 	}
 	// Design debt: these still find their game themselves (their own "game", or the
 	// working folder). Each moves to onGame (todos: Design debt, G2–G6), then off this list.
 	ownWay := map[string]bool{
-		"drive_start": true, "drive": true, "drive_frame": true, "drive_profile": true, "drive_stop": true,
-		"play_show": true, "play_frame": true, "play_state": true, "play_inputs": true, "play_verify": true, "play_resume": true,
 		"play_live": true, "game_log": true, "scene_view": true, "scene_render": true, "file_view": true,
 		"mention_search": true, "settings_read": true, "settings_update": true, "pick": true,
 	}
