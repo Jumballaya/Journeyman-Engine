@@ -131,6 +131,9 @@ class SceneManager {
   EventBus& _eventBus;
   SceneLoader _loader;
 
+  // A scene is loaded while it has a path: a prefab shown as one has no handle.
+  bool hasScene() const { return !_currentScenePath.empty(); }
+
   std::string _currentScenePath;
   AssetHandle _currentSceneHandle;
   std::unordered_set<EntityId> _sceneEntities;

@@ -18,7 +18,7 @@ void SceneManager::transitionTo(const std::filesystem::path& scenePath, Transiti
 }
 
 void SceneManager::loadPrefabScene(const std::filesystem::path& prefabPath) {
-  if (_currentSceneHandle.isValid()) unload();
+  if (hasScene()) unload();
   std::string name = prefabPath.filename().string();
   if (const std::string_view ending = ".prefab.json"; name.ends_with(ending)) name.resize(name.size() - ending.size());
   const nlohmann::json scene = {{"entities", {{{"name", name}, {"prefab", prefabPath.generic_string()}}}}};
@@ -38,7 +38,7 @@ void SceneManager::changeScene(const std::filesystem::path& scenePath, std::opti
   const AssetHandle to = _assetManager.loadAsset(scenePath);
   const AssetHandle from = _currentSceneHandle;
   const std::string fromPath = _currentScenePath;
-  if (from.isValid()) unload();
+  if (hasScene()) unload();
 
   std::vector<EntityId> created;
   try {

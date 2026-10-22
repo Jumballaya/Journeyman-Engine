@@ -165,6 +165,20 @@ TEST_F(SceneManagerTest, UnloadDestroysEveryEntityFromPreviousScene) {
 }
 
 // A scene without an "entities" key is an empty scene.
+TEST_F(SceneManagerTest, APrefabShownAsASceneIsUnloadedByTheNextLoad) {
+  dir.writeFile("hero.prefab.json", R"({"components": {}})");
+  dir.writeFile("bat.prefab.json", R"({"components": {}})");
+  int unloads = 0;
+  sm.addUnloadListener([&] { ++unloads; });
+  sm.loadPrefabScene("hero.prefab.json");
+  ASSERT_EQ(world.findWithTag("hero").size(), 1u);
+  sm.loadPrefabScene("bat.prefab.json");
+  EXPECT_TRUE(world.findWithTag("hero").empty());
+  sm.loadScene("a.scene.json");
+  EXPECT_TRUE(world.findWithTag("bat").empty());
+  EXPECT_EQ(unloads, 2);
+}
+
 TEST_F(SceneManagerTest, LoadSceneWithNoEntitiesFieldDoesNotCrash) {
   dir.writeFile("noEntities.scene.json",
                 nlohmann::json{{"name", "scene_without_entities"}}.dump());
