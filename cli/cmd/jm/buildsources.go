@@ -32,7 +32,8 @@ var notSources = []string{"build", outDir, outDir + ".modules", "build.old", "di
 
 // runOutputs are the JM_* variables naming where a run writes (as peerEnv
 // gives each peer its own): set in this process (jm run --watch), not sources.
-var runOutputs = []string{"JM_CAPTURE_DIR", "JM_DUMP_DIR", "JM_SAVE_DIR", "JM_RECORD_DIR", "JM_NET_TRACE", "JM_DRIVE_RECORD", "JM_ERRORS", "JM_PROFILE"}
+var runOutputs = []string{"JM_CAPTURE_DIR", "JM_DUMP_DIR", "JM_SAVE_DIR", "JM_RECORD_DIR", "JM_NET_TRACE", "JM_DRIVE_RECORD", "JM_ERRORS", "JM_PROFILE",
+	"JM_CONTROL", "JM_EDITOR_CONTROL", "JM_EDITOR_CAPTURE"}
 
 // buildSources are the game at root's sources: its files but hidden ones,
 // archives and what jm and runs write; what its manifest names though missing

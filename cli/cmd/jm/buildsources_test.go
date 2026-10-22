@@ -110,6 +110,9 @@ func TestABuildIsStaleWhenItsSourcesDiffer(t *testing.T) {
 	builtFrom(t, inner)
 	os.WriteFile(filepath.Join(inner, "net.jsonl"), []byte("{}"), 0o644)
 	os.WriteFile(filepath.Join(inner, "Logs", "engine.log"), nil, 0o644)
+	t.Setenv("JM_CONTROL", "control") // the engine's heartbeat, each second
+	os.MkdirAll(filepath.Join(inner, "control"), 0o755)
+	os.WriteFile(filepath.Join(inner, "control", "status.json"), nil, 0o644)
 	t.Setenv("JM_ERRORS", filepath.Join(inner, "errors.json")) // through the temp folder's link, on macOS
 	os.WriteFile(filepath.Join(inner, "errors.json"), nil, 0o644)
 	if buildIsStale(inner) {
