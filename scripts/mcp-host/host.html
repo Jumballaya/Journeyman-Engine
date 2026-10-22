@@ -69,13 +69,18 @@ function showBlocks(kind, blocks, opts) {
   log(kind, short(text, 1500), { ...opts, image: img ? `data:${img.mimeType};base64,${img.data}` : null });
 }
 
-// jm
-const toJm = (msg) => fetch("/send", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", ...msg }) });
+// jm: this page's own session (relay.mjs), named by the first event.
+let markSession;
+const session = new Promise((resolve) => { markSession = resolve; });
+const toJm = async (msg) => fetch("/send?session=" + await session, { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", ...msg }) });
 function jm(method, params) {
   const id = nextId++;
   return new Promise((resolve, reject) => { pending.set(id, { resolve, reject }); toJm({ id, method, params }); });
 }
 const events = new EventSource("/events");
+events.addEventListener("session", (e) => markSession(e.data));
+events.addEventListener("gone", (e) => { $("status").textContent = e.data; events.close(); });
+events.onerror = () => { $("status").textContent = "relay gone: reload"; events.close(); };  // a new session would be uninitialized
 events.onmessage = async (e) => {
   const m = JSON.parse(e.data);
   if (m.id !== undefined && !m.method && pending.has(m.id)) {
