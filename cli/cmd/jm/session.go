@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -40,7 +41,8 @@ func runSession(g gameToRun, opts runOptions) error {
 	var procs []*exec.Cmd
 	var output sync.WaitGroup
 	start := func(label, exe string, env []string) (*exec.Cmd, error) {
-		cmd := exec.Command(exe, g.target)
+		root, _ := projectOfBuild(g)
+		cmd := engineRun(context.Background(), exe, root, g.target)
 		cmd.Env = env
 		stdout, _ := cmd.StdoutPipe()
 		stderr, _ := cmd.StderrPipe()

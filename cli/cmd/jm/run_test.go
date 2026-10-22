@@ -218,6 +218,9 @@ func TestAPersonsPlayIsRecordedAndSteerable(t *testing.T) {
 		if !strings.Contains(env, "JM_CONTROL="+liveDir(root)) && !strings.Contains(env, "JM_CONTROL="+liveDir(evalOrSelf(root))) {
 			t.Errorf("%s can't be steered by play_live", how)
 		}
+		if !strings.Contains(env, "\nPWD="+root+"\n") && !strings.Contains(env, "\nPWD="+evalOrSelf(root)+"\n") {
+			t.Errorf("%s doesn't start in the game (its log goes where the next build deletes it)", how)
+		}
 		os.Remove(envFile)
 	}
 	t.Chdir(root)

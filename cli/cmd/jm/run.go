@@ -215,7 +215,8 @@ func runWith(target string, opts runOptions) error {
 	}
 	// stderr: stdout is the game's, e.g. the driver's JSON lines (JM_DRIVE).
 	fmt.Fprintf(os.Stderr, "Running engine: %s with %s: %s\n", exe, g.kind, target)
-	engineCmd := exec.CommandContext(ctx, exe, g.target)
+	root, _ := projectOfBuild(g)
+	engineCmd := engineRun(ctx, exe, root, g.target)
 	engineCmd.Stdin = os.Stdin
 	engineCmd.Stdout = os.Stdout
 	engineCmd.Stderr = os.Stderr
@@ -328,6 +329,21 @@ func readArchiveManifest(path string) (manifest.GameManifest, error) {
 
 // resolveEnginePath finds the engine. Games don't say where it is: it's the
 // machine's, found by findBinary.
+// engineLog is where a run of the game logs, from its folder (engineRun's).
+const engineLog = "logs/engine.log"
+
+// engineRun is the engine running target (a build folder or archive) of the
+// game at root, from root: what it writes beside itself (engineLog) lands in
+// the game, not in build/, which the next build replaces. root "": from here.
+func engineRun(ctx context.Context, engine, root, target string) *exec.Cmd {
+	if abs, err := filepath.Abs(target); err == nil {
+		target = abs // from here, not from root
+	}
+	cmd := exec.CommandContext(ctx, engine, target)
+	cmd.Dir = root
+	return cmd
+}
+
 func resolveEnginePath() (string, error) {
 	return findBinary("journeyman_engine", "JM_ENGINE")
 }

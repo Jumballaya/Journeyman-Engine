@@ -162,8 +162,8 @@ func TestSetLevelFiltersLogMessages(t *testing.T) {
 func TestEngineLogAndChildOutputReachTheClient(t *testing.T) {
 	output := ""
 	run := mcpTool{Name: "run", InputSchema: object(map[string]any{}), run: func(a toolArgs) toolResult {
-		os.MkdirAll(filepath.Join("build", "logs"), 0o755)
-		os.WriteFile(filepath.Join("build", "logs", "engine.log"), []byte("[2026-10-17 09:00:00.000] [engine] [warning] no music\n"), 0o644)
+		os.MkdirAll("logs", 0o755)
+		os.WriteFile(filepath.FromSlash(engineLog), []byte("[2026-10-17 09:00:00.000] [engine] [warning] no music\n"), 0o644)
 		out, _ := a.call().run(exec.CommandContext(a.call().context(), "sh", "-c",
 			`echo "jm-progress: Building" >&2; echo '{"level":"warning","message":"unused prefab"}'; echo done`))
 		output = string(out)

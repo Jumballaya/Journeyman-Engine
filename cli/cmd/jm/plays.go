@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -10,7 +11,6 @@ import (
 	"io"
 	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -628,7 +628,7 @@ func drivePlay(root, ref, at string) error {
 	}
 	g.close()
 	if state := g.cmd.ProcessState; state != nil && !state.Success() {
-		return fmt.Errorf("the game stopped: %s (its log: build/logs/engine.log)", state)
+		return fmt.Errorf("the game stopped: %s (its log: %s)", state, engineLog)
 	}
 	return nil
 }
@@ -652,8 +652,7 @@ func resumePlay(root, ref, at string) error {
 	// person takes over where state, frame and drive show frame f.
 	p.CopyThumbs(record, f+1)
 	fmt.Fprintf(os.Stderr, "Resuming %s at frame %d (fast-forwarding there); recording as %s\n", p.ID, f, filepath.Base(record))
-	cmd := exec.Command(engine, ".")
-	cmd.Dir = b.Dir
+	cmd := engineRun(context.Background(), engine, root, b.Dir)
 	cmd.Env = append(append(os.Environ(), "JM_PLAY_SESSION="+p.Dir, fmt.Sprintf("JM_PLAY_UNTIL=%d", f+1), "JM_PLAY_THEN=live"), recording...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()

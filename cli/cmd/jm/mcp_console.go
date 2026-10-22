@@ -10,7 +10,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/realpath"
 )
 
-// The game's log (the engine's logs/engine.log, where its last run wrote it),
+// The game's log (engineLog, where its last run wrote it),
 // for Studio's Console tab and the agent.
 func (s *mcpServer) consoleTools() []mcpTool {
 	return []mcpTool{{Name: "game_log", Title: "The game's log",
@@ -21,7 +21,7 @@ func (s *mcpServer) consoleTools() []mcpTool {
 			"errors": boolArg("only warnings and errors")}),
 		onGame: func(root string, a toolArgs) toolResult {
 			game := root // whose log: a page following one game's can tell
-			log := latestLog(root)
+			log := gameLog(root)
 			if log == "" {
 				return toolResult{Text: "No log yet: the game hasn't run here.", Structured: map[string]any{"lines": []logLine{}, "game": game}}
 			}
@@ -36,22 +36,14 @@ func (s *mcpServer) consoleTools() []mcpTool {
 		}}}
 }
 
-// latestLog is the log the game's last run wrote: a played run's (its folder)
-// or a built one's (build/), "" for none. Only a regular file in the game
-// counts: a link out of it, or a folder or pipe, isn't its log.
-func latestLog(root string) string {
-	best := ""
-	var bestInfo os.FileInfo
-	for _, p := range []string{"logs/engine.log", "build/logs/engine.log"} {
-		real, _, ok := realpath.Rel(root, filepath.FromSlash(p))
-		if !ok {
-			continue
-		}
-		if info, err := os.Stat(real); err == nil && info.Mode().IsRegular() && (bestInfo == nil || info.ModTime().After(bestInfo.ModTime())) {
-			best, bestInfo = real, info
-		}
+// gameLog is the game's log (engineLog: its last run's), "" for none. Only a
+// regular file in the game counts: a link out of it, or a folder or pipe, isn't its log.
+func gameLog(root string) string {
+	real, _, ok := realpath.Rel(root, filepath.FromSlash(engineLog))
+	if info, err := os.Stat(real); !ok || err != nil || !info.Mode().IsRegular() {
+		return ""
 	}
-	return best
+	return real
 }
 
 type logLine struct {

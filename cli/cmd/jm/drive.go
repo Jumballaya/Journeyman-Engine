@@ -125,8 +125,8 @@ func startGame(root string, o gameOptions) (*drivenGame, error) {
 		}
 		env = append(env, recording...)
 	}
-	g.cmd = exec.Command(engine, build)
-	g.cmd.Dir, g.cmd.Env = build, env
+	g.cmd = engineRun(context.Background(), engine, root, build)
+	g.cmd.Env = env
 	if g.in, err = g.cmd.StdinPipe(); err != nil {
 		return fail(err)
 	}
@@ -190,7 +190,7 @@ func (g *drivenGame) answer(command string, timeout time.Duration) (string, erro
 	select {
 	case ok := <-answered:
 		if !ok {
-			return "", errors.New("the game ended (its log: build/logs/engine.log)")
+			return "", errors.New("the game ended (its log: " + engineLog + ")")
 		}
 	case <-time.After(timeout):
 		// Its reply won't come: the game is stopped (the read ends with it) and dropped.

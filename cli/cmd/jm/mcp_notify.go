@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -270,16 +269,14 @@ func (c *toolCall) followEngineLog(root string) (stop func()) {
 	if c == nil || c.peer == nil || root == "" {
 		return func() {}
 	}
-	read := map[string]int64{} // how far each log has been sent: what earlier runs wrote isn't this call's
-	for _, log := range []string{filepath.Join(root, "logs", "engine.log"), filepath.Join(root, "build", "logs", "engine.log")} {
-		if real, err := realPath(log); err == nil {
-			if info, err := os.Stat(real); err == nil {
-				read[real] = info.Size()
-			}
+	read := map[string]int64{} // how far the log has been sent: what earlier runs wrote isn't this call's
+	if log := gameLog(root); log != "" {
+		if info, err := os.Stat(log); err == nil {
+			read[log] = info.Size()
 		}
 	}
 	sendNew := func() {
-		if log := latestLog(root); log != "" { // never a pipe, or a link out of the game
+		if log := gameLog(root); log != "" { // never a pipe, or a link out of the game
 			read[log] = c.sendLogFrom(log, read[log])
 		}
 	}
