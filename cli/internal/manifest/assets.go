@@ -12,7 +12,8 @@ import (
 
 // ExpandAssets turns manifest asset entries into file paths: globs ("*"
 // within a path segment, "**" across segments, "?" one character) become the
-// files under `root` that match them (sorted), plain paths pass through.
+// files under `root` that match them (sorted), plain paths pass through,
+// cleaned: "./a.png" and "a.png" are one asset.
 // The result keeps first-seen order and has no duplicates. node_modules, build
 // output, dot-files/directories (.DS_Store, .git) and the scripts' npm and
 // compiler files (ScriptToolingFiles) are never matched.
@@ -28,7 +29,7 @@ func ExpandAssets(root fs.FS, entries []string) ([]string, error) {
 	}
 	for _, entry := range entries {
 		if !strings.ContainsAny(entry, "*?") {
-			add(entry)
+			add(path.Clean(entry))
 			continue
 		}
 		if files == nil {
