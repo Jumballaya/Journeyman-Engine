@@ -109,13 +109,14 @@ func TestMCPResourcesAreTheProjectsFiles(t *testing.T) {
 		t.Fatalf("resources: %v", names)
 	}
 	abs, _ := filepath.Abs("assets/scripts/hero.ts")
-	if text, mime, err := readResource(here(t), "file://"+filepath.ToSlash(abs)); err != nil || text != "// hero" || mime != "text/x-typescript" {
-		t.Fatalf("read: %q %q %v", text, mime, err)
+	s := newMCPServer()
+	if c, err := s.readURI(fileURI(abs)); err != nil || firstText(c) != "// hero" || c[0]["mimeType"] != "text/x-typescript" {
+		t.Fatalf("read: %v %v", c, err)
 	}
-	if text, mime, err := readResource(here(t), "jm://docs/agents"); err != nil || !strings.Contains(text, "jm build --json") || mime != "text/markdown" {
-		t.Fatalf("docs: %q %v", mime, err)
+	if c, err := s.readURI("jm://docs/agents"); err != nil || !strings.Contains(firstText(c), "jm build --json") || c[0]["mimeType"] != "text/markdown" {
+		t.Fatalf("docs: %v", err)
 	}
-	if _, _, err := readResource(here(t), "file:///etc/hosts"); err == nil {
+	if _, err := s.readURI("file:///etc/hosts"); err == nil {
 		t.Fatal("files outside the project can't be read")
 	}
 }

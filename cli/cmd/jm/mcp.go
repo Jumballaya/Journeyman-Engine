@@ -93,9 +93,11 @@ Over stdio, long calls send notifications/progress (given a progressToken),
 notifications/cancelled kills what a call runs (a drive's game too), and the
 engine's log and jm's warnings come as notifications/message (logging/setLevel; default warning).
 
-resources/templates/list gives the jm:// shapes resources/read answers (any
-game's file as jm://game/{game}/file/{path}, plays, markers, entities, docs),
-and completion/complete fills in their parts (games, files, scenes, plays,
+resources/templates/list gives the jm:// shapes resources/read answers (a
+game's file, play, marker or entity as jm://game/{game}/…, and docs). Every
+URI jm hands out names its game, so it reads the same after open_game; a bare
+jm://play/… (as a game's tasks write it) is the open game's.
+completion/complete fills in their parts (games, files, scenes, plays,
 markers, entity names). Over stdio, resources/subscribe sends
 notifications/resources/updated when a subscribed file, scene or play
 changes, and notifications/resources/list_changed when the game's files or
@@ -455,24 +457,11 @@ func (s *mcpServer) handle(ctx context.Context, method string, params json.RawMe
 		if err := json.Unmarshal(params, &read); err != nil {
 			return nil, &rpcError{Code: -32602, Message: "invalid params: " + err.Error()}
 		}
-		if content, ok := readWidget(read.URI); ok {
-			return map[string]any{"contents": []map[string]any{content}}, nil
-		}
-		contents, ok, err := s.readGameResource(read.URI)
-		if !ok {
-			contents, ok, err = readMentioned(s.opened(), read.URI)
-		}
-		if ok {
-			if err != nil {
-				return nil, &rpcError{Code: -32002, Message: err.Error()}
-			}
-			return map[string]any{"contents": contents}, nil
-		}
-		text, mime, err := readResource(s.opened(), read.URI)
+		contents, err := s.readURI(read.URI)
 		if err != nil {
 			return nil, &rpcError{Code: -32002, Message: err.Error()}
 		}
-		return map[string]any{"contents": []map[string]any{{"uri": read.URI, "mimeType": mime, "text": text}}}, nil
+		return map[string]any{"contents": contents}, nil
 	}
 	return nil, &rpcError{Code: -32601, Message: "method not found: " + method}
 }

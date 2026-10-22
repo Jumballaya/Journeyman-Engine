@@ -1,11 +1,9 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"mime"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -14,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
-	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 )
@@ -34,9 +31,9 @@ func resourceTemplates() []map[string]any {
 	}
 	return []map[string]any{
 		t(gameFileTemplate, "game-file", "A game's file", "a file of any of the person's games (a name or absolute path from games), from its folder", ""),
-		t("jm://play/{play}", "play", "A recorded play", "what happened in a play and its markers", "text/plain"),
-		t("jm://play/{play}/{marker}", "marker", "A play's marker", `a marker ("m1") of a play: the moment, the note and what the person saw`, "text/plain"),
-		t("jm://entity{?scene,name}", "entity", "A scene's entity", "every entity of that name in the open game's scene, and where", "application/json"),
+		t("jm://game/{game}/play/{play}", "play", "A recorded play", "what happened in a play of a game and its markers", "text/plain"),
+		t("jm://game/{game}/play/{play}/{marker}", "marker", "A play's marker", `a marker ("m1") of a play: the moment, the note and what the person saw`, "text/plain"),
+		t("jm://game/{game}/entity{?scene,name}", "entity", "A scene's entity", "every entity of that name in a game's scene, and where", "application/json"),
 		t("jm://docs/{topic}", "docs", "Journeyman's docs", "a topic of jm docs", "text/markdown"),
 	}
 }
@@ -44,60 +41,6 @@ func resourceTemplates() []map[string]any {
 // path is simple expansion ("scenes%2Fmain.scene.json"): reserved expansion
 // would keep a file named "a%20b" as it is, and it would read as "a b".
 const gameFileTemplate = "jm://game/{game}/file/{path}"
-
-// readGameResource reads a jm://game/{game}/file/{path}; false: uri isn't one.
-func (s *mcpServer) readGameResource(uri string) ([]map[string]any, bool, error) {
-	rest, ok := strings.CutPrefix(uri, "jm://game/")
-	if !ok {
-		return nil, false, nil
-	}
-	root, path, err := s.gameFileOf(rest)
-	if err != nil {
-		return nil, true, err
-	}
-	f, err := readGameFile(root, path)
-	if err != nil {
-		return nil, true, err
-	}
-	if !f.Binary {
-		kind := mimeOf(f.Path)
-		if kind == "" {
-			kind = "text/plain"
-		}
-		return []map[string]any{{"uri": uri, "mimeType": kind, "text": f.Text}}, true, nil
-	}
-	if f.Size > textLimit {
-		return nil, true, fmt.Errorf("%s is %s: too big to read here", f.Path, sizeText(int64(f.Size)))
-	}
-	data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f.Path)))
-	if err != nil {
-		return nil, true, err
-	}
-	kind := mime.TypeByExtension(filepath.Ext(f.Path))
-	if kind == "" {
-		kind = "application/octet-stream"
-	}
-	return []map[string]any{{"uri": uri, "mimeType": kind, "blob": base64.StdEncoding.EncodeToString(data)}}, true, nil
-}
-
-// gameFileOf is the game and path a game file URI (past jm://game/) names:
-// any game open_game would open, and a path gamePath accepts there.
-func (s *mcpServer) gameFileOf(rest string) (root, path string, err error) {
-	game, path, found := strings.Cut(rest, "/file/")
-	if !found {
-		return "", "", fmt.Errorf("a game's file is %s", gameFileTemplate)
-	}
-	if game, err = url.PathUnescape(game); err == nil {
-		path, err = url.PathUnescape(path)
-	}
-	if err != nil {
-		return "", "", err
-	}
-	if root, err = findGame(s.home, game); err != nil {
-		return "", "", err
-	}
-	return root, path, nil
-}
 
 // resourceWatch is what the client subscribed to and what it was when last
 // seen, and the resources list as it last saw it.
@@ -126,10 +69,9 @@ func (s *mcpServer) subscribe(params json.RawMessage, on bool) (any, *rpcError) 
 		w.mu.Unlock()
 		return map[string]any{}, nil
 	}
-	root := s.opened()
-	stamp, err := s.stampOf(root, p.URI)
+	stamp, err := s.stampOf(p.URI)
 	if err == nil {
-		err = there(root, p.URI)
+		err = s.there(p.URI)
 	}
 	if err != nil {
 		return nil, &rpcError{Code: -32002, Message: err.Error()}
@@ -138,34 +80,6 @@ func (s *mcpServer) subscribe(params json.RawMessage, on bool) (any, *rpcError) 
 	w.stamps[p.URI] = stamp
 	w.mu.Unlock()
 	return map[string]any{}, nil
-}
-
-// there: a doc, play or marker uri names one there is. Checked once, when
-// subscribed: polls only stat. A file needn't be there yet.
-func there(root, uri string) error {
-	if topic, ok := strings.CutPrefix(uri, "jm://docs/"); ok {
-		_, err := docs.Read(topic)
-		return err
-	}
-	rest, ok := strings.CutPrefix(uri, "jm://play/")
-	if !ok {
-		return nil
-	}
-	id, marker, _ := strings.Cut(rest, "/")
-	id, _ = url.PathUnescape(id) // stampOf took it
-	p, err := plays.Load(filepath.Join(plays.Root(root), id))
-	if err != nil {
-		return fmt.Errorf("no play %s", id)
-	}
-	if marker == "" {
-		return nil
-	}
-	for _, m := range p.Meta.Markers {
-		if fmt.Sprintf("m%d", m.N) == marker {
-			return nil
-		}
-	}
-	return fmt.Errorf("play %s has no marker %s", id, marker)
 }
 
 // listedNow: the client has the list of the game at root as it is now.
@@ -189,14 +103,13 @@ func (s *mcpServer) pollResources() {
 	listed := w.listed
 	w.mu.Unlock()
 
-	root := s.opened()
 	now := map[string]string{}
 	for _, uri := range uris {
-		now[uri], _ = s.stampOf(root, uri) // gone: "", which changed too
+		now[uri], _ = s.stampOf(uri) // gone: "", which changed too
 	}
 	list := ""
 	if listed {
-		list = listStamp(root)
+		list = listStamp(s.opened())
 	}
 
 	var changed []string
@@ -232,58 +145,6 @@ func listStamp(root string) string {
 		data = fmt.Appendf(data, "\n%s %d", p.ID, len(p.Meta.Markers))
 	}
 	return fileEtag(data)
-}
-
-// stampOf names the version of what uri reads, in the open game at root:
-// the file it comes from's time and size. Resources that don't change while
-// jm runs (schema, docs, widgets) are "-".
-func (s *mcpServer) stampOf(root, uri string) (string, error) {
-	file := ""
-	switch {
-	case strings.HasPrefix(uri, "file://"):
-		path, err := url.PathUnescape(strings.TrimPrefix(uri, "file://"))
-		if err != nil {
-			return "", err
-		}
-		if file, _, err = gamePath(root, path); err != nil {
-			return "", err
-		}
-	case strings.HasPrefix(uri, "jm://game/"):
-		game, path, err := s.gameFileOf(strings.TrimPrefix(uri, "jm://game/"))
-		if err == nil {
-			file, _, err = gamePath(game, path)
-		}
-		if err != nil {
-			return "", err
-		}
-	case strings.HasPrefix(uri, "jm://play/"):
-		id, _, _ := strings.Cut(strings.TrimPrefix(uri, "jm://play/"), "/")
-		id, err := url.PathUnescape(id)
-		if err != nil || id == "" || id == "." || id == ".." || strings.ContainsAny(id, `/\`) {
-			return "", fmt.Errorf("no play %s", id)
-		}
-		// Its markers are in session.json; whether the build it was made with is still the build, in build/.
-		return fileStamp(filepath.Join(plays.Root(root), id, "session.json")) + " " + buildStamp(root), nil
-	case strings.HasPrefix(uri, "jm://entity?"):
-		u, err := url.Parse(uri)
-		if err == nil {
-			file, _, err = gamePath(root, u.Query().Get("scene"))
-		}
-		if err != nil {
-			return "", err
-		}
-	case uri == "jm://memory":
-		data, _ := json.Marshal(memory.Notes(root))
-		return fileEtag(data), nil
-	case uri == "jm://schema" || strings.HasPrefix(uri, "jm://docs/"):
-		return "-", nil
-	default:
-		if _, ok := readWidget(uri); ok {
-			return "-", nil
-		}
-		return "", fmt.Errorf("unknown resource %s", uri)
-	}
-	return fileStamp(file), nil
 }
 
 // fileStamp is a file's time and size: "" when it isn't there (yet), so its making is a change.
@@ -373,33 +234,29 @@ func (s *mcpServer) completeArgument(params json.RawMessage) (any, *rpcError) {
 		"total": len(matches), "hasMore": len(matches) > most}}, nil
 }
 
-// argumentValues are what a template's argument can be: games, a game's
-// files, the open game's plays, a play's markers, scenes, entity names, topics.
+// argumentValues are what a template's argument can be: games, docs topics,
+// and the parts of the game given (else the open one): files, plays, markers, scenes, entity names.
 func (s *mcpServer) argumentValues(name string, given map[string]string) []string {
-	root := s.opened()
-	var out []string
 	switch name {
 	case "game":
-		home := s.home
-		listed := false
-		for _, p := range projects.List(home) {
-			if p.Missing {
-				continue
-			}
-			listed = listed || evalOrSelf(p.Path) == evalOrSelf(root)
-			if filepath.Dir(p.Path) == evalOrSelf(home) {
-				out = append(out, filepath.Base(p.Path)) // what findGame takes by name
-			} else {
-				out = append(out, p.Path)
-			}
+		return s.gameValues()
+	case "topic":
+		var out []string
+		for _, t := range docs.Topics() {
+			out = append(out, t.Name)
 		}
-		if root != "" && !listed {
-			out = append(out, root) // the open game (from a root, say) though it isn't in the list
-		}
+		return out
+	}
+	root := s.opened()
+	if game := given["game"]; game != "" {
+		root, _ = findGame(s.home, game)
+	}
+	if root == "" { // no game, or one there isn't: nothing of one
+		return nil
+	}
+	var out []string
+	switch name {
 	case "path":
-		if game := given["game"]; game != "" {
-			root, _ = findGame(s.home, game)
-		}
 		out = filesOf(root, "")
 	case "play":
 		all, _ := plays.List(root)
@@ -407,9 +264,6 @@ func (s *mcpServer) argumentValues(name string, given map[string]string) []strin
 			out = append(out, p.ID)
 		}
 	case "marker":
-		if root == "" {
-			break
-		}
 		if p, err := plays.Find(root, given["play"]); err == nil {
 			for _, m := range p.Meta.Markers {
 				out = append(out, fmt.Sprintf("m%d", m.N))
@@ -431,32 +285,48 @@ func (s *mcpServer) argumentValues(name string, given map[string]string) []strin
 				})
 			}
 		}
-	case "topic":
-		for _, t := range docs.Topics() {
-			out = append(out, t.Name)
-		}
 	}
 	return out
 }
 
-// filesOf is the game at root's files ending in suffix, from its folder ("" root: none).
+// gameValues are the games a URI can name: the person's, by name when in the
+// games folder (as findGame takes them), and the open game though it isn't listed.
+func (s *mcpServer) gameValues() []string {
+	open, listed := s.opened(), false
+	var out []string
+	for _, p := range projects.List(s.home) {
+		if p.Missing {
+			continue
+		}
+		listed = listed || evalOrSelf(p.Path) == evalOrSelf(open)
+		if filepath.Dir(p.Path) == evalOrSelf(s.home) {
+			out = append(out, filepath.Base(p.Path))
+		} else {
+			out = append(out, p.Path)
+		}
+	}
+	if open != "" && !listed {
+		out = append(out, open) // from a root, say
+	}
+	return out
+}
+
+// filesOf is the game at root's files ending in suffix, from its folder.
 func filesOf(root, suffix string) []string {
 	var out []string
-	if root != "" {
-		_ = walkProject(root, func(rel string, _ fs.FileInfo) {
-			if strings.HasSuffix(rel, suffix) {
-				out = append(out, rel)
-			}
-		})
-	}
+	_ = walkProject(root, func(rel string, _ fs.FileInfo) {
+		if strings.HasSuffix(rel, suffix) {
+			out = append(out, rel)
+		}
+	})
 	return out
 }
 
 // projectResources lists the files an agent reads and writes, and the schema.
 func projectResources(root string) []map[string]any {
-	resources := []map[string]any{{"uri": "jm://schema", "name": "schema", "mimeType": "application/json",
+	resources := []map[string]any{{"uri": gameURI(root, "jm://schema"), "name": "schema", "mimeType": "application/json",
 		"description": "every component's scene keys and script fields (jm schema)"},
-		{"uri": "jm://memory", "name": "memory", "mimeType": "application/json", "description": "the game's design notes (design/): each one's title, observations and links"}}
+		{"uri": gameURI(root, "jm://memory"), "name": "memory", "mimeType": "application/json", "description": "the game's design notes (design/): each one's title, observations and links"}}
 	for _, t := range docs.Topics() {
 		resources = append(resources, map[string]any{"uri": "jm://docs/" + t.Name, "name": "docs/" + t.Name,
 			"mimeType": "text/markdown", "description": t.Title})
@@ -492,43 +362,4 @@ func mimeOf(path string) string {
 		return "text/plain"
 	}
 	return ""
-}
-
-func readResource(root, uri string) (string, string, error) {
-	if uri == "jm://schema" {
-		out, failed := runJM(nil, root, "schema")
-		if failed {
-			return "", "", fmt.Errorf("%s", out)
-		}
-		return out, "application/json", nil
-	}
-	if uri == "jm://memory" {
-		data, err := json.Marshal(map[string]any{"notes": memory.Notes(root)})
-		return string(data), "application/json", err
-	}
-	if topic, ok := strings.CutPrefix(uri, "jm://docs/"); ok {
-		text, err := docs.Read(topic)
-		return text, "text/markdown", err
-	}
-	path, ok := strings.CutPrefix(uri, "file://")
-	if !ok {
-		return "", "", fmt.Errorf("unknown resource %s", uri)
-	}
-	path, err := url.PathUnescape(path)
-	if err != nil {
-		return "", "", err
-	}
-	// The files projectResources lists, and no others.
-	real, rel, err := gamePath(root, path)
-	if err != nil {
-		return "", "", err
-	}
-	if mimeOf(rel) == "" {
-		return "", "", fmt.Errorf("%s isn't one of the project's resources", uri)
-	}
-	data, err := os.ReadFile(real)
-	if err != nil {
-		return "", "", err
-	}
-	return string(data), mimeOf(path), nil
 }

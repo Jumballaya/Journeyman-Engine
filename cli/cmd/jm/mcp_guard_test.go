@@ -23,12 +23,13 @@ func TestMCPResourcesStayInTheProject(t *testing.T) {
 	os.MkdirAll(".git", 0o755)
 	os.WriteFile(".git/config.txt", []byte("token=abc"), 0o644)
 	here, _ := filepath.Abs(".")
+	s := newMCPServer()
 	for _, uri := range []string{"link.txt", ".git/config.txt", "../" + filepath.Base(outside) + "/secret.txt"} {
-		if text, _, err := readResource(here, "file://"+filepath.Join(here, uri)); err == nil {
-			t.Errorf("%s was read: %q", uri, text)
+		if text, err := s.readURI("file://" + filepath.Join(here, uri)); err == nil {
+			t.Errorf("%s was read: %v", uri, text)
 		}
 	}
-	if _, _, err := readResource(here, "file://"+filepath.Join(here, ".jm.json")); err != nil {
+	if _, err := s.readURI("file://" + filepath.Join(here, ".jm.json")); err != nil {
 		t.Errorf("the manifest isn't readable: %v", err)
 	}
 }
