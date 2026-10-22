@@ -119,11 +119,11 @@ func startGame(root string, o gameOptions) (*drivenGame, error) {
 		env = append(env, "JM_SESSION="+path)
 	}
 	if o.Record {
-		_, _ = plays.Prune(root, keptPlays, true)
-		if g.play, err = plays.Create(root, plays.ReadBuild(build), version); err != nil {
+		var recording []string
+		if g.play, recording, err = newPlay(root, plays.ReadBuild(build)); err != nil {
 			return fail(err)
 		}
-		env = append(env, "JM_RECORD_DIR="+g.play)
+		env = append(env, recording...)
 	}
 	g.cmd = exec.Command(engine, build)
 	g.cmd.Dir, g.cmd.Env = build, env

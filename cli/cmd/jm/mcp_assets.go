@@ -158,7 +158,7 @@ func addAsset(ctx context.Context, root string, fetch func(context.Context, []st
 	}
 	format, _ := uploadFormat(rel)
 	ext := strings.ToLower(filepath.Ext(rel))
-	data, err := fetch(ctx, format.MIME)
+	data, err := fetch(ctx, format.UploadMIME)
 	if err != nil {
 		return "", false, 0, err
 	}

@@ -140,6 +140,30 @@ func init() {
 	prune.Flags().IntVar(&playsPruneKeep, "keep", keptPlays, "how many to keep")
 }
 
+// newPlay is a new play of the game at root, made with build b (older
+// unmarked plays go first, but those the run reads), and what a run needs to record into it.
+func newPlay(root string, b plays.Build, reads ...*plays.Play) (string, []string, error) {
+	spare := make([]string, len(reads))
+	for i, p := range reads {
+		spare[i] = p.Dir
+	}
+	_, _ = plays.Prune(root, keptPlays, true, spare...)
+	dir, err := plays.Create(root, b, version)
+	if err != nil {
+		return "", nil, err
+	}
+	return dir, []string{"JM_RECORD_DIR=" + dir}, nil
+}
+
+// personsPlay is newPlay for a run a person plays: play_live steers it too.
+func personsPlay(root string, b plays.Build, reads ...*plays.Play) (string, []string, error) {
+	dir, env, err := newPlay(root, b, reads...)
+	if err != nil {
+		return "", nil, err
+	}
+	return dir, append(env, "JM_CONTROL="+newLiveDir(root)), nil
+}
+
 // keptPlays is how many unmarked plays jm keeps: older ones go when a new one
 // starts. A marked play stays until pruned by hand: the person marked it.
 const keptPlays = 40
@@ -620,7 +644,7 @@ func resumePlay(root, ref, at string) error {
 	if err != nil {
 		return err
 	}
-	record, err := plays.Create(root, b, version)
+	record, recording, err := personsPlay(root, b, p) // p: what it fast-forwards through
 	if err != nil {
 		return err
 	}
@@ -630,8 +654,7 @@ func resumePlay(root, ref, at string) error {
 	fmt.Fprintf(os.Stderr, "Resuming %s at frame %d (fast-forwarding there); recording as %s\n", p.ID, f, filepath.Base(record))
 	cmd := exec.Command(engine, ".")
 	cmd.Dir = b.Dir
-	cmd.Env = append(os.Environ(), "JM_PLAY_SESSION="+p.Dir, fmt.Sprintf("JM_PLAY_UNTIL=%d", f+1), "JM_PLAY_THEN=live",
-		"JM_RECORD_DIR="+record)
+	cmd.Env = append(append(os.Environ(), "JM_PLAY_SESSION="+p.Dir, fmt.Sprintf("JM_PLAY_UNTIL=%d", f+1), "JM_PLAY_THEN=live"), recording...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()
 }

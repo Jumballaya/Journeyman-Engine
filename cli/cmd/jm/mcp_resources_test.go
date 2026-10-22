@@ -281,3 +281,36 @@ func TestHandedOutURIsKeepTheirGame(t *testing.T) {
 		t.Errorf("a bare link isn't the open game's: %s", text)
 	}
 }
+
+// The game's text files are listed as resources of their type; pictures aren't.
+func TestTextFilesAreListedAsTheirType(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	dir := filepath.Join(home, "a")
+	filesGame(t, dir)
+	for _, f := range []string{"notes.txt", "assets/shaders/glow.vert", "assets/hero.png", "assets/maps/m.tmx"} {
+		os.MkdirAll(filepath.Join(dir, filepath.Dir(f)), 0o755)
+		os.WriteFile(filepath.Join(dir, f), []byte("x"), 0o644)
+	}
+	t.Chdir(dir)
+	data, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "resources/list", "params": map[string]any{}})
+	reply, _ := newMCPServer().respond(data)
+	data, _ = json.Marshal(reply)
+	var out struct {
+		Result struct {
+			Resources []struct{ Name, MimeType string }
+		}
+	}
+	json.Unmarshal(data, &out)
+	got := map[string]string{}
+	for _, r := range out.Result.Resources {
+		got[r.Name] = r.MimeType
+	}
+	want := map[string]string{"notes.txt": "text/plain", "assets/shaders/glow.vert": "text/plain", "assets/maps/m.tmx": "application/xml", "assets/hero.png": ""}
+	for name, mime := range want {
+		if got[name] != mime {
+			t.Errorf("%s listed as %q, want %q", name, got[name], mime)
+		}
+	}
+}
