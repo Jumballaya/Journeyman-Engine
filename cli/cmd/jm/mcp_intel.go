@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -146,12 +147,10 @@ func runCheck(call *toolCall, root, name string) healthCheck {
 			c.OK, c.Summary = true, "no goldens yet ("+goldenDir+"/*.golden.json)"
 			return c
 		}
-		if buildIsStale(root) {
-			if text, failed := jmIn(call, root, "build", "--json"); failed {
-				c = readCheck(name, text, true)
-				c.Summary = "the build it runs failed: " + c.Summary
-				return c
-			}
+		if failed := (buildFailed{}); errors.As(freshBuild(call, root), &failed) {
+			c = readCheck(name, failed.problems, true)
+			c.Summary = "the build it runs failed: " + c.Summary
+			return c
 		}
 		args = []string{"golden", "--json"}
 	case "world":

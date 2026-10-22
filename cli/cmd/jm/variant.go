@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -275,10 +276,8 @@ func dropText(name string, kept bool) string {
 // playGame opens a game in its own window for the person (built first if it
 // needs it), with more of jm run's flags (--fullscreen) if given.
 func playGame(c *toolCall, dir string, flags ...string) error {
-	if buildIsStale(dir) {
-		if out, failed := jmIn(c, dir, "build", "--json"); failed {
-			return fmt.Errorf("the build failed:\n%s", out)
-		}
+	if err := freshBuild(c, dir); err != nil {
+		return err
 	}
 	return startDetached(jmCommand(context.Background(), dir, append([]string{"run"}, flags...)...), "the game")
 }
@@ -422,10 +421,8 @@ func frameOf(c *toolCall, side int, dir string, frame uint64, p *plays.Play, out
 	if _, err := resolveEnginePath(); err != nil { // before a build that would be for nothing
 		return "", err
 	}
-	if buildIsStale(dir) {
-		if text, failed := jmIn(c, dir, "build", "--json"); failed {
-			return "", fmt.Errorf("the build failed: %s", clip(text, 400))
-		}
+	if err := freshBuild(c, dir); err != nil {
+		return "", errors.New(clip(err.Error(), 400))
 	}
 	defer c.followEngineLog(dir)()
 	o := gameOptions{GL: true, Seed: new(uint64), Stop: c.context()}

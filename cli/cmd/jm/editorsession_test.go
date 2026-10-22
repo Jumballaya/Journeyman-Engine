@@ -83,6 +83,7 @@ func TestTheEditorBridgeReadsTheSessionAndWritesItsInbox(t *testing.T) {
 // Studio says which game its tab shows: another chat having opened another
 // game since doesn't send its editor, index, health or scene calls there.
 func TestTheEditorAndSceneToolsUseTheGameNamed(t *testing.T) {
+	fakeInspect(t) // which game's file: not how the engine lays it out
 	root := sceneGame(t)
 	session := filepath.Join(root, ".jm", "editor-session-7.json")
 	os.MkdirAll(filepath.Dir(session), 0o755)

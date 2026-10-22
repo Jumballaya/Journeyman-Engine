@@ -15,9 +15,8 @@ import (
 const pictureBudget = 8 << 20
 
 // scenePictures is how the scene's sprites and tile maps look, for the scene
-// page: each sprite's texture ("assets/hero.png",
-// "assets/sprites.atlas.json#hero_0") as a PNG data URI of the image, or of the
-// atlas region as the build cuts it; each tile map's .tmj drawn whole, with its
+// page: each sprite's look (the image the engine draws it with, and the part:
+// lookImage's) as a PNG data URI; each tile map's .tmj drawn whole, with its
 // size in pixels. One it can't read is left out (the page draws its box).
 func scenePictures(root string, placed []placedEntity) (sprites map[string]string, maps map[string]map[string]any) {
 	sprites, maps, used := map[string]string{}, map[string]map[string]any{}, 0
@@ -50,7 +49,7 @@ func scenePictures(root string, placed []placedEntity) (sprites map[string]strin
 			continue
 		}
 		sprites[texture] = "" // tried: one it can't draw isn't tried again
-		sprites[texture] = uri(gameImage(root, texture))
+		sprites[texture] = uri(lookImage(root, texture))
 	}
 	for texture, src := range sprites {
 		if src == "" {
@@ -58,26 +57,6 @@ func scenePictures(root string, placed []placedEntity) (sprites map[string]strin
 		}
 	}
 	return sprites, maps
-}
-
-// spriteLook is the texture a sprite shows as its scene starts: its animation's
-// first region when one plays (atlasPath + animations), else its texture.
-func spriteLook(components map[string]any) string {
-	sprite, _ := components["SpriteComponent"].(map[string]any)
-	texture, _ := sprite["texture"].(string)
-	anim, _ := components["SpriteAnimationComponent"].(map[string]any)
-	file, _ := anim["atlasPath"].(string)
-	current, _ := anim["current"].(string)
-	clips, _ := anim["animations"].(map[string]any)
-	clip, _ := clips[current].(map[string]any)
-	regions, _ := clip["regions"].([]any)
-	if sprite == nil || file == "" || len(regions) == 0 {
-		return texture
-	}
-	if first, _ := regions[0].(string); first != "" {
-		return file + "#" + first
-	}
-	return texture
 }
 
 // gameImage is an image the engine reads by reference: a file of the game, or

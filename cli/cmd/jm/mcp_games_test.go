@@ -345,6 +345,7 @@ func TestACallFallsBackToTheRecentGameWhenTheOpenOneIsGone(t *testing.T) {
 
 // A call from a file the host opened works on that file's game, whichever is open.
 func TestAnOpenedFileNamesItsGame(t *testing.T) {
+	fakeInspect(t) // which game's file: not how the engine lays it out
 	scratchSettings(t)
 	home := t.TempDir()
 	t.Setenv("JM_GAMES", home)
@@ -399,6 +400,7 @@ func TestSettingsAreTheCallsGameOrNone(t *testing.T) {
 // An opened file names the game holding it, links resolved; one in no game names
 // none (a call can't make a folder a game), and a call naming another game is refused.
 func TestAnOpenedFileIsInItsGameOrNone(t *testing.T) {
+	fakeInspect(t) // which game's file: not how the engine lays it out
 	scratchSettings(t)
 	home := t.TempDir()
 	t.Setenv("JM_GAMES", home)

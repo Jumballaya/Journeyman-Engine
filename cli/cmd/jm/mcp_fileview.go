@@ -60,9 +60,18 @@ func viewFile(root string, a toolArgs) (file map[string]any, summary string, thu
 	name := path.Base(rel)
 	switch {
 	case strings.HasSuffix(rel, ".prefab.json"):
-		placed := []placedEntity{}
+		seen, err := inspect(a.call(), root, rel)
+		if err == nil && seen.Error != "" {
+			err = fmt.Errorf("the engine couldn't make %s: %s", rel, seen.Error)
+		}
+		if err != nil {
+			return nil, "", nil, err
+		}
+		placed := seen.placed()
 		stem := strings.TrimSuffix(name, ".prefab.json")
-		place(root, []map[string]any{{"name": stem, "prefab": rel}}, nil, func(int, string) string { return stem }, false, placement{}, &placed, 0)
+		for i := range placed { // the prefab itself, by its name: Shadow is stem/Shadow
+			placed[i].Where = stem + strings.TrimPrefix(placed[i].Where, "entities[0]")
+		}
 		file["kind"], file["entities"] = "prefab", placed
 		summary = fmt.Sprintf("The prefab %s of %s: %d entities (itself and its children); structuredContent has their components.", rel, gameName(root), len(placed))
 	case strings.HasSuffix(rel, ".atlas.json"):
