@@ -43,6 +43,27 @@ test('a file is read once, and writable only as jm fmt writes it, with a version
   }
 });
 
+test("jm failing to check a file's layout as it's read leaves it to the save to check", async () => {
+  for (const laidOut of [true, false]) {
+    const host = fakeHost(), { f, said } = opened(host);
+    let fail = true;
+    host.callTool = async (name, a) => fail ? { isError: true, content: [{ type: 'text', text: 'jm is busy' }] } : jsonEdit(a);
+    f.open('a');
+    host.pending[0].resolve({ text: laidOut ? text({ x: 1 }) : '{"x":1}\n', etag: 'v1', writable: true }); await settle(); await settle();
+    assert.ok(f.editable('a'));
+    fail = false;
+    f.save((doc) => { doc.x = 2; }); await settle(); await settle();
+    if (laidOut) {
+      host.pending[1].resolve({ outcome: 'saved', etag: 'v2' }); await settle(); await settle();
+      assert.equal(host.pending[1].args[1], text({ x: 2 }));
+    } else {
+      assert.equal(host.pending.length, 1, 'nothing written');
+      assert.ok(!f.editable('a'));
+      assert.match(said.at(-1), /isn't as jm fmt writes it/);
+    }
+  }
+});
+
 test('one save at a time; a conflict reads the file again', async () => {
   const host = fakeHost(), { f, said } = opened(host);
   f.open('a');

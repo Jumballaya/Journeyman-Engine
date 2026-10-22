@@ -164,7 +164,7 @@ const kit = (() => {
   // nothing. say(notice) shows what happened; changed() re-renders.
   const jsonFile = (host, { say, changed }) => {
     let reads = 0, wanted = "";
-    const f = { file: null, saving: false };  // file: { uri, text, doc, etag, writable, why }
+    const f = { file: null, saving: false };  // file: { uri, text, doc, etag, writable, why, unchecked }
     // laid is text with edits made, as jm fmt writes it.
     const laid = async (text, made) => {
       const r = await host.callTool("json_edit", { text, edits: made });
@@ -180,8 +180,9 @@ const kit = (() => {
         const r = await host.readResource(uri);
         file = { uri, text: r.text, doc: JSON.parse(r.text), etag: r.etag, writable: false, why: "the host won't save it" };
         if (r.writable && r.etag) {
-          file.writable = (await laid(r.text, [])) === r.text;
           file.why = "it isn't as jm fmt writes it (jm fmt it)";
+          try { file.writable = (await laid(r.text, [])) === r.text; }
+          catch { file.writable = file.unchecked = true; }  // jm couldn't say now: the save asks again
         }
       } catch (e) { notice = "Couldn't read the file: " + (e && e.message || e); }
       if (n !== reads) return false;
@@ -203,6 +204,8 @@ const kit = (() => {
       f.saving = true; say("Saving…"); changed();
       let outcome = "failed", notice = "Couldn't save.";
       try {
+        if (s.unchecked && (await laid(s.text, [])) !== s.text) { s.writable = false; throw new Error(s.why); }
+        s.unchecked = false;
         const text = await laid(s.text, edits(s.doc, doc));
         const r = await host.writeResource(s.uri, text, s.etag);
         if (r && r.outcome === "saved") { Object.assign(s, { text, doc, etag: r.etag }); outcome = "saved"; notice = "Saved."; }
