@@ -48,12 +48,18 @@ func buildSources(root string) map[string]string {
 	realRoot := evalOrSelf(root)
 	var outputs []string
 	for _, v := range runOutputs {
-		if p := os.Getenv(v); p != "" && p != "-" {
-			if !filepath.IsAbs(p) {
-				p = filepath.Join(realRoot, p)
-			}
-			outputs = append(outputs, filepath.Clean(p))
+		p := os.Getenv(v)
+		if p == "" || p == "-" {
+			continue
 		}
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(realRoot, p)
+		}
+		p = filepath.Join(evalOrSelf(filepath.Dir(p)), filepath.Base(p)) // named as the walk names files (it may not be there yet)
+		if rel, err := filepath.Rel(p, realRoot); err == nil && (rel == "." || filepath.IsLocal(rel)) {
+			continue // the game, or a folder holding it: its outputs can't be told from its sources
+		}
+		outputs = append(outputs, p)
 	}
 	// output: file is one jm or a run writes.
 	output := func(file string) bool {
