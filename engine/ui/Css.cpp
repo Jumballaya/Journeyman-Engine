@@ -4,6 +4,7 @@
 #include <unordered_map>
 
 #include "Text.hpp"
+#include "../core/ecs/component/Color.hpp"
 
 namespace {
 
@@ -190,18 +191,7 @@ std::optional<Length> parseLength(std::string_view raw, glm::vec2 viewport, floa
 std::optional<glm::vec4> parseColor(std::string_view raw) {
   const std::string v = lower(trim(raw));
   if (v.empty()) return std::nullopt;
-  if (v[0] == '#') {
-    std::string hex = v.substr(1);
-    if (hex.size() == 3 || hex.size() == 4) {
-      std::string expanded;
-      for (char c : hex) expanded += std::string(2, c);
-      hex = expanded;
-    }
-    if (hex.size() != 6 && hex.size() != 8) return std::nullopt;
-    if (!std::all_of(hex.begin(), hex.end(), [](unsigned char c) { return std::isxdigit(c); })) return std::nullopt;
-    auto byte = [&](size_t at) { return std::strtoul(hex.substr(at, 2).c_str(), nullptr, 16) / 255.0f; };
-    return glm::vec4(byte(0), byte(2), byte(4), hex.size() == 8 ? byte(6) : 1.0f);
-  }
+  if (v[0] == '#') return hexColor(v);
   if (v.starts_with("rgb")) {
     const size_t open = v.find('(');
     const size_t close = v.find(')');

@@ -10,6 +10,7 @@
 #include "../core/app/ModuleTags.hpp"
 #include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
+#include "../core/ecs/component/Color.hpp"
 #include "../core/ecs/system/System.hpp"
 #include "../core/scripting/ScriptComponent.hpp"
 #include "../core/ecs/system/SystemTraits.hpp"
@@ -83,13 +84,10 @@ class DebugDrawExpiry : public System {
   const GameClock& _clock;
 };
 
+// A component's color, or any CSS color (UI is styled with CSS: "red", rgb()).
 glm::vec4 colorFrom(const nlohmann::json& value, glm::vec4 fallback) {
   if (value.is_string()) return parseColor(value.get<std::string>()).value_or(fallback);
-  if (value.is_array() && value.size() == 4) {
-    const auto c = value.get<std::array<float, 4>>();
-    return {c[0], c[1], c[2], c[3]};
-  }
-  return fallback;
+  return colorOf(value).value_or(fallback);
 }
 
 }  // namespace
