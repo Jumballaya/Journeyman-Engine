@@ -213,6 +213,26 @@ func TestADraftIDOfTasksAlikeIsRefused(t *testing.T) {
 	}
 }
 
+// A draft id a change used up never names a task written later with its text.
+func TestARemovedDraftIDIsntANewTasksOfItsText(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "design"), 0o755)
+	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte("## To do\n- [ ] Coins\n"), 0o644)
+	_, tasks, _ := Tasks(root)
+	coins := tasks[0].ID
+	if err := RemoveTask(root, coins); err != nil {
+		t.Fatal(err)
+	}
+	text := strings.Replace(boardFile(t, root), "## To do\n", "## To do\n- [ ] Coins\n", 1) // written again by hand
+	os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte(text), 0o644)
+	if err := RemoveTask(root, coins); err != nil {
+		t.Fatal(err)
+	}
+	if _, tasks, _ = Tasks(root); len(tasks) != 1 || tasks[0].Text != "Coins" {
+		t.Errorf("a removal retried took the new Coins: %+v", tasks)
+	}
+}
+
 // lastTask is read as YAML writes it, and kept once.
 func TestLastTaskIsReadAsYAML(t *testing.T) {
 	for _, front := range []string{"lastTask: 't7'", "lastTask: t7 # the highest", `lastTask: "t7"`} {
@@ -254,6 +274,7 @@ func TestLastTaskKeepsTheFrontmattersShape(t *testing.T) {
 		"lastTask: t7\n# kept by hand\ntitle: Tasks":      "\nlastTask: t8\n# kept by hand\ntitle: Tasks\n",
 		"lastTask: t7 # do not reset\ntitle: Tasks":       "\nlastTask: t8 # do not reset\ntitle: Tasks\n",
 		"lastTask:\n  # do not reset\n  t7\ntitle: Tasks": "\nlastTask: t8\n  # do not reset\ntitle: Tasks\n",
+		"lastTask: # do not reset\n  t7\ntitle: Tasks":    "\nlastTask: t8 # do not reset\ntitle: Tasks\n",
 	} {
 		root := t.TempDir()
 		os.MkdirAll(filepath.Join(root, "design"), 0o755)

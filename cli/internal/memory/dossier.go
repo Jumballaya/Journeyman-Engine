@@ -273,9 +273,10 @@ func quoted(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "
 // property is a frontmatter property: its name as YAML reads it, its value,
 // and its lines as written (raw: to write it again unchanged).
 type property struct {
-	key  string
-	node *yaml.Node
-	raw  string
+	key     string
+	keyNode *yaml.Node // its comments: "key: # this" is the key's
+	node    *yaml.Node
+	raw     string
 }
 
 // frontmatter splits a note's text into its frontmatter's properties and its
@@ -310,7 +311,7 @@ func frontmatter(text string) ([]property, string, error) {
 			len(starts) > 0 && key.Line-1 <= starts[len(starts)-1] {
 			return nil, body, fmt.Errorf("its frontmatter has %q twice, or not on a line of its own", key.Value)
 		}
-		out = append(out, property{key: key.Value, node: m[i+1]})
+		out = append(out, property{key: key.Value, keyNode: key, node: m[i+1]})
 		starts = append(starts, key.Line-1)
 	}
 	for i := range out {

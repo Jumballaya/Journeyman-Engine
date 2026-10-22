@@ -97,13 +97,20 @@ func (b *board) scan() {
 			t := Task{ID: m[3], Text: m[2], Column: column, Links: links(m[2])}
 			if v, ok := idNumber(t.ID); ok && !seen[t.ID] {
 				seen[t.ID], b.last = true, max(b.last, v)
-			} else { // none, or a copied task's: listed by its text (two alike: one draft, which find refuses)
-				t.ID = "new-" + fmt.Sprintf("%x", sha256.Sum256([]byte(t.Text)))[:8]
+			} else { // none, or a copied task's: a draft, below
+				t.ID = ""
 			}
 			if m[1] != " " { // ticked by hand (Obsidian): done, whatever column it's in
 				t.Column = "Done"
 			}
 			b.tasks, b.at, b.end, open = append(b.tasks, t), append(b.at, i), append(b.end, i+1), true
+		}
+	}
+	// A draft id is its text's as of the board's highest id: two alike share
+	// one (find refuses it), and a change giving ids retires every draft listed.
+	for i, t := range b.tasks {
+		if t.ID == "" {
+			b.tasks[i].ID = "new-" + fmt.Sprintf("%x", sha256.Sum256([]byte(strconv.Itoa(b.last)+"\x00"+t.Text)))[:8]
 		}
 	}
 	for _, c := range Columns {
@@ -223,8 +230,10 @@ func withLastTask(text string, last int) (string, error) {
 		for value > 1 && (strings.TrimSpace(lines[value-1]) == "" || strings.HasPrefix(strings.TrimSpace(lines[value-1]), "#")) {
 			value--
 		}
-		if c := front[at].node.LineComment; c != "" { // its comment on its line too
-			mark += " " + c
+		for _, c := range []string{front[at].keyNode.LineComment, front[at].node.LineComment} { // its line's comment too
+			if c != "" {
+				mark += " " + c
+			}
 		}
 		kept := []string{mark}
 		for _, line := range lines[1:value] { // and those among its value's lines
