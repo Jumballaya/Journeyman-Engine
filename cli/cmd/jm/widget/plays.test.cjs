@@ -41,7 +41,7 @@ class Element {
 }
 
 const play = {
-  id: 'test-run', game: 'VOIDLANCE', frames: 121, seconds: 2,
+  id: 'test-run', name: 'VOIDLANCE', game: '/g/void', frames: 121, seconds: 2,
   sampleAt: [0, 60, 120], sampleTime: [0, 1, 2], scenes: [], values: [], markers: [], thumbs: [], stale: false,
 };
 const metadata = {
@@ -177,9 +177,9 @@ test('an MCP Apps host gets the timeline from its tool result, and its buttons c
   exact.listeners.click();
   await settle();
   const call = sent.find((m) => m.method === 'tools/call' && m.params.name === 'play_frame');
-  assert.equal(JSON.stringify(call.params), JSON.stringify({ name: 'play_frame', arguments: { play: 'test-run', at: '60' } }));
+  assert.equal(JSON.stringify(call.params), JSON.stringify({ name: 'play_frame', arguments: { play: 'test-run', at: '60', game: '/g/void' } }));
   fromHost({ id: call.id, result: { content: [], _meta: { 'jm/image': 'data:image/jpeg;base64,exact' },
-                                    structuredContent: { play: 'test-run', frame: 60, time: 1, path: 'f.jpg', source: { kind: 'replay', drift: 'same' } } } });
+                                    structuredContent: { play: 'test-run', game: '/g/void', frame: 60, time: 1, path: 'f.jpg', source: { kind: 'replay', drift: 'same' } } } });
   await settle();
   const viewer = app.children.find((child) => (child.className || '').startsWith('viewer'));
   assert.equal(viewer.children.find((child) => child.tag === 'img').attributes.src, 'data:image/jpeg;base64,exact');
@@ -207,12 +207,12 @@ async function exactFrameAnswers(result) {
   const { app } = widget(play, metadata, 60, null, { callTool });
   button(app, 'Exact frame').listeners.click();
   await settle();
-  assert.deepEqual(calls.filter((c) => c.name === 'play_frame'), [{ name: 'play_frame', args: { play: 'test-run', at: '60' } }]);
+  assert.deepEqual(calls.filter((c) => c.name === 'play_frame'), [{ name: 'play_frame', args: { play: 'test-run', at: '60', game: '/g/void' } }]);
   return app;
 }
 const replayed = (source) => ({
   content: [{ type: 'text', text: 'prose the widget must not read' }],
-  structuredContent: { play: 'test-run', frame: 60, time: 1, path: 'f.png', source },
+  structuredContent: { play: 'test-run', game: '/g/void', frame: 60, time: 1, path: 'f.png', source },
   _meta: { 'jm/image': 'data:image/png;base64,replayed' },
 });
 
@@ -336,7 +336,7 @@ test('ask about this puts the moment in the person\'s draft: titled, with its pi
   const [text, image] = message.content;
   assert.equal(text._meta['openai/title'], 'VOIDLANCE at 0:02.0');
   assert.match(text.text, /Play test-run, 0:02.0 \(frame 120\).*session.lives 2/);
-  assert.deepEqual(JSON.parse(text.text.split('\n')[1]), { play: 'test-run', frame: 120, time: 2, scene: '', values: { 'session.lives': 2 } });
+  assert.deepEqual(JSON.parse(text.text.split('\n')[1]), { play: 'test-run', game: '/g/void', frame: 120, time: 2, scene: '', values: { 'session.lives': 2 } });
   assert.deepEqual({ type: image.type, data: image.data }, { type: 'image', data: 'end' });
 });
 
@@ -354,7 +354,7 @@ test('the moment shown is the model\'s context, its state for the model only, an
   timeline.listeners.pointerup({ pointerId: 1 });
   await settle();
   update = plain(last('ui/update-model-context').params);
-  assert.deepEqual(update.structuredContent, { play: 'test-run', frame: 60, time: 1, scene: '', values: { 'session.lives': 3 } });
+  assert.deepEqual(update.structuredContent, { play: 'test-run', game: '/g/void', frame: 60, time: 1, scene: '', values: { 'session.lives': 3 } });
 });
 
 test('an exact frame the same size as its thumbnail still reaches the model', async () => {
@@ -364,7 +364,7 @@ test('an exact frame the same size as its thumbnail still reaches the model', as
   await settle();
   const call = sent.filter((m) => m.method === 'tools/call' && m.params.name === 'play_frame').at(-1);
   fromHost({ id: call.id, result: { content: [], _meta: { 'jm/image': 'data:image/png;base64,END' },
-                                    structuredContent: { play: 'test-run', frame: 120, time: 2, path: 'f.png', source: { kind: 'replay', drift: 'same' } } } });
+                                    structuredContent: { play: 'test-run', game: '/g/void', frame: 120, time: 2, path: 'f.png', source: { kind: 'replay', drift: 'same' } } } });
   await settle();
   assert.equal(plain(last('ui/update-model-context').params).content[0].data, 'END');
 });
@@ -381,11 +381,38 @@ test('another play is picked from the list and shown in place', async () => {
   menu.listeners.change({ target: { value: 'older-run' } });
   await settle();
   const show = last('tools/call');
-  assert.deepEqual(JSON.parse(JSON.stringify(show.params)), { name: 'play_show', arguments: { play: 'older-run' } });
-  fromHost({ id: show.id, result: { content: [], structuredContent: { ...play, id: 'older-run', game: 'OLDER', frames: 301, seconds: 5 }, _meta: metadata } });
+  assert.deepEqual(JSON.parse(JSON.stringify(show.params)), { name: 'play_show', arguments: { play: 'older-run', game: '/g/void' } });
+  fromHost({ id: show.id, result: { content: [], structuredContent: { ...play, id: 'older-run', name: 'OLDER', frames: 301, seconds: 5 }, _meta: metadata } });
   await settle();
   assert.match(app.text, /OLDER/);
   assert.equal(last('ui/update-model-context').params.structuredContent.play, 'older-run');
+});
+
+test('the review asks about its own play\'s game, whichever game is open', async () => {
+  const { app, sent, last } = await chatgptReview();
+  button(app, 'Exact frame').listeners.click();
+  await settle();
+  button(app, 'Play from here').listeners.click();
+  await settle();
+  const asked = sent.filter((m) => m.method === 'tools/call').map((m) => [m.params.name, m.params.arguments.game]);
+  for (const name of ['plays_list', 'play_frame', 'play_resume']) assert.deepEqual(asked.find(([n]) => n === name), [name, '/g/void']);
+  assert.equal(last('ui/update-model-context').params.structuredContent.game, '/g/void');
+});
+
+test('a copy\'s play with the same id is another play: its frames aren\'t the first one\'s', async () => {
+  const { app, sent, fromHost } = await chatgptReview();
+  button(app, 'Exact frame').listeners.click();
+  await settle();
+  const call = sent.filter((m) => m.method === 'tools/call' && m.params.name === 'play_frame').at(-1);
+  fromHost({ id: call.id, result: { content: [], _meta: { 'jm/image': 'data:image/png;base64,EXACT' },
+                                    structuredContent: { play: 'test-run', frame: 120, source: { kind: 'replay', drift: 'same' } } } });
+  await settle();
+  assert.equal(button(app, 'Exact frame').attributes.disabled, '', 'the first play has its frame');
+  fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { ...play, game: '/g/copy' }, _meta: metadata } });
+  await settle();
+  assert.equal(button(app, 'Exact frame').attributes.disabled, undefined, 'the copy has none yet');
+  const viewer = app.children.find((c) => (c.className || '').startsWith('viewer'));
+  assert.notEqual(viewer.children.find((c) => c.tag === 'img').attributes.src, 'data:image/png;base64,EXACT');
 });
 
 test('new chat about this opens a new chat\'s draft with the moment (a bug report, say)', async () => {

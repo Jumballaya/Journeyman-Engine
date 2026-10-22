@@ -54,14 +54,14 @@ func (s *mcpServer) playTools() []mcpTool {
 				"and gives you what happened: scenes over time, values that changed (lives, score, ...), and the moments they marked with F8 (what they meant is in what they tell you). " +
 				"Then play_frame / play_state at a marker.",
 			InputSchema: object(map[string]any{"play": playArg}), Annotations: readOnly(),
-			Meta: timeline.toolMeta("Opening the play…", "The play", entrypoint("thread")),
-			run:  playShow},
+			Meta:   timeline.toolMeta("Opening the play…", "The play", entrypoint("thread")),
+			onGame: playShow},
 		{Name: "play_frame", Title: "See a moment of a play",
 			Description: "An image of a moment in a recorded play, replayed exactly (or the nearest thumbnail where nothing can draw: source says which). " +
 				"Use it to see what the person saw, e.g. at: \"m1\" for their first marker.",
 			InputSchema: object(map[string]any{"play": playArg, "at": atArg}), Annotations: readOnly(),
-			Meta: callableMeta("Replaying to that moment…", "That moment"),
-			run:  playFrame},
+			Meta:   callableMeta("Replaying to that moment…", "That moment"),
+			onGame: playFrame},
 		{Name: "play_moment", Title: "What the person pointed at",
 			Description: "A marker the person saved with F8 after picking entities, points or areas (a moment): the frame as they saw it with each pick outlined and numbered, " +
 				"and the picks: each entity's id, tags, components then and origin, where it came from: a scene's entry (scene, entry, name, prefab) " +
@@ -77,8 +77,8 @@ func (s *mcpServer) playTools() []mcpTool {
 				"session and save values, UI: the numbers behind what play_frame shows (positions, speeds, lives). parts narrows it like the driver's state: e.g. [\"session\"], [\"tag=Player\", \"TransformComponent\"].",
 			InputSchema: object(map[string]any{"play": playArg, "at": atArg, "parts": listArg("which parts (default: all but the draw list)")}),
 			Annotations: readOnly(), Meta: callableMeta("", ""),
-			run: func(a toolArgs) toolResult {
-				root, p, _, f, err := openMoment(a.str("play"), a.str("at"))
+			onGame: func(root string, a toolArgs) toolResult {
+				p, _, f, err := openMoment(root, a.str("play"), a.str("at"))
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
@@ -93,8 +93,8 @@ func (s *mcpServer) playTools() []mcpTool {
 				"Use it when how they played matters: a jump that felt floaty or short, a missed dodge. from/to are moments (default: the whole play); " +
 				"play_show already lists what was pressed just before each marker.",
 			InputSchema: object(map[string]any{"play": playArg, "from": fromArg, "to": atArg}), Annotations: readOnly(), Meta: callableMeta("", ""),
-			run: func(a toolArgs) toolResult {
-				l, err := pressesBetween(a.str("play"), a.str("from"), a.str("to"))
+			onGame: func(root string, a toolArgs) toolResult {
+				l, err := pressesBetween(root, a.str("play"), a.str("from"), a.str("to"))
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
@@ -105,8 +105,8 @@ func (s *mcpServer) playTools() []mcpTool {
 				"and if not, by when and how its end differs (session values). Run it after build to check a change against how they actually played, " +
 				"and tell the person both: after a change their play is expected to go differently; how it ends says what the change did.",
 			InputSchema: object(map[string]any{"play": playArg}), Annotations: readOnly(), Meta: callableMeta("", ""),
-			run: func(a toolArgs) toolResult {
-				root, p, b, err := openPlay(a.str("play"))
+			onGame: func(root string, a toolArgs) toolResult {
+				p, b, err := openPlay(root, a.str("play"))
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
@@ -120,17 +120,17 @@ func (s *mcpServer) playTools() []mcpTool {
 			Description: "Opens the game for the person at a moment of a recorded play (fast-forwarded there, then theirs to play), " +
 				"recorded as a new play. Use it to hand them the exact spot to try a change: \"play on from your marker 2\".",
 			InputSchema: object(map[string]any{"play": playArg, "at": atArg}), Annotations: writes(),
-			Meta: callableMeta("Opening the game…", "The game is open"),
-			run:  playResume},
+			Meta:   callableMeta("Opening the game…", "The game is open"),
+			onGame: playResume},
 	}
 }
 
-func playShow(a toolArgs) toolResult {
-	_, p, b, err := openPlay(a.str("play"))
+func playShow(root string, a toolArgs) toolResult {
+	p, b, err := openPlay(root, a.str("play"))
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
-	o, err := overviewOf(p, b)
+	o, err := overviewOf(root, p, b)
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
@@ -179,8 +179,8 @@ func markerImage(p *plays.Play, m plays.Marker) string {
 	return path
 }
 
-func playFrame(a toolArgs) toolResult {
-	root, p, b, f, err := openMoment(a.str("play"), a.str("at"))
+func playFrame(root string, a toolArgs) toolResult {
+	p, b, f, err := openMoment(root, a.str("play"), a.str("at"))
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
@@ -264,8 +264,8 @@ func momentSummary(p *plays.Play, m plays.Marker) string {
 	return text + fmt.Sprintf("play_frame / play_state with play %q and at \"m%d\" show the frame replayed and its state.\n", p.ID, m.N)
 }
 
-func playResume(a toolArgs) toolResult {
-	_, p, _, f, err := openMoment(a.str("play"), a.str("at"))
+func playResume(root string, a toolArgs) toolResult {
+	p, _, f, err := openMoment(root, a.str("play"), a.str("at"))
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
@@ -275,6 +275,7 @@ func playResume(a toolArgs) toolResult {
 	}
 	// The person plays; the call doesn't wait for them to finish.
 	cmd := exec.Command(self, "plays", "resume", p.ID, fmt.Sprint(f))
+	cmd.Dir = root
 	if err := cmd.Start(); err != nil {
 		return textResult(err.Error(), true)
 	}

@@ -62,19 +62,29 @@ func init() {
 		playsCmd.AddCommand(c)
 		return c
 	}
+	// A command on the play of the project here.
+	rooted := func(run func(root string, cmd *cobra.Command, args []string) error) func(*cobra.Command, []string) error {
+		return func(cmd *cobra.Command, args []string) error {
+			root, err := projectRoot()
+			if err != nil {
+				return err
+			}
+			return run(root, cmd, args)
+		}
+	}
 	sub("list", "The recorded plays, newest first", 0, func(cmd *cobra.Command, _ []string) error {
 		return emitPlays(cmd.OutOrStdout())
 	})
-	sub("show [play]", "What happened in a play", 1, func(cmd *cobra.Command, args []string) error {
-		_, p, b, err := openPlay(arg(args, 0))
+	sub("show [play]", "What happened in a play", 1, rooted(func(root string, cmd *cobra.Command, args []string) error {
+		p, b, err := openPlay(root, arg(args, 0))
 		if err != nil {
 			return err
 		}
-		o, err := overviewOf(p, b)
+		o, err := overviewOf(root, p, b)
 		return printResult(cmd.OutOrStdout(), o, err)
-	})
-	sub("state [play] [moment] [part...]", "The game's state at a moment (replayed)", 64, func(cmd *cobra.Command, args []string) error {
-		root, p, _, f, err := openMoment(arg(args, 0), arg(args, 1))
+	}))
+	sub("state [play] [moment] [part...]", "The game's state at a moment (replayed)", 64, rooted(func(root string, cmd *cobra.Command, args []string) error {
+		p, _, f, err := openMoment(root, arg(args, 0), arg(args, 1))
 		if err != nil {
 			return err
 		}
@@ -83,10 +93,10 @@ func init() {
 			return err
 		}
 		return writeJSON(cmd.OutOrStdout(), s)
-	})
+	}))
 	frame := sub("frame [play] [moment]", "An image of a moment (replayed with GL, else the nearest thumbnail)", 2,
-		func(cmd *cobra.Command, args []string) error {
-			root, p, b, f, err := openMoment(arg(args, 0), arg(args, 1))
+		rooted(func(root string, cmd *cobra.Command, args []string) error {
+			p, b, f, err := openMoment(root, arg(args, 0), arg(args, 1))
 			if err != nil {
 				return err
 			}
@@ -96,26 +106,26 @@ func init() {
 				fmt.Fprintf(cmd.ErrOrStderr(), "not frame %d: the %s\n", f, r.Source.text())
 			}
 			return printResult(cmd.OutOrStdout(), r, err)
-		})
+		}))
 	frame.Flags().String("out", "", "where to write the PNG (default: the play's folder)")
-	sub("inputs [play] [from] [to]", "What the person pressed, and how long (default: the whole play)", 3, func(cmd *cobra.Command, args []string) error {
-		l, err := pressesBetween(arg(args, 0), arg(args, 1), arg(args, 2))
+	sub("inputs [play] [from] [to]", "What the person pressed, and how long (default: the whole play)", 3, rooted(func(root string, cmd *cobra.Command, args []string) error {
+		l, err := pressesBetween(root, arg(args, 0), arg(args, 1), arg(args, 2))
 		return printResult(cmd.OutOrStdout(), l, err)
-	})
-	sub("drive [play] [moment]", "The stepped driver, starting at a moment of the play", 2, func(cmd *cobra.Command, args []string) error {
-		return drivePlay(arg(args, 0), arg(args, 1))
-	})
-	sub("resume [play] [moment]", "Play on yourself from a moment (recorded as a new play)", 2, func(cmd *cobra.Command, args []string) error {
-		return resumePlay(arg(args, 0), arg(args, 1))
-	})
-	sub("verify [play]", "Replay a play to its end: does it go the same way?", 1, func(cmd *cobra.Command, args []string) error {
-		root, p, b, err := openPlay(arg(args, 0))
+	}))
+	sub("drive [play] [moment]", "The stepped driver, starting at a moment of the play", 2, rooted(func(root string, cmd *cobra.Command, args []string) error {
+		return drivePlay(root, arg(args, 0), arg(args, 1))
+	}))
+	sub("resume [play] [moment]", "Play on yourself from a moment (recorded as a new play)", 2, rooted(func(root string, cmd *cobra.Command, args []string) error {
+		return resumePlay(root, arg(args, 0), arg(args, 1))
+	}))
+	sub("verify [play]", "Replay a play to its end: does it go the same way?", 1, rooted(func(root string, cmd *cobra.Command, args []string) error {
+		p, b, err := openPlay(root, arg(args, 0))
 		if err != nil {
 			return err
 		}
 		v, err := verify(nil, root, p, b)
 		return printResult(cmd.OutOrStdout(), v, err)
-	})
+	}))
 	prune := sub("prune", "Delete all but the newest plays (marked ones too)", 0, func(cmd *cobra.Command, _ []string) error {
 		root, err := projectRoot()
 		if err != nil {
@@ -180,27 +190,23 @@ func clock(seconds float64) string {
 	return fmt.Sprintf("%d:%04.1f", m, seconds-float64(m*60))
 }
 
-// openPlay finds a play of the project here, and the build it's replayed with.
-func openPlay(ref string) (string, *plays.Play, plays.Build, error) {
-	root, err := projectRoot()
-	if err != nil {
-		return "", nil, plays.Build{}, err
-	}
+// openPlay finds a play of the game at root, and the build it's replayed with.
+func openPlay(root, ref string) (*plays.Play, plays.Build, error) {
 	p, err := plays.Find(root, ref)
 	if err != nil {
-		return "", nil, plays.Build{}, err
+		return nil, plays.Build{}, err
 	}
-	return root, p, plays.ReadBuild(filepath.Join(root, "build")), nil
+	return p, plays.ReadBuild(filepath.Join(root, "build")), nil
 }
 
 // openMoment is openPlay and a moment in the play.
-func openMoment(ref, at string) (string, *plays.Play, plays.Build, uint64, error) {
-	root, p, b, err := openPlay(ref)
+func openMoment(root, ref, at string) (*plays.Play, plays.Build, uint64, error) {
+	p, b, err := openPlay(root, ref)
 	if err != nil {
-		return "", nil, b, 0, err
+		return nil, b, 0, err
 	}
 	f, err := p.FrameAt(at)
-	return root, p, b, f, err
+	return p, b, f, err
 }
 
 // playListing is a play as `jm plays` lists it.
@@ -302,19 +308,20 @@ func (l playListings) text() string {
 // (the timeline widget reads it, and checks JM against its own version).
 type playOverview struct {
 	plays.Summary
+	Game  string `json:"game"` // its folder: what follow-up calls name
 	Dir   string `json:"dir"`
 	Stale bool   `json:"stale"` // made with a build that plays differently
 	JM    string `json:"jm"`
 }
 
-func overviewOf(p *plays.Play, b plays.Build) (playOverview, error) {
+func overviewOf(root string, p *plays.Play, b plays.Build) (playOverview, error) {
 	s, err := p.Summarize()
-	return playOverview{s, p.Dir, p.DriftFrom(b) == plays.GameChanged, version}, err
+	return playOverview{s, evalOrSelf(root), p.Dir, p.DriftFrom(b) == plays.GameChanged, version}, err
 }
 
 func (o playOverview) text() string {
 	var out strings.Builder
-	fmt.Fprintf(&out, "%s: %s of %s (%d frames), %s\n", o.ID, clock(o.Seconds), o.Game, o.Frames, endedText(o.Ended))
+	fmt.Fprintf(&out, "%s: %s of %s (%d frames), %s\n", o.ID, clock(o.Seconds), o.Name, o.Frames, endedText(o.Ended))
 	if o.Stale {
 		fmt.Fprintln(&out, "(made with an older build: replays may go differently; verify says)")
 	}
@@ -381,8 +388,8 @@ func (l pressList) text() string {
 }
 
 // pressesBetween is a play's presses from one moment to another (default: all of it).
-func pressesBetween(ref, from, to string) (pressList, error) {
-	_, p, _, err := openPlay(ref)
+func pressesBetween(root, ref, from, to string) (pressList, error) {
+	p, _, err := openPlay(root, ref)
 	if err != nil {
 		return pressList{}, err
 	}
@@ -573,8 +580,8 @@ func hasDisplay() bool {
 	return runtime.GOOS != "linux" || os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != ""
 }
 
-func drivePlay(ref, at string) error {
-	root, p, _, f, err := openMoment(ref, at)
+func drivePlay(root, ref, at string) error {
+	p, _, f, err := openMoment(root, ref, at)
 	if err != nil {
 		return err
 	}
@@ -604,8 +611,8 @@ func drivePlay(ref, at string) error {
 
 // resumePlay hands the game to the person at frame f of a play: fast-forwarded
 // there, then theirs, recorded as a new play.
-func resumePlay(ref, at string) error {
-	root, p, b, f, err := openMoment(ref, at)
+func resumePlay(root, ref, at string) error {
+	p, b, f, err := openMoment(root, ref, at)
 	if err != nil {
 		return err
 	}

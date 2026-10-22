@@ -182,6 +182,9 @@ type mcpTool struct {
 	// A tool that works on a game gives onGame instead of run: it gets the game's
 	// root (the call's "game", else the open game) and the "game" argument is added.
 	onGame func(root string, a toolArgs) toolResult
+	// A tool on the driven game (one runs at a time) gives onDriven: its game is
+	// the run's, and a call that names another is refused (drivenArg is added).
+	onDriven func(a toolArgs) toolResult
 }
 
 // toolResult is a tool's answer: text (and images) for the model, structured
@@ -227,17 +230,17 @@ func newMCPServer() *mcpServer {
 		if _, entry := tool.Meta["openai/ui"]; entry { // opened from the host's sidebar or tabs: jm's mark there
 			server.tools[i].Icons = serverIcons()
 		}
-		if (tool.run == nil) == (tool.onGame == nil) {
-			panic("tool " + tool.Name + ": give run or onGame, one of them")
+		if given := btoi(tool.run != nil) + btoi(tool.onGame != nil) + btoi(tool.onDriven != nil); given != 1 {
+			panic("tool " + tool.Name + ": give one of run, onGame and onDriven")
 		}
-		if tool.onGame != nil {
+		if tool.run == nil {
 			server.tools[i].run = func(a toolArgs) toolResult { _, run := server.prepare(tool, a); return run() }
 			props, _ := tool.InputSchema["properties"].(map[string]any)
 			if props == nil {
 				props = map[string]any{}
 				tool.InputSchema["properties"] = props
 			}
-			props["game"] = gameOfTool
+			props["game"] = map[bool]map[string]any{true: gameOfTool, false: drivenArg}[tool.onGame != nil]
 		}
 	}
 	if cwd, err := os.Getwd(); err == nil && exists(archive.ManifestEntryKey) { // started in a game (or --dir)
@@ -571,14 +574,36 @@ func (s *mcpServer) callTool(ctx context.Context, params json.RawMessage, round 
 // A tool on a game gets the game the call names, else the open one; it's
 // resolved here, once, so the call's forms, log and work all agree on it.
 func (s *mcpServer) prepare(tool mcpTool, args toolArgs) (game string, run func() toolResult) {
-	if tool.onGame == nil {
-		return s.opened(), func() toolResult { return tool.run(args) }
+	failed := func(err error) func() toolResult { return func() toolResult { return textResult(err.Error(), true) } }
+	switch {
+	case tool.onGame != nil:
+		root, err := s.gameRoot(args)
+		if err != nil {
+			return s.opened(), failed(err)
+		}
+		return root, func() toolResult { return tool.onGame(root, args) }
+	case tool.onDriven != nil && s.game != nil:
+		if v, named := args["game"]; named && v != "" {
+			root, err := s.gameRoot(args)
+			if err == nil && root != s.game.root {
+				err = fmt.Errorf("the game driven is %s, not %s: drive_start {game} to drive that one", s.game.root, root)
+			}
+			if err != nil {
+				return s.game.root, failed(err)
+			}
+		}
+		return s.game.root, func() toolResult { return s.driving(args, tool.onDriven) }
+	case tool.onDriven != nil:
+		return s.opened(), func() toolResult { return tool.onDriven(args) } // nothing runs: it says so
 	}
-	root, err := s.gameRoot(args)
-	if err != nil {
-		return s.opened(), func() toolResult { return textResult(err.Error(), true) }
+	return s.opened(), func() toolResult { return tool.run(args) }
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
 	}
-	return root, func() toolResult { return tool.onGame(root, args) }
+	return 0
 }
 
 // mcpCapabilities: extensions (MCP Apps, OpenAI's) both where current
@@ -691,14 +716,14 @@ func idempotent(annotations map[string]any) map[string]any {
 // Schemas for structuredContent (outputSchema).
 func typed(kind string) map[string]any { return map[string]any{"type": kind} }
 
-// jmTool runs a jm command whose arguments args builds.
-func jmTool(args func(a toolArgs) ([]string, error)) func(toolArgs) toolResult {
-	return func(a toolArgs) toolResult {
-		list, err := args(a)
+// jmTool is a tool on a game that runs a jm command in it, its arguments built from the call.
+func jmTool(args func(root string, a toolArgs) ([]string, error)) func(root string, a toolArgs) toolResult {
+	return func(root string, a toolArgs) toolResult {
+		list, err := args(root, a)
 		if err != nil {
 			return textResult(err.Error(), true)
 		}
-		return textResult(runJM(a.call(), list...))
+		return textResult(runJM(a.call(), root, list...))
 	}
 }
 
@@ -709,20 +734,6 @@ func positional(command []string, args ...string) []string {
 		return command
 	}
 	return append(append(command, "--"), args...)
-}
-
-// projectFiles are paths that must be the project's own files, as paths
-// from the project's folder.
-func projectFiles(paths []string) ([]string, error) {
-	out := []string{}
-	for _, p := range paths {
-		rel, err := projectFile(p)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, rel)
-	}
-	return out, nil
 }
 
 // projectFile is path (from the project's folder, or absolute) as a path from
@@ -770,32 +781,32 @@ func (s *mcpServer) makeTools() []mcpTool {
 	return []mcpTool{
 		{Name: "build", Description: "Call after you change the game's files, then play_verify. jm build --json: compile scripts, bake atlases, check scenes and prefabs. JSON lines; the last is the result.",
 			Annotations: writes(), InputSchema: object(map[string]any{}),
-			run: jmTool(func(toolArgs) ([]string, error) { return []string{"build", "--json"}, nil })},
+			onGame: jmTool(func(string, toolArgs) ([]string, error) { return []string{"build", "--json"}, nil })},
 		{Name: "doctor", Description: "jm doctor --json: jm's and the engine's versions, the script toolchain (Node, AssemblyScript), the project, and any problems with their fixes.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{}),
-			run: jmTool(func(toolArgs) ([]string, error) { return []string{"doctor", "--json"}, nil })},
+			run: func(a toolArgs) toolResult { return textResult(runJM(a.call(), "", "doctor", "--json")) }},
 		{Name: "test", Description: "jm test --json: run tests/*.spec.ts (game logic, no engine). A JSON line per test; the last is the result.",
 			Annotations: writes(), InputSchema: object(map[string]any{"specs": listArg("spec files (default: all)")}),
-			run: jmTool(func(a toolArgs) ([]string, error) {
-				specs, err := projectFiles(a.list("specs"))
+			onGame: jmTool(func(root string, a toolArgs) ([]string, error) {
+				specs, err := gamePaths(root, a.list("specs"))
 				return positional([]string{"test", "--json"}, specs...), err
 			})},
 		{Name: "golden", Description: "jm golden --json: compare frames with tests/golden images (update: record them instead). Build first.",
 			Annotations: writes(), InputSchema: object(map[string]any{"names": listArg("goldens to check (default: all)"), "update": boolArg("record the frames as the new goldens")}),
-			run: jmTool(func(a toolArgs) ([]string, error) {
+			onGame: jmTool(func(_ string, a toolArgs) ([]string, error) {
 				return positional(with([]string{"golden", "--json"}, a.flag("update"), "--update"), a.list("names")...), nil
 			})},
 		{Name: "schema", Description: "jm schema: every component's scene keys and script fields (or one component's), as JSON.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"component": strArg("e.g. SpriteComponent (default: all)")}),
-			run: jmTool(func(a toolArgs) ([]string, error) {
+			run: func(a toolArgs) toolResult {
 				if c := a.str("component"); c != "" {
-					return positional([]string{"schema"}, c), nil
+					return textResult(runJM(a.call(), "", positional([]string{"schema"}, c)...))
 				}
-				return []string{"schema"}, nil
-			})},
+				return textResult(runJM(a.call(), "", "schema"))
+			}},
 		{Name: "generate", Description: "jm generate <kind> <name>: make a file from a template (jm generate list shows the kinds).",
 			Annotations: writes(), InputSchema: object(map[string]any{"kind": strArg("e.g. prefab, script, scene, ui, shader, bindings, list"), "name": strArg("the new file's name")}, "kind"),
-			run: jmTool(func(a toolArgs) ([]string, error) {
+			onGame: jmTool(func(_ string, a toolArgs) ([]string, error) {
 				if a.str("name") == "" {
 					return positional([]string{"generate"}, a.str("kind")), nil
 				}
@@ -806,13 +817,13 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"files": listArg("only these files (default: the whole project)"),
 				"check": boolArg("change nothing; fail if a file needs formatting"),
 			}),
-			run: jmTool(func(a toolArgs) ([]string, error) {
-				files, err := projectFiles(a.list("files"))
+			onGame: jmTool(func(root string, a toolArgs) ([]string, error) {
+				files, err := gamePaths(root, a.list("files"))
 				return positional(with([]string{"fmt"}, a.flag("check"), "--check"), files...), err
 			})},
 		{Name: "export", Description: "jm export: build the game and write a standalone executable with everything inside (an .app on macOS) to dist/, for the person to run or share.",
 			Annotations: writes(), InputSchema: object(map[string]any{"target": exportTargetArg, "server": boolArg("export the dedicated multiplayer server instead")}),
-			run: jmTool(func(a toolArgs) ([]string, error) { return exportArgs(a), nil })},
+			onGame: jmTool(func(_ string, a toolArgs) ([]string, error) { return exportArgs(a), nil })},
 		{Name: "drive_start", Description: "For the person's own plays use play_show first. Start the built game under the stepped driver (headless; no window or GL unless gl is true). " +
 			"It builds the game first when the build is missing or older than the sources. " +
 			"It waits at frame 0 until told to step, or with play, at that moment of the person's recorded play. One game at a time; starting again restarts it. " +
@@ -827,7 +838,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"seed":    intArg("the run's random seed (default: a new one; a play replays its own)"),
 				"visible": boolArg("show the game in a window as you drive it, so the person can watch (implies gl)"),
 			}),
-			run: s.startDriver},
+			onGame: s.startDriver},
 		{Name: "drive", Description: "Driver commands, each answered as JSON: step [n], state [part...] [tag=Name...] [Component...] (e.g. state session tag=Player), get [tag=Name] <path> (get tag=Ball TransformComponent.x), " +
 			"down|up|press <Key>, move x y, click [x y], wheel dy, set <key> <json>, scene <path>, marker [note] (marks the moment in a recorded run, as F8 does), " +
 			"until [tag=Name] <path> <op> <value> [max n] (steps until it's true, e.g. until tag=Lift TransformComponent.y < -270), echo <text>, " +
@@ -842,7 +853,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"commands": listArg("several commands in order, instead of command"),
 				"repeat":   intArg("run commands this many times over (default 1, at most 1000)"),
 			}),
-			run: s.driving(func(a toolArgs) toolResult {
+			onDriven: func(a toolArgs) toolResult {
 				commands := a.list("commands")
 				if len(commands) == 0 && a.str("command") != "" {
 					commands = []string{a.str("command")}
@@ -851,22 +862,23 @@ func (s *mcpServer) makeTools() []mcpTool {
 					return textResult(`give a command, e.g. "step 60", or commands`, true)
 				}
 				return s.driveBatch(a.call(), commands, int(a.num("repeat", 1, 1, 1000)), driveReplyLimit)
-			})},
+			}},
 		{Name: "drive_frame", Title: "See the driven game", Description: "An image of the driven game as it is now (the last frame it ran). " +
 			"Needs a game started with gl: true. Use it to see what your commands did, e.g. after step 60 or a click.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driving(s.driveFrame)},
+			Annotations: readOnly(), InputSchema: object(map[string]any{}), onDriven: s.driveFrame},
 		{Name: "drive_profile", Title: "Where the driven game's time goes", Description: "Call when the game feels slow or you changed something costly: " +
 			"where the driven game's last frames (up to 120) went: each system's, script's and module's average and worst ms, " +
 			"and counts (entities, scripts, draw calls, sprites). Step to the moment you care about first. " +
 			"Without gl there's no GPU work, so the CPU's share is what it measures.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driving(s.driveProfile)},
-		{Name: "drive_stop", Description: "Stop the driven game; a recorded run's play id comes back.", Annotations: writes(), InputSchema: object(map[string]any{}),
-			run: func(toolArgs) toolResult {
-				play := s.stopDriver()
+			Annotations: readOnly(), InputSchema: object(map[string]any{}), onDriven: s.driveProfile},
+		{Name: "drive_stop", Description: "Stop the driven game; a recorded run's play id (and its game) comes back.", Annotations: writes(),
+			InputSchema: object(map[string]any{}),
+			onDriven: func(toolArgs) toolResult {
+				play, game := s.endRun()
 				if play == "" {
 					return textResult(`{"ok":true}`, false)
 				}
-				return jsonResult(map[string]any{"ok": true, "play": play, "next": "play_show shows it, as it does the person's plays"})
+				return jsonResult(map[string]any{"ok": true, "play": play, "game": game, "next": "play_show {play, game} shows it, as it does the person's plays"})
 			}},
 		{Name: "session", Description: "Play a multiplayer session on this machine (jm run --peers), headless with no GL, " +
 			"in real time: the game's server if it has one, and N games. Each game can replay its own input. " +
@@ -879,23 +891,22 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"latency": intArg("simulated latency per message, ms"),
 				"loss":    map[string]any{"type": "number", "description": "simulated loss of unreliable messages, 0..1"},
 			}),
-			run: runSessionTool},
+			onGame: runSessionTool},
 	}
 }
 
-// driving is a tool on the driven game, which its call's cancel kills, mid-step or not.
-func (s *mcpServer) driving(run func(toolArgs) toolResult) func(toolArgs) toolResult {
-	return func(a toolArgs) toolResult {
-		release := func() bool { return false }
-		if s.game != nil {
-			release = s.game.stopOn(a.call().context())
-		}
-		result := run(a)
-		if release(); a.call().context().Err() != nil {
-			s.stopDriver() // killed (or about to be): reaped, its folder gone
-		}
-		return result
+// drivenArg is a driving tool's game: there's one driven game, so it only
+// checks the call means it (an agent driving one game, another opened since).
+var drivenArg = strArg("the game whose run this is (default: the one driven); another game's is refused")
+
+// driving runs a tool on the driven game, which its call's cancel kills, mid-step or not.
+func (s *mcpServer) driving(a toolArgs, run func(toolArgs) toolResult) toolResult {
+	release := s.game.stopOn(a.call().context())
+	result := run(a)
+	if release(); a.call().context().Err() != nil {
+		s.stopDriver() // killed (or about to be): reaped, its folder gone
 	}
+	return result
 }
 
 // jsonResult is a value as compact JSON for the model and as structured
@@ -915,9 +926,12 @@ func jsonResult(v any) toolResult {
 
 // runSessionTool is the "session" tool: jm run --peers with every peer's
 // final state dumped, then those dumps, trimmed to what a session is about.
-func runSessionTool(a toolArgs) toolResult {
+func runSessionTool(root string, a toolArgs) toolResult {
 	peers, frames := int(a.num("peers", 2, 1, 64)), int(a.num("frames", 300, 1, 1e7))
 	work, err := os.MkdirTemp("", "jm-session-")
+	if err == nil {
+		work, err = filepath.Abs(work) // the games run in root: a relative TMPDIR would be found there
+	}
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
@@ -939,7 +953,7 @@ func runSessionTool(a toolArgs) toolResult {
 	if v := a.num("loss", 0, 0, 1); v > 0 {
 		args = append(args, "--loss", fmt.Sprint(v))
 	}
-	cmd := jmCommand(a.call().context(), "", args...)
+	cmd := jmCommand(a.call().context(), root, args...)
 	cmd.Env = append(os.Environ(), "JM_RENDERER=none", "JM_REALTIME=1", fmt.Sprintf("JM_EXIT_AFTER_FRAMES=%d", frames),
 		"JM_DUMP_DIR="+filepath.Join(work, "dump"), "JM_SAVE_DIR="+filepath.Join(work, "save"),
 		"JM_ERRORS="+filepath.Join(work, "errors.jsonl"))
@@ -995,9 +1009,9 @@ func runSessionTool(a toolArgs) toolResult {
 	return textResult(string(text), runErr != nil || len(errors) > 0)
 }
 
-// runJM runs this jm with args in the current folder for call c: its output,
-// and whether it failed. A variable so tests can see what a tool runs.
-var runJM = func(c *toolCall, args ...string) (string, bool) { return jmIn(c, "", args...) }
+// runJM runs this jm with args in dir ("": the working folder) for call c: its
+// output, and whether it failed. A variable so tests can see what a tool runs where.
+var runJM = func(c *toolCall, dir string, args ...string) (string, bool) { return jmIn(c, dir, args...) }
 
 // jmIn runs this jm with args in dir ("": the current folder) for call c.
 func jmIn(c *toolCall, dir string, args ...string) (string, bool) {
@@ -1020,16 +1034,12 @@ func jmCommand(ctx context.Context, dir string, args ...string) *exec.Cmd {
 	return cmd
 }
 
-func (s *mcpServer) startDriver(a toolArgs) toolResult {
+func (s *mcpServer) startDriver(root string, a toolArgs) toolResult {
 	s.stopDriver()
-	root, err := projectRoot()
-	if err != nil {
-		return textResult(err.Error(), true)
-	}
 	// The build is jm's, not the person's files: one that's missing or older
 	// than the sources is made first, so the game driven is the game as it is.
 	if buildIsStale(root) {
-		if out, failed := runJM(a.call(), "build", "--json"); failed {
+		if out, failed := runJM(a.call(), root, "build", "--json"); failed {
 			return textResult("the build failed, so there's no game to run:\n"+out, true)
 		}
 	}
@@ -1057,8 +1067,8 @@ func (s *mcpServer) startDriver(a toolArgs) toolResult {
 		o.Play, o.Until = p, from+1
 	}
 	o.Stop = a.call().context() // while it starts and replays: then it outlives the call
-	s.game, err = startGame(root, o)
-	if err != nil {
+	var err error
+	if s.game, err = startGame(root, o); err != nil {
 		return textResult(err.Error(), true)
 	}
 	if o.Play != nil {
@@ -1149,12 +1159,20 @@ func (s *mcpServer) driveBatch(call *toolCall, commands []string, repeat, limit 
 	return result(false)
 }
 
-// ended stops a game that has ended, adding the play it recorded to reply.
+// ended stops a game that has ended, adding the play it recorded (and its game) to reply.
 func (s *mcpServer) ended(reply string) string {
-	if play := s.stopDriver(); play != "" {
-		return reply + "\n" + fmt.Sprintf(`{"play":%q,"next":"play_show shows it"}`, play)
+	if play, game := s.endRun(); play != "" {
+		return reply + "\n" + fmt.Sprintf(`{"play":%q,"game":%q,"next":"play_show {play, game} shows it"}`, play, game)
 	}
 	return reply
+}
+
+// endRun stops the driven game: the play it recorded ("" for none) and its game.
+func (s *mcpServer) endRun() (play, game string) {
+	if s.game != nil {
+		game = s.game.root
+	}
+	return s.stopDriver(), game
 }
 
 // stopDriver ends the driven game, if one runs: the id of the play it
@@ -1296,7 +1314,7 @@ func mimeOf(path string) string {
 
 func readResource(uri string) (string, string, error) {
 	if uri == "jm://schema" {
-		out, failed := runJM(nil, "schema")
+		out, failed := runJM(nil, "", "schema")
 		if failed {
 			return "", "", fmt.Errorf("%s", out)
 		}

@@ -30,7 +30,7 @@ type Series struct {
 // before replaying anything.
 type Summary struct {
 	ID       string    `json:"id"`
-	Game     string    `json:"game"`
+	Name     string    `json:"name"` // the game's, when it was played
 	Started  string    `json:"started"`
 	Seconds  float64   `json:"seconds"`
 	Frames   uint64    `json:"frames"`
@@ -46,7 +46,7 @@ type Summary struct {
 
 // Summarize reads the play's timeline into a Summary.
 func (p *Play) Summarize() (Summary, error) {
-	s := Summary{ID: p.ID, Game: p.Meta.Game, Started: p.Meta.Started, Seconds: p.Meta.Seconds,
+	s := Summary{ID: p.ID, Name: p.Meta.Game, Started: p.Meta.Started, Seconds: p.Meta.Seconds,
 		Frames: p.Meta.Frames, Ended: p.Meta.Ended, Gamepad: p.Meta.Gamepad, Markers: p.Meta.Markers,
 		Scenes: []Span{}, Values: []Series{}}
 	s.Markers = append([]Marker{}, s.Markers...) // its own: their times are set below

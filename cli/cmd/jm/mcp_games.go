@@ -159,14 +159,11 @@ func (s *mcpServer) openGame(dir string) string {
 	return "Opened " + dir + ". Read its AGENTS.md first." + keepInMind(dir) + planned(dir)
 }
 
-// setOpen makes dir the game calls work on when they name none, stopping the
-// driven game if it's another game's. Also the working folder, while some tools still read it.
-// It's kept as the folder's real path: a link to it retargeted later doesn't move it.
+// setOpen makes dir the game calls work on when they name none (the driven
+// game is its own: it keeps running). Also the working folder, while some tools
+// still read it. It's kept as the folder's real path: a link retargeted later doesn't move it.
 func (s *mcpServer) setOpen(dir string) error {
 	real := evalOrSelf(dir)
-	if real != s.open {
-		s.stopDriver()
-	}
 	if err := os.Chdir(real); err != nil {
 		return err
 	}

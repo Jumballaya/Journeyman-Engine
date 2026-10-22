@@ -244,14 +244,18 @@ func readPlayMention(uri, rest string) ([]map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, p, b, err := openPlay(id)
+	root, err := projectRoot() // mentions still read the open game off the working folder (design debt G6)
+	if err != nil {
+		return nil, err
+	}
+	p, b, err := openPlay(root, id)
 	if err != nil {
 		return nil, err
 	}
 	if p.ID != id {
 		return nil, fmt.Errorf("no play %s", id) // a prefix finds a play: a link names one
 	}
-	o, err := overviewOf(p, b)
+	o, err := overviewOf(root, p, b)
 	if err != nil {
 		return nil, err
 	}
