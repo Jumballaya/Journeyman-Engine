@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <functional>
 
+#include <nlohmann/json.hpp>
+
 // An index plus the generation it was handed out in, so stale ids of a reused
 // index are detectably dead.
 struct EntityId {
@@ -15,6 +17,11 @@ struct EntityId {
 
 // No entity (a parent of nothing, a lookup that found none).
 inline constexpr EntityId kNoEntityId{UINT32_MAX, UINT32_MAX};
+
+// An entity as tools and saved files name it: [index, generation]; null for none.
+inline nlohmann::json idJson(EntityId id) {
+  return id == kNoEntityId ? nlohmann::json(nullptr) : nlohmann::json::array({id.index, id.generation});
+}
 
 template <> struct std::hash<EntityId> {
   size_t operator()(const EntityId &id) const noexcept {

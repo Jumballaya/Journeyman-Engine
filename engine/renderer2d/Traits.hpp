@@ -12,7 +12,7 @@
 #include "SpriteComponent.hpp"
 
 // Renderer2D Tags
-struct Renderer2D_AnimationsApplied {};  // produced by SpriteAnimationSystem
+struct Renderer2D_AnimationsApplied {};  // produced by SpriteFrameSystem
 struct Renderer2D_ClipsChosen {};         // produced by AnimatorSystem
 
 template <>
@@ -27,10 +27,19 @@ struct SystemTraits<AnimatorSystem> {
 template <>
 struct SystemTraits<SpriteAnimationSystem> {
   using DependsOn = TypeList<Renderer2D_ClipsChosen>;
+  using Provides  = EmptyList;
+  using Reads     = EmptyList;
+  using Writes    = TypeList<SpriteAnimationComponent>;
+  static constexpr SystemStage stage = SystemStage::PostPhysics;
+};
+
+template <>
+struct SystemTraits<SpriteFrameSystem> {
+  using DependsOn = EmptyList;
   using Provides  = TypeList<Renderer2D_AnimationsApplied>;
   using Reads     = TypeList<SpriteAnimationComponent>;
-  using Writes    = TypeList<SpriteComponent, SpriteAnimationComponent>;
-  static constexpr SystemStage stage = SystemStage::PostPhysics;
+  using Writes    = TypeList<SpriteComponent>;
+  static constexpr SystemStage stage = SystemStage::Render;
 };
 
 template <>

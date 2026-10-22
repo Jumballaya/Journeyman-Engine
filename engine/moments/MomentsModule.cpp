@@ -49,8 +49,6 @@ constexpr float kDrag = 4.0f;   // a press moved further is a drag
 constexpr size_t kListed = 24;  // entities listed with a point or an area; then a count
 constexpr size_t kCells = 64;   // tile cells listed per layer; then a count
 
-nlohmann::json idJson(EntityId id) { return {id.index, id.generation}; }
-
 // A zero scale hides a sprite: nothing of it is drawn to pick.
 bool collapsed(const std::array<glm::vec2, 4>& quad) {
   const glm::vec2 w = quad[1] - quad[0], h = quad[3] - quad[0];

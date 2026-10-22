@@ -16,8 +16,6 @@
 
 namespace {
 
-nlohmann::json idJson(EntityId id) { return {id.index, id.generation}; }
-
 double hundredths(float v) { return std::round(static_cast<double>(v) * 100.0) / 100.0; }
 
 nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }

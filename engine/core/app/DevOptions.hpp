@@ -30,6 +30,7 @@ struct DevOptions {
   std::filesystem::path driveRecord;         // JM_DRIVE_RECORD: the driven inputs, as a replay file
   std::filesystem::path dumpDir;             // JM_DUMP_DIR: the game's state as JSON, at exit
   std::vector<uint64_t> dumpFrames;          // JM_DUMP_FRAMES=60,120: and at these frames
+  std::filesystem::path inspectOut;          // JM_INSPECT: the entry scene as the engine builds it, as JSON there; nothing runs (agent/Inspect.cpp)
   std::string errorsOut;                     // JM_ERRORS: "-" (stderr) or a file; errors as JSON lines
   bool strict = false;                       // JM_STRICT: the first error ends the run, exit code 1
   std::filesystem::path profileOut;          // JM_PROFILE: where frames' time goes, as JSON at exit (Profiler.hpp)

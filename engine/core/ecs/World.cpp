@@ -37,6 +37,11 @@ nlohmann::json mergeOverride(const std::string& componentName, const nlohmann::j
 
 EntityRef World::operator[](EntityId id) { return EntityRef{id, this}; }
 
+const nlohmann::json* World::componentJson(EntityId id) const {
+  const auto it = _componentJson.find(id);
+  return it == _componentJson.end() ? nullptr : &it->second;
+}
+
 void World::runSystems(float dt, SystemStage first, SystemStage last, const SystemScheduler::Timed& timed) {
   _systemScheduler.run(*this, dt, first, last, timed);
 }
@@ -85,6 +90,7 @@ void World::destroyEntity(EntityId id) {
   });
   if (record.archetype) destroyRow(*record.archetype, record.row);
   _entityRecords.erase(id);
+  _componentJson.erase(id);
 
   if (auto tags = _entityToTags.find(id); tags != _entityToTags.end()) {
     for (const std::string& tag : tags->second) untag(id, tag);
@@ -140,7 +146,9 @@ void World::instantiatePrefabInto(EntityId entity, const Prefab& prefab, const n
   auto add = [&](const std::string& name, const nlohmann::json& data, const nlohmann::json* override) {
     const ComponentInfo* info = _components.getInfoByName(name);
     if (!info || !info->addFromJson) return;
-    info->addFromJson(*this, entity, override ? mergeOverride(name, data, *override) : data);
+    const nlohmann::json json = override ? mergeOverride(name, data, *override) : data;
+    info->addFromJson(*this, entity, json);
+    if (_keepJson) _componentJson[entity][name] = json;
   };
 
   try {

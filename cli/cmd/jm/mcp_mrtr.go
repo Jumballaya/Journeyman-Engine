@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 )
 
@@ -192,40 +191,9 @@ func fills(content map[string]any, schema map[string]any) bool {
 		}
 	}
 	for field, v := range content {
-		if prop, ok := props[field].(map[string]any); ok && !fits(v, prop) {
+		if prop, ok := props[field].(map[string]any); ok && schemaError(prop, v) != nil {
 			return false
 		}
-	}
-	return true
-}
-
-func fits(v any, prop map[string]any) bool {
-	var choices []string
-	for _, c := range choicesOf(prop) {
-		choices = append(choices, c.value)
-	}
-	if enum, ok := prop["enum"].([]string); ok { // a plain form's choices
-		choices = enum
-	}
-	chosen := func(x any) bool {
-		s, ok := x.(string)
-		return ok && (choices == nil || slices.Contains(choices, s))
-	}
-	switch prop["type"] {
-	case "string":
-		return chosen(v)
-	case "array":
-		items, ok := v.([]any)
-		for _, x := range items {
-			ok = ok && chosen(x)
-		}
-		return ok
-	case "boolean":
-		_, ok := v.(bool)
-		return ok
-	case "integer", "number":
-		_, ok := v.(float64)
-		return ok
 	}
 	return true
 }

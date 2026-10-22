@@ -41,7 +41,7 @@ func TestFactsAreRememberedOnceAndUpdated(t *testing.T) {
 	if all := Recall("", game, you); len(all) != 5 {
 		t.Errorf("all: %+v", all)
 	}
-	if n, ok := Find(root, "Memory"); !ok || n.Type != "memory" || len(n.Observations) != 3 {
+	if n, err := Find(root, "Memory"); err != nil || n.Type != "memory" || len(n.Observations) != 3 {
 		t.Errorf("the game's facts are a design note: %+v", n)
 	}
 	if _, err := game.Forget(exiled.ID); err != nil || len(game.All()) != 2 {

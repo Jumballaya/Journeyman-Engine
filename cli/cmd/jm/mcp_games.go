@@ -103,7 +103,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 			}},
 		{Name: "project_export", Title: "Export a game", Meta: callableMeta("Exporting…", "Exported"), Description: "jm export on a game (default: the open game): build it and write a standalone executable (an .app on macOS) to its dist/. " +
 			"Leave target out to let the person choose (platform, server, Mac signing) in a form, where the host shows forms.",
-			Annotations: writes(), InputSchema: object(map[string]any{"target": exportTargetArg}),
+			Annotations: writes(), InputSchema: object(exportProps),
 			onGame: func(dir string, a toolArgs) toolResult {
 				args := exportArgs(a)
 				if a.str("target") == "" && !a.flag("server") {

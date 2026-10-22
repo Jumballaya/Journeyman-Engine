@@ -25,7 +25,11 @@ func jmTool(args func(root string, a toolArgs) ([]string, error)) func(root stri
 	}
 }
 
-var exportTargetArg = strArg("platform as os-arch, e.g. windows-amd64 (default: this machine; others need that platform's engine as player)")
+// exportProps are jm export's arguments, as both export tools take them.
+var exportProps = map[string]any{
+	"target": strArg("platform as os-arch, e.g. windows-amd64 (default: this machine; others need that platform's engine as player)"),
+	"server": boolArg("export the dedicated multiplayer server instead"),
+}
 
 func exportArgs(a toolArgs) []string {
 	return with(with([]string{"export"}, a.str("target") != "", "--target", a.str("target")), a.flag("server"), "--server")
@@ -76,7 +80,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				return positional(with([]string{"fmt"}, a.flag("check"), "--check"), files...), err
 			})},
 		{Name: "export", Description: "jm export: build the game and write a standalone executable with everything inside (an .app on macOS) to dist/, for the person to run or share.",
-			Annotations: writes(), InputSchema: object(map[string]any{"target": exportTargetArg, "server": boolArg("export the dedicated multiplayer server instead")}),
+			Annotations: writes(), InputSchema: object(exportProps),
 			onGame: jmTool(func(_ string, a toolArgs) ([]string, error) { return exportArgs(a), nil })},
 		{Name: "session", Description: "Play a multiplayer session on this machine (jm run --peers), headless with no GL, " +
 			"in real time: the game's server if it has one, and N games. Each game can replay its own input. " +

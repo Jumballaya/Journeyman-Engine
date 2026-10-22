@@ -120,6 +120,7 @@ void Renderer2DModule::initialize(Engine& app) {
   registerAssetTypes(app);
   app.getWorld().registerSystem<AnimatorSystem>();
   app.getWorld().registerSystem<SpriteAnimationSystem>();
+  app.getWorld().registerSystem<SpriteFrameSystem>();
   app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
   app.getWorld().registerSystem<ParticleSystem>();
   app.getWorld().registerSystem<CameraSystem>(_cameras, [this]() { return glm::vec2(gameSize()); });
@@ -657,12 +658,11 @@ void Renderer2DModule::step(Engine& app, float dt) {
 
 void Renderer2DModule::draw(Engine& app, float dt) {
   World& world = app.getWorld();
+  if (!app.simulating()) _cameras.update(world, 0.0f, glm::vec2(gameSize()));  // no steps: the shown camera's view still
   const float fraction = app.drawFraction();
   const float viewSize = static_cast<float>(std::min(_renderer.logicalSize().x, _renderer.logicalSize().y));
   const StepBlend::Camera camera = _blend.blend(world, {_cameras.view().center, _cameras.view().zoom}, fraction, viewSize);
-  world.runSystems(dt * app.getClock().stepScale(), SystemStage::Render, SystemStage::Render);
-  const GameClock& clock = app.getClock();
-  _renderer.setTime(static_cast<float>(clock.unscaledElapsed() - (1.0f - fraction) * clock.unscaledDt()));
+  // Before the render systems: tile maps cull and scroll parallax by this frame's camera.
   if (_editorView) {
     _renderer.camera().setPosition(_editorView->center);
     _renderer.camera().setZoom(_editorView->zoom);
@@ -670,6 +670,9 @@ void Renderer2DModule::draw(Engine& app, float dt) {
     _renderer.camera().setPosition(camera.center + _shake);
     _renderer.camera().setZoom(camera.zoom);
   }
+  world.runSystems(dt * app.getClock().stepScale(), SystemStage::Render, SystemStage::Render);
+  const GameClock& clock = app.getClock();
+  _renderer.setTime(static_cast<float>(clock.unscaledElapsed() - (1.0f - fraction) * clock.unscaledDt()));
   for (auto& pass : _overlayPasses) pass(_renderer);
   _renderer.setDrawing(!app.fastForwarding());
   _renderer.endFrame();
@@ -777,6 +780,8 @@ void Renderer2DModule::writeImageLater(const std::filesystem::path& path, int ma
 namespace {
 
 double tidy(float value) { return std::round(static_cast<double>(value) * 100.0) / 100.0; }
+// A part of an image (0..1) to a texel of a big one: tidy would lose whole texels.
+double tidyFraction(float value) { return std::round(static_cast<double>(value) * 1e6) / 1e6; }
 
 }  // namespace
 
@@ -803,7 +808,8 @@ void Renderer2DModule::describeState(Engine&, nlohmann::json& state) {
     const glm::vec4& c = d.instance.color;
     if (c != glm::vec4(1.0f)) out["color"] = {tidy(c.r), tidy(c.g), tidy(c.b), tidy(c.a)};
     const glm::vec4& r = d.instance.texRect;
-    if (r != glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)) out["texRect"] = {tidy(r.x), tidy(r.y), tidy(r.z), tidy(r.w)};
+    if (r != glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)) out["texRect"] = {tidyFraction(r.x), tidyFraction(r.y), tidyFraction(r.z), tidyFraction(r.w)};
+    if (d.entity != kNoEntityId) out["entity"] = idJson(d.entity);
     return out;
   };
   nlohmann::json world = nlohmann::json::array(), screen = nlohmann::json::array();

@@ -418,28 +418,18 @@ func (f *settingsFile) save() error {
 
 // checkSetting is v if it fits schema (a whole float as an integer), else why not.
 func checkSetting(schema map[string]any, v any) (any, error) {
+	if err := schemaError(schema, v); err != nil {
+		return nil, err
+	}
 	switch schema["type"] {
-	case "boolean":
-		if _, ok := v.(bool); !ok {
-			return nil, errors.New("true or false")
-		}
-	case "integer":
-		n, ok := v.(float64)
-		if !ok || n != math.Trunc(n) {
-			return nil, errors.New("a whole number")
-		}
+	case "integer": // a setting's bounds are kept, not clamped
+		n, _ := number(v)
 		if n < float64(schema["minimum"].(int)) || n > float64(schema["maximum"].(int)) {
 			return nil, fmt.Errorf("from %v to %v", schema["minimum"], schema["maximum"])
 		}
 		return int(n), nil
 	case "string":
-		s, ok := v.(string)
-		if !ok {
-			return nil, errors.New("text")
-		}
-		if choices, ok := schema["enum"].([]string); ok && !contains(choices, s) {
-			return nil, errors.New("one of " + strings.Join(choices, ", "))
-		}
+		s := v.(string)
 		if min, ok := schema["minLength"].(int); ok && len(s) < min {
 			return nil, errors.New("can't be empty")
 		}

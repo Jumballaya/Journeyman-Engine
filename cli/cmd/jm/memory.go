@@ -96,15 +96,15 @@ func init() {
 		return err
 	})
 	sub("show <note>", "A note, what it links and what links it", cobra.ExactArgs(1), func(w io.Writer, root string, args []string) error {
-		n, ok := memory.Find(root, args[0])
-		if !ok {
-			return fmt.Errorf("no note %q (jm memory lists them)", args[0])
+		n, err := memory.Find(root, args[0])
+		if err != nil {
+			return err
 		}
+		back := memory.Backlinks(root, n)
 		if jsonOutput {
-			return writeJSON(w, noteView(root, n))
+			return writeJSON(w, noteView(root, n, back))
 		}
-		fmt.Fprintf(w, "%s\n--\nLinks: %s\nLinked from: %s\n", strings.TrimRight(n.Text, "\n"),
-			strings.Join(n.Links, ", "), strings.Join(memory.Backlinks(root, n), ", "))
+		fmt.Fprintf(w, "%s\n--\nLinks: %s\nLinked from: %s\n", strings.TrimRight(n.Text, "\n"), strings.Join(n.Links, ", "), refTitles(back))
 		return nil
 	})
 	sub("search <query>", "The notes a query names, best first", cobra.ExactArgs(1), func(w io.Writer, root string, args []string) error {
@@ -279,6 +279,15 @@ func inGameRoot(run func(root string) error) error {
 
 // noteView is a note as tools show it: its text, what it links and what
 // links it, and a link that opens it in Obsidian.
-func noteView(root string, n memory.Note) map[string]any {
-	return map[string]any{"note": n, "text": n.Text, "backlinks": memory.Backlinks(root, n), "obsidian": memory.ObsidianURL(root, n)}
+func noteView(root string, n memory.Note, back []memory.Ref) map[string]any {
+	return map[string]any{"note": n, "text": n.Text, "backlinks": back, "obsidian": memory.ObsidianURL(root, n)}
+}
+
+// refTitles are notes' titles, as text shows them.
+func refTitles(refs []memory.Ref) string {
+	var titles []string
+	for _, r := range refs {
+		titles = append(titles, r.Title)
+	}
+	return strings.Join(titles, ", ")
 }

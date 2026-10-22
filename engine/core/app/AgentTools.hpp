@@ -14,8 +14,9 @@ struct DevOptions;
 
 // What the agent build adds to a run: the stepped driver (JM_DRIVE), live
 // control (JM_CONTROL), play recording and replay (JM_RECORD_DIR,
-// JM_PLAY_SESSION, F8's moments and markers), state dumps (JM_DUMP_DIR), profile output
-// (JM_PROFILE), hot reload (JM_WATCH), JM_SESSION and JM_EXIT_AFTER_FRAMES.
+// JM_PLAY_SESSION, F8's moments and markers), state dumps (JM_DUMP_DIR), scene
+// inspection (JM_INSPECT), profile output (JM_PROFILE), hot reload (JM_WATCH),
+// JM_SESSION and JM_EXIT_AFTER_FRAMES.
 // The engine calls these at fixed points of a run. The modules' own tools
 // (input replays, captures, the driver's commands for them) are agent-only
 // modules beside them: <module>/agent/, linked the same way.
@@ -42,6 +43,9 @@ class AgentTools {
   virtual std::filesystem::path saveDir(std::filesystem::path usual) { return usual; }
   // Modules are up, the entry scene isn't loaded yet.
   virtual void start() {}
+  // The tools load the entry scene themselves, in runStarts (an inspection:
+  // its failing to load is what it reports).
+  virtual bool loadsEntryScene() const { return false; }
 
   // Engine::run. runStarts: true when the tools ran the game themselves (the
   // driver) and it's over. beforeFrame: how fast game time goes (0: paused).

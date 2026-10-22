@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"maps"
+	"path"
 	"regexp"
 	"slices"
 	"sort"
@@ -157,15 +158,8 @@ func (w World) Name(n Note) string {
 func WorldOf(root string) World {
 	all, unread := notes(root)
 	w := World{Notes: all, Unwritten: []string{}, Unread: unread, names: map[string]string{}}
-	titled := map[string]int{}
 	for _, n := range all {
-		titled[strings.ToLower(n.Title)]++
-	}
-	for _, n := range all {
-		w.names[n.Path] = n.Title
-		if titled[strings.ToLower(n.Title)] > 1 {
-			w.names[n.Path] = strings.TrimSuffix(strings.TrimPrefix(n.Path, Dir+"/"), ".md")
-		}
+		w.names[n.Path] = NameOf(all, n)
 	}
 	inverse := map[string]string{}
 	pair := func(a, b string) { // a pairing replaces the ones a and b had
@@ -197,9 +191,13 @@ func WorldOf(root string) World {
 		}
 	}
 	edge := func(from Note, kind, link string, attrs map[string]string) string {
-		if named := w.named(link); len(named) > 1 {
-			_, err := w.node(link)
-			w.ambiguous = append(w.ambiguous, Conflict{from.Path, fmt.Sprintf("%s's [[%s]]: %v; it's read as %s", w.Name(from), link, err, w.Name(named[0]))})
+		if found := linked(w.Notes, link); len(found) > 1 {
+			var names []string
+			for _, n := range found {
+				names = append(names, w.Name(n))
+			}
+			w.ambiguous = append(w.ambiguous, Conflict{from.Path, fmt.Sprintf("%s's [[%s]]: it's %d notes (%s); it's read as %s",
+				w.Name(from), link, len(found), strings.Join(names, ", "), w.Name(found[0]))})
 		}
 		to, ok := w.find(link)
 		if !ok {
@@ -295,14 +293,40 @@ func (w World) node(name string) (Note, error) {
 }
 
 // named are the notes name may mean.
-func (w World) named(name string) []Note {
-	var found []Note
-	for _, n := range w.Notes {
-		if linksTo(name, n) || strings.EqualFold(strings.TrimSuffix(n.Path, ".md"), strings.TrimSuffix(name, ".md")) {
-			found = append(found, n)
+func (w World) named(name string) []Note { return named(w.Notes, name) }
+
+// LinkTo is the [[link]] a note writes to reach the note ref names (a
+// tool's argument, by Find's rules); false when ref names none or several.
+func LinkTo(root, ref string) (string, bool) {
+	w := WorldOf(root)
+	if found := w.named(ref); len(found) == 1 {
+		return w.linkFor(found[0])
+	}
+	return "", false
+}
+
+// linkFor is the shortest name a [[link]] written in a note finds n alone by.
+func (w World) linkFor(n Note) (string, bool) {
+	inVault := strings.TrimPrefix(n.Path, Dir+"/") // with its .md: Foo.md.md isn't Foo.md's
+	for _, name := range append(shortNames(n), path.Base(inVault), inVault) {
+		if w.writesLink(name, n) {
+			return name, true
 		}
 	}
-	return found
+	return "", false
+}
+
+// writesLink says whether [[name]], written in a note, reads back as a link
+// to n and no other note (C#, `C`: the parser reads another name).
+func (w World) writesLink(name string, n Note) bool {
+	read := parse("", "[["+name+"]]\n").Links
+	return len(read) == 1 && read[0] == name && w.linksOnly(name, n)
+}
+
+// linksOnly says whether [[link]] names n and no other note.
+func (w World) linksOnly(link string, n Note) bool {
+	found := linked(w.Notes, link)
+	return len(found) == 1 && found[0].Path == n.Path
 }
 
 // at is the node an edge's end is.
@@ -317,10 +341,8 @@ func (w World) at(path, name string) Note {
 
 // find is the note a [[link]] names.
 func (w World) find(link string) (Note, bool) {
-	for _, n := range w.Notes {
-		if linksTo(link, n) {
-			return n, true
-		}
+	if found := linked(w.Notes, link); len(found) > 0 {
+		return found[0], true
 	}
 	return Note{}, false
 }
@@ -563,8 +585,11 @@ func Relate(root, from string, r Relation) (Note, error) {
 	case len(named) > 1:
 		_, err := w.node(r.Target)
 		return Note{}, err
-	case len(named) == 1 && !linksTo(r.Target, named[0]): // its path: as a link names it
-		r.Target = strings.TrimSuffix(strings.TrimPrefix(named[0].Path, Dir+"/"), ".md")
+	case len(named) == 1 && !w.writesLink(r.Target, named[0]): // its path, say: written as a link that finds it alone
+		var ok bool
+		if r.Target, ok = w.linkFor(named[0]); !ok {
+			return Note{}, fmt.Errorf("no [[link]] names %s alone (another note's name or path is the same): rename one", named[0].Path)
+		}
 	}
 	for _, have := range n.Relations {
 		if have.Type == r.Type && w.target(have.Target) == w.target(r.Target) {

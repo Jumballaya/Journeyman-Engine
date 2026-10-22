@@ -11,10 +11,6 @@
 
 namespace {
 
-nlohmann::json idJson(EntityId id) {
-  return id == kNoEntityId ? nlohmann::json(nullptr) : nlohmann::json::array({id.index, id.generation});
-}
-
 // A float as its shortest faithful decimal (0.32, not 0.3199999928474426).
 double tidy(float value) {
   char text[32];

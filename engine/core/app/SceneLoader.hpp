@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
@@ -30,6 +31,8 @@ class SceneLoader {
   // All or nothing: if an entry fails, the entities made so far are destroyed and it rethrows.
   std::vector<EntityId> loadScene(const std::filesystem::path& scenePath);
   std::vector<EntityId> loadScene(const AssetHandle& sceneHandle);
+  // A scene's JSON, as the scene at path (what its entities' origins name).
+  std::vector<EntityId> loadScene(const nlohmann::json& scene, const std::string& path);
 
   // One scene entry: {"name", "components": {...}} or {"name", "prefab", "overrides"},
   // with the entries in its "children" (and its prefab's) attached to it; an
@@ -42,8 +45,9 @@ class SceneLoader {
   // after destroying the children made so far.
   void createChildren(EntityId parent, const nlohmann::json& entries, const nlohmann::json& overrides,
                       const std::string& keyPrefix = {});
-  // Whether an entry's "if" / "unless" conditions hold now.
-  bool conditionsHold(const nlohmann::json& entityJson) const;
+  // Whether an entry's "if" / "unless" conditions hold now; which fails ("if key").
+  bool conditionsHold(const nlohmann::json& entityJson) const { return !unmetCondition(entityJson); }
+  std::optional<std::string> unmetCondition(const nlohmann::json& entityJson) const;
   // While a scene's entry is being built: a name for it that's the same in
   // every process loading the scene ("3", a group's "g:wave1/0", children
   // "3/c1", a prefab's children "3/p0"), which multiplayer uses to pair up
@@ -51,6 +55,12 @@ class SceneLoader {
   const std::string& entryKey() const { return _keys.empty() ? kNoKey : _keys.back(); }
   // The last loaded scene's held-back entries, by group.
   const std::unordered_map<std::string, std::vector<nlohmann::json>>& groups() const { return _groups; }
+  // The last loaded scene's entries it didn't build, in order: their key and
+  // why ("group wave1", "if key", "unless key").
+  struct Skipped {
+    std::string key, reason;
+  };
+  const std::vector<Skipped>& skipped() const { return _skipped; }
 
  private:
   World& _world;
@@ -59,6 +69,7 @@ class SceneLoader {
   Built _built;
   std::string _scene;  // the scene last loaded (its groups come later)
   std::unordered_map<std::string, std::vector<nlohmann::json>> _groups;
+  std::vector<Skipped> _skipped;
   int _nesting = 0;
   std::vector<std::string> _keys;
   static inline const std::string kNoKey;  // entries being built, outermost first: a prefab holding itself would never end

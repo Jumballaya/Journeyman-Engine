@@ -74,5 +74,6 @@ DevOptions DevOptions::fromEnvironment() {
   o.captureFrames = frameList(env("JM_CAPTURE_FRAMES"));
   o.dumpDir = env("JM_DUMP_DIR");
   o.dumpFrames = frameList(env("JM_DUMP_FRAMES"));
+  o.inspectOut = env("JM_INSPECT");
   return o;
 }

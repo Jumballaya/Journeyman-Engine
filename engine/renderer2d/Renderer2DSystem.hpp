@@ -23,15 +23,19 @@ class Renderer2DSystem : public System {
   void update(World& world, float) override {
     _renderer.setLighting(gatherLights(world));
     for (auto [entity, sprite, trans] : world.view<SpriteComponent, TransformComponent>()) {
+      Renderer2D::DrawnFor drawn(_renderer, entity);
       if (auto shadow = sprite->shadow.instance(*trans, sprite->color.a, sprite->texRect)) {
         _renderer.drawSprite(shadow->transform, shadow->color, shadow->texRect, sprite->texture, shadow->transform[3].z);
       }
       _renderer.drawSprite(trans->toMatrix(), sprite->color, sprite->texRect, sprite->texture, trans->position.z);
     }
-    for (auto [entity, emitter, trans] : world.view<ParticleEmitterComponent, TransformComponent>())
+    for (auto [entity, emitter, trans] : world.view<ParticleEmitterComponent, TransformComponent>()) {
+      Renderer2D::DrawnFor drawn(_renderer, entity);
       drawParticles(_renderer, *emitter, trans->position.z);
+    }
     for (auto [entity, terrain, trans] : world.view<GroundComponent, TransformComponent>()) {
       if (terrain->strokeColor.a <= 0.0f) continue;
+      Renderer2D::DrawnFor drawn(_renderer, entity);
       const glm::vec2 at(trans->position);  // drawn whatever its layers (none: art only)
       for (const TerrainChain& chain : terrain->chains)
         chain.forEachSegment([&](glm::vec2 a, glm::vec2 b) {
