@@ -1071,7 +1071,6 @@ func (s *mcpServer) startDriver(root string, a toolArgs) toolResult {
 	if s.game, err = startGame(root, o); err != nil {
 		return textResult(err.Error(), true)
 	}
-	s.game.root = root
 	if o.Play != nil {
 		// Replay the play up to the moment: the game is then where the person was.
 		err = s.game.runTo(a.call(), from, 0, float64(from+1))

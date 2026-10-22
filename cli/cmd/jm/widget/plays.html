@@ -236,7 +236,7 @@
   const viewer = (p, m) => $("div", { class: viewerAspect ? "viewer boxed" : "viewer", style: viewerAspect ? `aspect-ratio: ${viewerAspect}` : null },
     m.src ? $("img", { src: m.src, alt: `Frame ${m.frame}`, onload: (e) => boxViewer(e.target) }) : $("div", { class: "empty" }, "No picture of this moment yet"),
     m.badge ? $("div", { class: "exact" }, m.badge) : null,
-    state.pending === "exact" && state.replaying === `${p.id}#${m.frame}` ? $("div", { class: "replaying", role: "status" }, $("i", {}),
+    state.pending === "exact" && state.replaying === `${playKey(p)}#${m.frame}` ? $("div", { class: "replaying", role: "status" }, $("i", {}),
       `Replaying to frame ${m.frame}… about ${clock(replaySeconds(p, m.frame)).replace(/\.\d$/, "")}, at the game's own speed`,
       $("div", { class: "bar" }, $("b", { style: `animation-duration: ${replaySeconds(p, m.frame)}s` }))) : null);
 
@@ -370,9 +370,9 @@
       return;
     }
     const p = d.play;
-    if (state.play !== p.id) {
+    if (state.play !== playKey(p)) {
       if (state.play !== null) state.selected = null;
-      Object.assign(state, { play: p.id, frames: {}, notice: "" });
+      Object.assign(state, { play: playKey(p), frames: {}, notice: "" });
     }
     if (!Number.isFinite(state.selected) || state.selected < 0 || state.selected >= p.frames) {
       state.selected = (p.markers && p.markers.length) ? p.markers[0].frame : (d.thumbs.length ? d.thumbs[d.thumbs.length - 1].frame : 0);
@@ -465,11 +465,13 @@
 
   // The exact frame, replayed by jm. When nothing can replay it, jm answers
   // with the nearest thumbnail: shown as what it is, never kept as exact.
+  // Which play p is: copies of a game keep its plays' ids.
+  const playKey = (p) => JSON.stringify([p.game || "", p.id]);
   // A call about p: on p's game, whichever game is open now.
   const onGame = (p, name, args) => host.callTool(name, p.game ? { ...args, game: p.game } : args);
   const exactFrame = async (p, frame) => {
     let shown = false;
-    state.pending = "exact"; state.replaying = `${p.id}#${frame}`; state.notice = "Replaying to that frame…"; render();
+    state.pending = "exact"; state.replaying = `${playKey(p)}#${frame}`; state.notice = "Replaying to that frame…"; render();
     try {
       const r = await onGame(p, "play_frame", { play: p.id, at: String(frame) });
       const src = (r && (r._meta || r.meta || {})["jm/image"])
@@ -479,7 +481,7 @@
       else if (!src) state.notice = "No image came back.";
       else if (source.kind === "thumbnail") {
         state.notice = `Nothing here can replay it (${source.why || "no display"}): the nearest thumbnail is frame ${source.frame ?? "?"}.`;
-      } else {
+      } else if (state.play === playKey(p)) {  // still this play's: another may show by now
         state.frames[frame] = { src, label: REPLAY_LABELS[source.drift] || REPLAY_LABELS.same };
         state.notice = "";
         shown = true;
@@ -489,7 +491,7 @@
     state.replaying = null;
     render();
     // The viewer (its badge at its top) in view: the inline widget may have scrolled past it meanwhile.
-    if (shown && state.play === p.id) requestAnimationFrame(() => { const v = document.querySelector(".viewer"); if (v && v.scrollIntoView) v.scrollIntoView({ block: "nearest" }); });
+    if (shown && state.play === playKey(p)) requestAnimationFrame(() => { const v = document.querySelector(".viewer"); if (v && v.scrollIntoView) v.scrollIntoView({ block: "nearest" }); });
   };
 
   // The moment, for the model: a title, a line saying it, and its state.

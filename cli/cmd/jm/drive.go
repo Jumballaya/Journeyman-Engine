@@ -43,7 +43,7 @@ var (
 // (JM_DRIVE): a command in, a JSON line out, and nothing moves in between.
 // Replays, `jm plays` and the MCP driver all run the game this way.
 type drivenGame struct {
-	root     string // the game it's a run of, as the server resolved it
+	root     string // the game folder it's a run of
 	cmd      *exec.Cmd
 	in       io.WriteCloser
 	out      *bufio.Scanner
@@ -72,7 +72,7 @@ func startGame(root string, o gameOptions) (*drivenGame, error) {
 	if err != nil {
 		return nil, err
 	}
-	g := &drivenGame{}
+	g := &drivenGame{root: root}
 	if g.work, err = os.MkdirTemp("", "jm-drive-"); err != nil {
 		return nil, err
 	}

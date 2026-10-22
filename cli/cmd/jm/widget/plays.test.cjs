@@ -399,6 +399,22 @@ test('the review asks about its own play\'s game, whichever game is open', async
   assert.equal(last('ui/update-model-context').params.structuredContent.game, '/g/void');
 });
 
+test('a copy\'s play with the same id is another play: its frames aren\'t the first one\'s', async () => {
+  const { app, sent, fromHost } = await chatgptReview();
+  button(app, 'Exact frame').listeners.click();
+  await settle();
+  const call = sent.filter((m) => m.method === 'tools/call' && m.params.name === 'play_frame').at(-1);
+  fromHost({ id: call.id, result: { content: [], _meta: { 'jm/image': 'data:image/png;base64,EXACT' },
+                                    structuredContent: { play: 'test-run', frame: 120, source: { kind: 'replay', drift: 'same' } } } });
+  await settle();
+  assert.equal(button(app, 'Exact frame').attributes.disabled, '', 'the first play has its frame');
+  fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { ...play, game: '/g/copy' }, _meta: metadata } });
+  await settle();
+  assert.equal(button(app, 'Exact frame').attributes.disabled, undefined, 'the copy has none yet');
+  const viewer = app.children.find((c) => (c.className || '').startsWith('viewer'));
+  assert.notEqual(viewer.children.find((c) => c.tag === 'img').attributes.src, 'data:image/png;base64,EXACT');
+});
+
 test('new chat about this opens a new chat\'s draft with the moment (a bug report, say)', async () => {
   const { app, last } = await chatgptReview();
   button(app, 'New chat').listeners.click();
