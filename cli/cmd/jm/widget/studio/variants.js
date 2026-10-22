@@ -73,7 +73,7 @@ studioTabs.push((() => {
   const comparing = (ctx, item, kind) => {
     const { el } = ctx.kit, c = state.compared && state.compared.name === item.name && state.compared.kind === kind ? state.compared : null;
     const frameInput = el("input", { type: "number", min: "1", "aria-label": "Frame", class: "var-frame", "data-key": "var-frame",
-      oninput: (e) => { state.frame = Math.max(1, Number(e.target.value) || 1); } });
+      oninput: (e) => { state.frame = Math.max(1, Math.round(Number(e.target.value)) || 1); } });
     frameInput.value = String(state.frame);
     // Standing still, two takes look alike: a recorded play's inputs drive both the same way.
     const playPick = state.plays.length ? el("select", { "aria-label": "Inputs", class: "var-play", onchange: (e) => { state.play = e.target.value; } },
