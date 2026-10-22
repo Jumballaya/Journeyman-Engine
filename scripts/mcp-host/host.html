@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>jm MCP Apps host</title>
+<style>
+  :root { --bg: #f4f4f2; --panel: #fff; --ink: #1d1d1b; --mute: #6b6b66; --line: #ddddd8; --accent: #2f5bd3; }
+  :root[data-theme="dark"] { --bg: #18181a; --panel: #222225; --ink: #ececea; --mute: #9a9a95; --line: #333336; --accent: #7d9cff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.45 -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--ink); display: grid; grid-template-columns: 340px 1fr; height: 100vh; }
+  #chat { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+  #chat header { padding: 10px 12px; border-bottom: 1px solid var(--line); font-weight: 600; display: flex; gap: 8px; align-items: center; }
+  #chat header button { margin-left: auto; }
+  #log { flex: 1; overflow: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .entry { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; white-space: pre-wrap; word-break: break-word; }
+  .entry b { display: block; font-size: 11px; color: var(--mute); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .entry.user { border-color: var(--accent); }
+  .entry img { max-width: 100%; border-radius: 4px; display: block; margin-top: 4px; }
+  #call { border-top: 1px solid var(--line); padding: 8px 12px; display: grid; gap: 6px; }
+  #call textarea { font: 12px ui-monospace, monospace; height: 54px; width: 100%; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; }
+  select, button, input { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
+  button { cursor: pointer; }
+  #stage { min-width: 0; overflow: auto; padding: 16px; }
+  #stage.fullscreen { padding: 0; }
+  #apps { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .frame { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); margin-bottom: 16px; }
+  .frame .bar { font-size: 11px; color: var(--mute); padding: 4px 10px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
+  .frame .bar .modes { margin-left: auto; display: flex; gap: 4px; }
+  .frame .bar .modes button { font-size: 11px; padding: 0 6px; }
+  .frame.pip { position: fixed; right: 16px; bottom: 16px; width: min(460px, 48vw); z-index: 5; margin: 0; box-shadow: 0 8px 28px rgb(0 0 0 / .25); }
+  .frame.pip iframe { height: 380px; }
+  .frame iframe { border: 0; width: 100%; height: 480px; display: block; background: var(--panel); }
+  #stage.fullscreen #apps, #stage.fullscreen .frame:not(.full) { display: none; }
+  #stage.fullscreen .frame.full { border: 0; border-radius: 0; margin: 0; }
+  #stage.fullscreen .frame.full iframe { height: calc(100vh - 25px); }
+  form.elicit { display: grid; gap: 4px; }
+  form.elicit label { display: grid; gap: 2px; font-size: 12px; }
+</style>
+</head>
+<body>
+<section id="chat">
+  <header>Chat <span id="status" style="font-weight:400;color:var(--mute)">connecting…</span><button id="theme">Theme</button></header>
+  <div id="log"></div>
+  <div id="call">
+    <select id="tool"></select>
+    <textarea id="args">{}</textarea>
+    <button id="run">Call tool</button>
+  </div>
+</section>
+<main id="stage"><div id="apps"></div></main>
+<script>
+"use strict";
+// One MCP client (jm, through relay.mjs) and an MCP Apps host for each widget it shows.
+// ?tool=<name>&args=<json> calls a tool once connected; ?seen=1 (below).
+const $ = (id) => document.getElementById(id);
+let theme = "light", nextId = 1, tools = [];
+const pending = new Map();
+const frames = new Set(); // { iframe, tool, args, result, mode, box }
+
+const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+function log(kind, text, { user = false, image = null } = {}) {
+  const e = el("div", { className: "entry" + (user ? " user" : "") }, el("b", { textContent: kind }), text);
+  if (image) e.append(el("img", { src: image }));
+  $("log").append(e);
+  $("log").scrollTop = 1e9;
+}
+const short = (v, n = 600) => { const s = typeof v === "string" ? v : JSON.stringify(v, null, 1); return s.length > n ? s.slice(0, n) + "…" : s; };
+// Content blocks as the chat shows them: text, and images.
+function showBlocks(kind, blocks, opts) {
+  const list = typeof blocks === "string" ? [{ type: "text", text: blocks }] : blocks || [];
+  const text = list.filter((b) => b.type === "text").map((b) => b.text).join("\n") || (list.length ? "" : "(nothing)");
+  const img = list.find((b) => b.type === "image");
+  log(kind, short(text, 1500), { ...opts, image: img ? `data:${img.mimeType};base64,${img.data}` : null });
+}
+
+// jm: this page's own session (relay.mjs), named by the first event.
+let markSession;
+const session = new Promise((resolve) => { markSession = resolve; });
+const toJm = async (msg) => fetch("/send?session=" + await session, { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", ...msg }) });
+function jm(method, params) {
+  const id = nextId++;
+  return new Promise((resolve, reject) => { pending.set(id, { resolve, reject }); toJm({ id, method, params }); });
+}
+const events = new EventSource("/events");
+events.addEventListener("session", (e) => markSession(e.data));
+events.addEventListener("gone", (e) => { $("status").textContent = e.data; events.close(); });
+events.onerror = () => { $("status").textContent = "relay gone: reload"; events.close(); };  // a new session would be uninitialized
+events.onmessage = async (e) => {
+  const m = JSON.parse(e.data);
+  if (m.id !== undefined && !m.method && pending.has(m.id)) {
+    const p = pending.get(m.id); pending.delete(m.id);
+    m.error ? p.reject(new Error(m.error.message)) : p.resolve(m.result);
+  } else if (m.method && m.id !== undefined) {
+    toJm({ id: m.id, ...(await serverAsks(m)) });
+  } else if (m.method) {
+    if (m.method === "notifications/message") log("jm log", short(m.params && m.params.data));
+    else log("jm says", m.method);
+  }
+};
+// What jm asks the host: forms (elicitation), roots, ping.
+async function serverAsks(m) {
+  if (m.method === "ping") return { result: {} };
+  if (m.method === "roots/list") return { result: { roots: [] } };
+  if (m.method === "elicitation/create") return { result: await elicit(m.params) };
+  return { error: { code: -32601, message: "not handled: " + m.method } };
+}
+function elicit({ message, requestedSchema }) {
+  return new Promise((resolve) => {
+    const props = (requestedSchema && requestedSchema.properties) || {};
+    const form = el("form", { className: "elicit" });
+    const inputs = {};
+    for (const [key, s] of Object.entries(props)) {
+      const choices = s.enum || (s.oneOf || []).map((o) => o.const);
+      let input;
+      if (choices.length) {
+        input = el("select");
+        choices.forEach((c, i) => input.append(el("option", { value: c, textContent: (s.enumNames || [])[i] || (s.oneOf && s.oneOf[i].title) || c })));
+      } else if (s.type === "boolean") input = el("input", { type: "checkbox", checked: !!s.default });
+      else input = el("input", { value: s.default ?? "" });
+      if (s.default !== undefined && input.tagName === "SELECT") input.value = s.default;
+      inputs[key] = { input, s };
+      form.append(el("label", {}, s.title || key, input));
+    }
+    const done = (action) => {
+      const content = {};
+      for (const [key, { input, s }] of Object.entries(inputs)) {
+        content[key] = s.type === "boolean" ? input.checked : s.type === "number" || s.type === "integer" ? Number(input.value) : input.value;
+      }
+      form.replaceChildren(el("i", { textContent: action }));
+      resolve(action === "accept" ? { action, content } : { action });
+    };
+    form.append(el("div", {}, el("button", { type: "submit", textContent: "Submit" }), " ", el("button", { type: "button", textContent: "Decline", onclick: () => done("decline") })));
+    form.onsubmit = (e) => { e.preventDefault(); done("accept"); };
+    const entry = el("div", { className: "entry user" }, el("b", { textContent: "form from jm" }), message || "", form);
+    $("log").append(entry);
+    $("log").scrollTop = 1e9;
+  });
+}
+
+// A tool called: by the person (the chat box, an app button) or the model.
+async function callTool(name, args, who = "you") {
+  log(`${who} → ${name}`, short(args, 300), { user: who === "you" });
+  let result;
+  try { result = await jm("tools/call", { name, arguments: args }); }
+  catch (e) { log(`${name} failed`, e.message); return; }
+  showBlocks(`${name}${result.isError ? " (error)" : ""}`, result.content);
+  const tool = tools.find((t) => t.name === name);
+  const uri = tool && tool._meta && tool._meta.ui && tool._meta.ui.resourceUri;
+  if (uri && who === "you") await show(tool, args, result, uri);
+  return result;
+}
+
+// A widget: its page from jm's resource, framed, spoken to over postMessage.
+async function show(tool, args, result, uri) {
+  const res = await jm("resources/read", { uri });
+  const page = res.contents[0];
+  // Same-origin, unlike a real host's: a test driving the page (Chrome tools, devtools) can reach inside.
+  const iframe = el("iframe", { sandbox: "allow-scripts allow-same-origin allow-forms allow-popups", srcdoc: page.text });
+  // ?seen=1: the page counts as seen though its tab isn't (a driven tab in the background): tabs that only poll when seen do.
+  if (new URLSearchParams(location.search).get("seen")) {
+    iframe.addEventListener("load", () => Object.defineProperty(iframe.contentDocument, "visibilityState", { get: () => "visible" }));
+  }
+  // The host's own controls: a person moves a widget between modes, as in a chat app.
+  const modes = el("span", { className: "modes" }, ...["inline", "fullscreen", "pip"].map((m) => el("button", { textContent: m, onclick: () => setMode(f, m) })));
+  const box = el("div", { className: "frame" }, el("div", { className: "bar" }, tool.name, el("span", { textContent: uri }), modes), iframe);
+  for (const f of frames) if (f.mode === "fullscreen") setMode(f, "inline");  // the new one shows, as a host's does
+  $("stage").insertBefore(box, $("apps").nextSibling);
+  const f = { iframe, tool, args, result, mode: "inline", box };
+  frames.add(f);
+  // Escape leaves fullscreen though the widget has the keyboard (its keys never reach this page).
+  iframe.addEventListener("load", () => iframe.contentWindow.addEventListener("keydown", (e) => { if (e.key === "Escape" && f.mode !== "inline") setMode(f, "inline"); }));
+}
+const frameOf = (source) => [...frames].find((f) => f.iframe.contentWindow === source);
+const post = (f, msg) => f.iframe.contentWindow.postMessage({ jsonrpc: "2.0", ...msg }, "*");
+const context = (f) => ({ theme, displayMode: f.mode, availableDisplayModes: ["inline", "fullscreen", "pip"], locale: "en-US",
+  platform: "desktop", toolInfo: { tool: { name: f.tool.name } }, containerDimensions: { maxHeight: 2000 } });
+window.addEventListener("message", async (e) => {
+  const f = frameOf(e.source), m = e.data;
+  if (!f || !m || m.jsonrpc !== "2.0") return;
+  if (m.method === "ui/notifications/initialized") {
+    post(f, { method: "ui/notifications/tool-input", params: { arguments: f.args } });
+    post(f, { method: "ui/notifications/tool-result", params: f.result });
+    return;
+  }
+  if (m.method === "ui/notifications/size-changed") {
+    if (f.mode === "inline" && m.params && m.params.height) f.iframe.style.height = Math.min(Math.max(m.params.height, 120), 1400) + "px";
+    return;
+  }
+  if (!m.method || m.id === undefined) return;
+  const answer = (result) => post(f, { id: m.id, result });
+  const refuse = (message) => post(f, { id: m.id, error: { code: -32601, message } });
+  const p = m.params || {};
+  switch (m.method) {
+    case "ui/initialize":
+      return answer({ protocolVersion: "2026-01-26", hostInfo: { name: "jm-show-host", version: "1" },
+        hostCapabilities: { openLinks: {}, serverTools: {}, serverResources: {}, logging: {}, updateModelContext: { text: {}, image: {} }, message: { text: {}, image: {} } },
+        hostContext: context(f) });
+    case "tools/call": {
+      log(`${f.tool.name} widget → ${p.name}`, short(p.arguments, 300));
+      try { const r = await jm("tools/call", p); showBlocks(`${p.name} (for the widget)`, r.content); return answer(r); }
+      catch (err) { return refuse(err.message); }
+    }
+    case "resources/read":
+      try { return answer(await jm("resources/read", p)); } catch (err) { return refuse(err.message); }
+    case "ui/message":
+      showBlocks("widget → chat message", p.content, { user: true });
+      return answer({});
+    case "ui/update-model-context":
+      showBlocks("model context (next turn)", p.content || short(p.structuredContent));
+      return answer({});
+    case "ui/open-link":
+      log("open link", p.url);
+      return answer({});
+    case "ui/request-display-mode":
+      setMode(f, ["fullscreen", "pip"].includes(p.mode) ? p.mode : "inline");
+      return answer({ mode: f.mode });
+    case "ping": return answer({});
+    default: return refuse("not handled: " + m.method);
+  }
+});
+// A frame's display mode: inline in the stage, fullscreen over it, or pip (floating beside the chat).
+// One frame at most is fullscreen and one pip, as in a host.
+function setMode(f, mode) {
+  for (const g of frames) if (g !== f && mode !== "inline" && g.mode === mode) setMode(g, "inline");
+  if (f.mode === "inline" && mode !== "inline") f.inlineHeight = f.iframe.style.height;
+  f.mode = mode;
+  f.iframe.style.height = mode === "inline" ? f.inlineHeight || "" : "";
+  f.box.classList.toggle("full", mode === "fullscreen");
+  f.box.classList.toggle("pip", mode === "pip");
+  $("stage").classList.toggle("fullscreen", [...frames].some((g) => g.mode === "fullscreen"));
+  $("stage").scrollTop = 0;
+  log("display mode", mode);
+  post(f, { method: "ui/notifications/host-context-changed", params: { displayMode: mode } });
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  for (const f of frames) if (f.mode !== "inline") setMode(f, "inline");
+});
+$("theme").onclick = () => {
+  theme = theme === "light" ? "dark" : "light";
+  document.documentElement.dataset.theme = theme;
+  for (const f of frames) post(f, { method: "ui/notifications/host-context-changed", params: { theme } });
+};
+$("run").onclick = () => { let args; try { args = JSON.parse($("args").value || "{}"); } catch (e) { return log("bad JSON", e.message); } callTool($("tool").value, args); };
+
+(async () => {
+  const init = await jm("initialize", { protocolVersion: "2025-11-25", clientInfo: { name: "jm-show-host", version: "1" },
+    capabilities: { elicitation: { form: {} }, roots: {}, extensions: { "io.modelcontextprotocol/ui": { mimeTypes: ["text/html;profile=mcp-app"] } } } });
+  toJm({ method: "notifications/initialized" });
+  $("status").textContent = `${init.serverInfo.name} ${init.serverInfo.version || ""}`;
+  tools = (await jm("tools/list", {})).tools;
+  for (const t of tools) $("tool").append(el("option", { value: t.name, textContent: t.name }));
+  log("tools", `${tools.length} tools; apps: ` + tools.filter((t) => t._meta && t._meta.ui).map((t) => t.name).join(", "));
+  // Entrypoints: what the host's UI opens an app with ({} arguments).
+  for (const t of tools.filter((t) => t._meta && t._meta["openai/ui"] && t._meta["openai/ui"].entrypoints)) {
+    $("apps").append(el("button", { textContent: "▶ " + t.name, onclick: () => callTool(t.name, {}) }));
+  }
+  const q = new URLSearchParams(location.search);
+  if (q.get("tool")) callTool(q.get("tool"), JSON.parse(q.get("args") || "{}"));
+})();
+</script>
+</body>
+</html>

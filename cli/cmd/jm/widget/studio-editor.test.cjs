@@ -66,6 +66,22 @@ test('a note pointed out while the Studio is open is drafted in the chat, on any
   assert.equal(s.sent.filter((m) => m.method === 'ui/message').length, 1, 'drafted once');
 });
 
+test('with no editor running, the Studio asks after one only now and then, but often on the Editor tab', async () => {
+  const asked = (s) => s.calls().filter((c) => c.name === 'editor_state').length;
+  const elsewhere = await studio(games, { answers: { editor_state: { structuredContent: { editors: [] } } } });
+  await settle(6);
+  const before = asked(elsewhere);
+  await new Promise((resolve) => setTimeout(resolve, 2100));
+  await settle(6);
+  assert.equal(asked(elsewhere), before, 'no editor, another tab: not every 2 s');
+  const here = await studio(games, { answers: { editor_state: { structuredContent: { editors: [] } } }, widgetState: { route: '/editor' } });
+  await settle(6);
+  const first = asked(here);
+  await new Promise((resolve) => setTimeout(resolve, 2100));
+  await settle(6);
+  assert.ok(asked(here) > first, 'the Editor tab keeps asking');
+});
+
 test('Render shows the scene as the engine draws it', async () => {
   const s = await studio(games, { answers: { editor_state: editing([]), scene_view: level,
     scene_render: { content: [{ type: 'text', text: 'drawn' }], _meta: { 'jm/image': 'data:image/jpeg;base64,abc' } } }, widgetState: { route: '/editor' } });

@@ -23,7 +23,8 @@ studioTabs.push((() => {
   };
   const about = (n) => (n.entities && n.entities.length ? `${n.entities.join(", ")} in ${n.scene}` : n.scene);
 
-  // Polls the editor while the Studio is open (every 2 s, only when the page is seen).
+  // Polls the editor while the Studio is open, only when the page is seen: every 2 s
+  // while an editor runs or this tab shows, else every 10 s (one may start).
   const poll = async () => {
     const ctx = state.ctx;
     if (document.visibilityState !== "hidden") {
@@ -39,7 +40,8 @@ studioTabs.push((() => {
         if (JSON.stringify(state.editor) !== before) ctx.rerender();
       }
     }
-    setTimeout(poll, 2000);
+    const watching = (state.editor && state.editor.editors.length) || state.ctx.current === "editor";
+    setTimeout(poll, watching ? 2000 : 10000);
   };
 
   // A note the person just pointed out goes to the chat's composer, unsent (hosts that can draft only).
