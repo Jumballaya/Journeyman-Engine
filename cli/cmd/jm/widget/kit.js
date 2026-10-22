@@ -62,8 +62,9 @@ const kit = (() => {
   // fold and unfold, ↑/↓ move. folded: a Set of ids the caller keeps. A row
   // with children onPick returns false for (a folder, not a thing to pick)
   // folds or unfolds instead.
-  const tree = ({ items, selected, folded = new Set(), onPick, label = "Tree" }) => {
-    const root = el("div", { class: "tree", role: "tree", "aria-label": label });
+  // wrap: labels are sentences, shown whole (a note), not cut to a line.
+  const tree = ({ items, selected, folded = new Set(), onPick, label = "Tree", wrap = false }) => {
+    const root = el("div", { class: wrap ? "tree wrap" : "tree", role: "tree", "aria-label": label });
     const rows = [];
     const draw = () => {
       rows.length = 0;

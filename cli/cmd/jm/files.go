@@ -103,12 +103,21 @@ func listFiles(root string) ([]projectEntry, error) {
 		delete(status, rel)
 	})
 	for path, mark := range status {
-		if mark == "D" && !hiddenFromAgents(filepath.Dir(path)) {
+		if mark == "D" && !hiddenFromAgents(filepath.Dir(path)) && !osClutter(path) {
 			out = append(out, projectEntry{Path: path, Status: mark})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, nil
+}
+
+// osClutter is a file the OS leaves in folders: its, not the game's.
+func osClutter(path string) bool {
+	switch strings.ToLower(filepath.Base(path)) {
+	case ".ds_store", "thumbs.db", "desktop.ini":
+		return true
+	}
+	return false
 }
 
 // walkProject calls visit with each regular file of the game outside the hidden folders.
@@ -129,6 +138,9 @@ func walkProject(root string, visit func(rel string, info fs.FileInfo)) error {
 			return nil
 		}
 		if d.Name() == ".git" { // a worktree's link to its repository: git's, not the game's
+			return nil
+		}
+		if osClutter(d.Name()) {
 			return nil
 		}
 		if info, err := d.Info(); err == nil && info.Mode().IsRegular() {

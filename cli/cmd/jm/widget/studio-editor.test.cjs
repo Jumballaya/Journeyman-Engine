@@ -114,3 +114,13 @@ test('another game\'s editor, scene and picture never show under this one, howev
   assert.match(s.app.text, /Beta Door/);
   assert.match(s.app.text, /Beta Player/);
 });
+
+test('a note pointed out is shown whole, not cut to a line', async () => {
+  const long = 'this elder should face the well, and say so when the player walks up';
+  const s = await studio(games, { answers: { editor_state: () => editing([{ id: 1, at: now, scene: 'scenes/level.scene.json', entities: ['elder'], text: long }]) },
+    widgetState: { route: '/editor' } });
+  await settle(6);
+  const tree = s.find((e) => e.attributes['aria-label'] === 'Pointed out')[0];
+  assert.equal(tree.attributes.class, 'tree wrap');
+  assert.match(tree.text, /walks up/);
+});

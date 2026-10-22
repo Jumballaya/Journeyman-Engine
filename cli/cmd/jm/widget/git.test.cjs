@@ -146,3 +146,42 @@ test('an entity under a file with "#" in its name or folder picks that whole fil
     assert.deepEqual(s.calls().find((c) => c.name === 'vcs_restore').arguments.files, [path]);
   }
 });
+
+test("a commit in a copy, after another chat opened another game: the tab stays in the copy, as a copy", async () => {
+  const dir = '/g/pip/.jm/variants/floaty';
+  const copy = { name: 'Pip', path: dir, opened: 2, scenes: [], copyOf: '/g/pip', copyKind: 'variant', copy: 'floaty' };
+  const first = { structuredContent: { open: dir, games: [listing.structuredContent.games[0], copy] } };
+  const later = { structuredContent: { open: '/g/other', games: [listing.structuredContent.games[0], { name: 'Other', path: '/g/other', opened: 3, scenes: [] }] } };
+  const s = await studio(first, { answers: { ...answers, games: later } });
+  s.tab('Git').fire('click');
+  await settle(8);
+  s.find((e) => e.attributes['data-key'] === 'git-message')[0].fire('input', { target: { value: 'Add a bat' } });
+  s.find((e) => e.tag === 'form')[0].fire('submit');
+  await settle(10);
+  assert.equal(s.calls().find((c) => c.name === 'vcs_commit').arguments.game, dir);
+  assert.equal(s.contexts().at(-1).structuredContent.copyOf, '/g/pip');
+  assert.match(s.app.text, /Working in variant\s+floaty/);
+});
+
+test("a game opened while a list was being read again stays open", async () => {
+  let open = '/g/pip', hold;
+  const games = () => ({ structuredContent: { open, games: [listing.structuredContent.games[0], { name: 'Other', path: '/g/other', opened: 2, scenes: [] }] } });
+  let n = 0;
+  const s = await studio(games(), { answers: { ...answers,
+    games: () => (++n === 1 ? new Promise((r) => { hold = () => r(games()); }) : games()),
+    open_game: (a) => { open = a.game; return { content: [{ type: 'text', text: 'Opened.' }] }; } } });
+  s.tab('Git').fire('click');
+  await settle(8);
+  s.find((e) => e.attributes['data-key'] === 'git-message')[0].fire('input', { target: { value: 'Add a bat' } });
+  s.find((e) => e.tag === 'form')[0].fire('submit');  // its list held back
+  await settle(8);
+  s.tab('Games').fire('click');
+  await settle(8);
+  s.find((e) => e.attributes['data-key'] === 'card:/g/other')[0].fire('click');
+  s.button('Open').fire('click');
+  await settle(10);
+  assert.equal(s.contexts().at(-1).structuredContent.game, '/g/other');
+  hold();
+  await settle(10);
+  assert.equal(s.contexts().at(-1).structuredContent.game, '/g/other');
+});

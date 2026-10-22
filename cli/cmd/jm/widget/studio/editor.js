@@ -99,7 +99,7 @@ studioTabs.push((() => {
         e.scene ? el("div", { class: "meta" }, e.scene) : null,
         e.selection && e.selection.length ? el("div", {}, "Selected: ", el("b", {}, e.selection.join(", "))) : el("div", { class: "meta" }, "Nothing selected.")),
       kit.section(`Pointed out (${notes.length})`, notes.length
-        ? kit.tree({ label: "Pointed out", items: notes.map((n) => ({ id: keyOf(e, n), label: n.text, meta: `${about(n)} · ${kit.ago(n.at)}` })),
+        ? kit.tree({ label: "Pointed out", wrap: true, items: notes.map((n) => ({ id: keyOf(e, n), label: n.text, meta: `${about(n)} · ${kit.ago(n.at)}` })),
             onPick: (item) => {
               const n = notes.find((x) => keyOf(e, x) === item.id);
               ctx.host.message(`About ${about(n)}: ${n.text}`, { send: false });
