@@ -300,6 +300,7 @@ jobs:
         run: |
           go vet ./...
           go test ./...
+          go test -count=1 -run TestTheEditorSkipsWhatJmMakes ./internal/gametree/  # reads editor/, outside the module: the cache doesn't see it change
       - name: Build jm
         working-directory: cli
         run: go build -o "$RUNNER_TEMP/jm" ./cmd/jm

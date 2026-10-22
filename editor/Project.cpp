@@ -19,9 +19,10 @@ namespace fs = std::filesystem;
 
 namespace {
 
-// What jm makes in a project: build output (and its staging), exports, logs.
+// What jm makes in a project: build output (and its staging), exports, logs,
+// captured frames (cli/internal/gametree's Made: a test keeps them alike).
 bool generatedFolder(const std::string& name) {
-  static const std::set<std::string> kGenerated = {"build", "build.next", "build.old", "dist", "logs"};
+  static const std::set<std::string> kGenerated = {"build", "build.next", "build.next.modules", "build.old", "dist", "logs", "frames"};
   return kGenerated.contains(name);
 }
 
