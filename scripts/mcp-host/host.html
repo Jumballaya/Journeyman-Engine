@@ -24,7 +24,9 @@
   #stage.fullscreen { padding: 0; }
   #apps { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
   .frame { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); margin-bottom: 16px; }
-  .frame .bar { font-size: 11px; color: var(--mute); padding: 4px 10px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; }
+  .frame .bar { font-size: 11px; color: var(--mute); padding: 4px 10px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
+  .frame .bar .exit { margin-left: auto; font-size: 11px; padding: 0 6px; display: none; }
+  .frame.full .bar .exit { display: inline-block; }
   .frame iframe { border: 0; width: 100%; height: 480px; display: block; background: var(--panel); }
   #stage.fullscreen #apps, #stage.fullscreen .frame:not(.full) { display: none; }
   #stage.fullscreen .frame.full { border: 0; border-radius: 0; margin: 0; }
@@ -156,10 +158,14 @@ async function show(tool, args, result, uri) {
   if (new URLSearchParams(location.search).get("seen")) {
     iframe.addEventListener("load", () => Object.defineProperty(iframe.contentDocument, "visibilityState", { get: () => "visible" }));
   }
-  const box = el("div", { className: "frame" }, el("div", { className: "bar" }, tool.name, el("span", { textContent: uri })), iframe);
+  const exit = el("button", { textContent: "Exit fullscreen", className: "exit", onclick: () => setMode(f, "inline") });
+  const box = el("div", { className: "frame" }, el("div", { className: "bar" }, tool.name, el("span", { textContent: uri }), exit), iframe);
   for (const f of frames) if (f.mode === "fullscreen") setMode(f, "inline");  // the new one shows, as a host's does
   $("stage").insertBefore(box, $("apps").nextSibling);
-  frames.add({ iframe, tool, args, result, mode: "inline", box });
+  const f = { iframe, tool, args, result, mode: "inline", box };
+  frames.add(f);
+  // Escape leaves fullscreen though the widget has the keyboard (its keys never reach this page).
+  iframe.addEventListener("load", () => iframe.contentWindow.addEventListener("keydown", (e) => { if (e.key === "Escape" && f.mode === "fullscreen") setMode(f, "inline"); }));
 }
 const frameOf = (source) => [...frames].find((f) => f.iframe.contentWindow === source);
 const post = (f, msg) => f.iframe.contentWindow.postMessage({ jsonrpc: "2.0", ...msg }, "*");

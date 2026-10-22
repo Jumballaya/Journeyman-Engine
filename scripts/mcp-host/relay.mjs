@@ -43,6 +43,7 @@ createServer((req, res) => {
     const jm = sessions.get(url.searchParams.get("session"));
     if (!jm) return res.writeHead(410).end("no such session: reload the page");
     let body = "";
+    req.setEncoding("utf8");  // a character split across chunks stays whole
     req.on("data", (d) => { body += d; });
     req.on("end", () => { jm.stdin.write(JSON.stringify(JSON.parse(body)) + "\n"); res.end(); });
   } else if (url.pathname === "/") {
