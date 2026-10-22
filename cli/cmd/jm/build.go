@@ -45,6 +45,9 @@ var buildCmd = &cobra.Command{
 	Long: `Builds the project into build/: compiles scripts, bakes atlases and
 tilesets, and checks scenes and prefabs against the engine's schema.
 
+Scripts compile at once, and only when a script, the script package or jm
+changed: their last clean compile is kept in .jm/cache/scripts.
+
 --json prints no progress; each problem is a JSON line ({"level", "category",
 "message", "file", "line", "column"}) and the last line is the result
 ({"result": "ok"|"failed", "errors", "warnings"}).`,
@@ -341,20 +344,21 @@ export function __jmOnMessage(): void {
 }
 `
 
-// runAsc compiles a script (project-relative path) to outFile, through a
-// generated entry under node_modules/.jm so @jm/runtime resolves normally.
-func runAsc(r *report, tc toolchain.Toolchain, scriptPath, projectRoot, outFile string) error {
+// compileScript compiles a script (project-relative path) to outFile, through a
+// generated entry under node_modules/.jm so @jm/runtime resolves normally,
+// giving what asc said (reportAsc's).
+func compileScript(tc toolchain.Toolchain, scriptPath, projectRoot, outFile string) (string, error) {
 	scriptsDir := scriptsPath(projectRoot)
 	entry := scriptsPath(projectRoot, "node_modules", ".jm", "entries", scriptPath)
 	importPath, err := filepath.Rel(filepath.Dir(entry), filepath.Join(projectRoot, strings.TrimSuffix(scriptPath, ".ts")))
 	if err != nil {
-		return fmt.Errorf("compute entry import path: %w", err)
+		return "", fmt.Errorf("compute entry import path: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(entry), 0755); err != nil {
-		return err
+		return "", err
 	}
 	if err := os.WriteFile(entry, []byte(fmt.Sprintf(entryTemplate, filepath.ToSlash(importPath))), 0644); err != nil {
-		return err
+		return "", err
 	}
 	entryRel, _ := filepath.Rel(scriptsDir, entry)
 	// Run by node directly, not npx (which would fetch from the network).
@@ -364,16 +368,21 @@ func runAsc(r *report, tc toolchain.Toolchain, scriptPath, projectRoot, outFile 
 	cmd := exec.Command(tc.Node, asc, filepath.ToSlash(entryRel), "--config", "asconfig.json", "--optimize",
 		"--outFile", outFile)
 	cmd.Dir = scriptsDir
-	if !jsonOutput {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
-	}
-	// --json: asc's messages become diagnostics with project paths.
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
 	err = cmd.Run()
-	for _, d := range parseAsc(output.String(), func(p string) string {
+	return output.String(), err
+}
+
+// reportAsc gives asc's output: as diagnostics with project paths (--json),
+// else as it said it.
+func reportAsc(r *report, projectRoot, output string) {
+	if !jsonOutput {
+		fmt.Print(output)
+		return
+	}
+	scriptsDir := scriptsPath(projectRoot)
+	for _, d := range parseAsc(output, func(p string) string {
 		if rel, err := filepath.Rel(projectRoot, filepath.Join(scriptsDir, p)); err == nil {
 			return filepath.ToSlash(rel)
 		}
@@ -381,7 +390,6 @@ func runAsc(r *report, tc toolchain.Toolchain, scriptPath, projectRoot, outFile 
 	}) {
 		r.add(d)
 	}
-	return err
 }
 
 // scriptNameProblems are warnings for literal prefab and scene names in
@@ -669,6 +677,7 @@ func buildGame(r *report) error {
 		return fmt.Errorf("Failed to write the built manifest: %w", err)
 	}
 
+	var compiles []compile
 	for _, asset := range man.Assets {
 		source := asset
 		if strings.HasPrefix(asset, behaviorsPrefix) {
@@ -683,24 +692,16 @@ func buildGame(r *report) error {
 		}
 		say("Copied asset: %s", asset)
 		if strings.HasSuffix(asset, ".ts") {
-			stage("Building script %s", path.Base(asset))
-			// Every script, then the content, before failing: one build
-			// reports all the problems it can.
-			if err := runAsc(r, tc, source, projectRoot, filepath.Join(projectRoot, outDir, asset)); err != nil {
-				r.add(Diagnostic{Level: "error", Category: "script", File: asset, Message: "doesn't compile (asc: " + err.Error() + ")"})
-				continue
-			}
-			say("Built script: %s", asset)
+			compiles = append(compiles, compile{script: source, out: filepath.Join(projectRoot, outDir, asset)})
 		}
 	}
 	checked := filepath.Join(projectRoot, outDir+".modules")
 	for _, module := range modules {
-		if err := runAsc(r, tc, module, projectRoot, filepath.Join(checked, module)); err != nil {
-			r.add(Diagnostic{Level: "error", Category: "script", File: module, Message: "doesn't compile (asc: " + err.Error() + ")"})
-			continue
-		}
-		say("Checked module: %s (no scene or prefab attaches it)", module)
+		compiles = append(compiles, compile{script: module, out: filepath.Join(checked, module), module: true})
 	}
+	// Every script, then the content, before failing: one build reports all the problems it can.
+	stage("Building scripts")
+	compileScripts(r, tc, projectRoot, openScriptCache(projectRoot, sources, tc), compiles)
 	if err := os.RemoveAll(checked); err != nil {
 		return fmt.Errorf("Failed to clean up checked modules: %w", err)
 	}

@@ -9,6 +9,9 @@ Build game assets and compile AssemblyScript.
 Builds the project into build/: compiles scripts, bakes atlases and
 tilesets, and checks scenes and prefabs against the engine's schema.
 
+Scripts compile at once, and only when a script, the script package or jm
+changed: their last clean compile is kept in .jm/cache/scripts.
+
 --json prints no progress; each problem is a JSON line ({"level", "category",
 "message", "file", "line", "column"}) and the last line is the result
 ({"result": "ok"|"failed", "errors", "warnings"}).
