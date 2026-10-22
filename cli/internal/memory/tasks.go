@@ -210,7 +210,12 @@ func withLastTask(text string, last int) (string, error) {
 	}
 	out := "---\n" + mark + "\n---\n\n" + text
 	if at := slices.IndexFunc(front, func(p property) bool { return p.key == "lastTask" }); at >= 0 {
-		out = strings.Replace(text, "\n"+front[at].raw+"\n", "\n"+mark+"\n", 1) // a block's lines too
+		lines := strings.Split(front[at].raw, "\n")
+		value := len(lines) // its value's lines (a block's too); the comments and blank lines after it stay
+		for value > 1 && (strings.TrimSpace(lines[value-1]) == "" || strings.HasPrefix(strings.TrimSpace(lines[value-1]), "#")) {
+			value--
+		}
+		out = strings.Replace(text, "\n"+front[at].raw+"\n", "\n"+strings.Join(append([]string{mark}, lines[value:]...), "\n")+"\n", 1)
 	} else if strings.HasPrefix(text, "---\n") && strings.Contains(text[3:], "\n---\n") {
 		out = "---\n" + mark + "\n" + text[4:]
 	}

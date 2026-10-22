@@ -228,9 +228,10 @@ func TestRemovingATaskLeavesItsCopyItsOwn(t *testing.T) {
 // can't be (an anchor others use) refuses the change rather than lose count.
 func TestLastTaskKeepsTheFrontmattersShape(t *testing.T) {
 	for front, want := range map[string]string{
-		"  title: Tasks\n  lastTask: t7":   "  title: Tasks\n  lastTask: t8\n",
-		"  title: Tasks":                   "---\n  lastTask: t8\n  title: Tasks\n",
-		"lastTask: |-\n  t7\ntitle: Tasks": "\nlastTask: t8\ntitle: Tasks\n",
+		"  title: Tasks\n  lastTask: t7":             "  title: Tasks\n  lastTask: t8\n",
+		"  title: Tasks":                             "---\n  lastTask: t8\n  title: Tasks\n",
+		"lastTask: |-\n  t7\ntitle: Tasks":           "\nlastTask: t8\ntitle: Tasks\n",
+		"lastTask: t7\n# kept by hand\ntitle: Tasks": "\nlastTask: t8\n# kept by hand\ntitle: Tasks\n",
 	} {
 		root := t.TempDir()
 		os.MkdirAll(filepath.Join(root, "design"), 0o755)
