@@ -91,10 +91,11 @@ func TestAScriptCompilesOnceUntilWhatCompilingReadsChanges(t *testing.T) {
 	scripts := filepath.Join(root, "assets", "scripts")
 	os.MkdirAll(filepath.Join(scripts, ".internal"), 0o755)
 	os.WriteFile(filepath.Join(scripts, "a.ts"), []byte(`import { step } from /* the rules */ "./.internal/logic";
-export * from './later';`), 0o644)
+export * from './later';
+import { x } from "\u002e/.internal/escaped";`), 0o644)
 	os.WriteFile(filepath.Join(scripts, ".internal", "logic.ts"), []byte(`export * from "../host";`), 0o644)
 	build()
-	for i, edit := range []string{"host.d.ts", "later.ts", ".internal/logic.ts"} {
+	for i, edit := range []string{"host.d.ts", "later.ts", ".internal/escaped.ts", ".internal/logic.ts"} {
 		os.WriteFile(filepath.Join(scripts, filepath.FromSlash(edit)), []byte("export const step = 2;"), 0o644)
 		build()
 		if count("a.ts") != i+6 {
@@ -108,7 +109,7 @@ export * from './later';`), 0o644)
 	build()
 	os.WriteFile(base, []byte(`{"options": {"noAssert": false}}`), 0o644)
 	build()
-	if count("a.ts") != 10 {
+	if count("a.ts") != 11 {
 		t.Errorf("the asconfig's base changed: compiled %v", compiled())
 	}
 	// A chain of bases, however long: its last one changed compiles again.
@@ -121,7 +122,7 @@ export * from './later';`), 0o644)
 	build()
 	os.WriteFile(filepath.Join(chain, "k.json"), []byte(`{"options": {"noAssert": true}}`), 0o644)
 	build()
-	if count("a.ts") != 12 {
+	if count("a.ts") != 13 {
 		t.Errorf("the chain's last base changed: compiled %v", compiled())
 	}
 	// What the cache can't follow it doesn't keep: a package's config, an option but codegen's (a file

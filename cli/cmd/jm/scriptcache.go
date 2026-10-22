@@ -128,9 +128,19 @@ func openScriptCache(root string, sources map[string]string, tc toolchain.Toolch
 	return scriptCache{filepath.Join(top, key), true}
 }
 
-// pathSpec is a quoted path: any an import may name (and more: a string
-// that only looks like one costs a file read, never a stale compile).
-var pathSpec = regexp.MustCompile(`["']((?:\.{1,2}|/)[^"'\n]*)["']`)
+// literal is a string literal, escapes and all: any an import may name (and
+// more: a string that only names a path costs a file read, never a stale compile).
+var literal = regexp.MustCompile(`"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'`)
+
+// unquoted is a literal's text, its escapes decoded as JSON's (\u002e is "."):
+// the raw text when they aren't JSON's.
+func unquoted(raw string) string {
+	var s string
+	if json.Unmarshal([]byte(`"`+strings.ReplaceAll(raw, `\'`, "'")+`"`), &s) != nil {
+		return raw
+	}
+	return s
+}
 
 // importsOf is each file compiles' scripts may import by a relative or
 // absolute path, however far (hidden, outside the game): every file asc may
@@ -144,10 +154,13 @@ func importsOf(root string, compiles []compile) map[string]string {
 		if err != nil {
 			return
 		}
-		for _, m := range pathSpec.FindAllSubmatch(data, -1) {
-			base := filepath.FromSlash(string(m[1]))
-			if !filepath.IsAbs(base) {
+		for _, m := range literal.FindAllSubmatch(data, -1) {
+			base := filepath.FromSlash(unquoted(string(m[1]) + string(m[2])))
+			switch {
+			case strings.HasPrefix(base, "."):
 				base = filepath.Join(filepath.Dir(file), base)
+			case !filepath.IsAbs(base):
+				continue
 			}
 			for _, f := range []string{base, base + ".ts", base + ".d.ts", filepath.Join(base, "index.ts"), filepath.Join(base, "index.d.ts")} {
 				if _, seen := out[f]; seen {

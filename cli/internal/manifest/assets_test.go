@@ -87,3 +87,14 @@ func TestAGlobOfEverythingLeavesWhatJmMakes(t *testing.T) {
 		t.Errorf("** = %v, want %v", got, want)
 	}
 }
+
+// A path named two ways is one asset, by its clean name.
+func TestAnAssetNamedTwoWaysIsOne(t *testing.T) {
+	got, err := ExpandAssets(fstest.MapFS{}, []string{"./assets/a.ts", "assets/a.ts", "assets/x/../b.png"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"assets/a.ts", "assets/b.png"}; !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
