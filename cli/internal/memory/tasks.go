@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
-	"gopkg.in/yaml.v3"
 )
 
 // The game's task board: design/Tasks.md, a column per "## " heading and a
@@ -75,11 +74,7 @@ func (b *board) scan() {
 	b.columns, b.tasks, b.at, b.end = nil, nil, nil, nil
 	column, code, open := "", codeBlocks(b.lines), false // open: the last task's block goes on
 	if front, _, err := frontmatter(b.text()); err == nil {
-		for _, p := range front {
-			if v, ok := idNumber(p.text()); ok && p.key == "lastTask" {
-				b.kept = v
-			}
-		}
+		b.kept = lastTaskOf(front)
 	}
 	b.last = max(b.last, b.kept)
 	seen, drafts := map[string]bool{}, map[string]int{}
@@ -187,29 +182,47 @@ func (b *board) find(id string) int {
 
 func (b *board) text() string { return strings.Join(b.lines, "\n") + "\n" }
 
-// save writes the board, raising its lastTask to the highest id given (a
-// frontmatter made for it if it has none). Frontmatter YAML can't read, or
-// a lastTask that's more than a value (an anchor others use), is left be.
+// save writes the board, its lastTask raised to the highest id given.
 func (b *board) save(root string) error {
-	text, mark := b.text(), "lastTask: t"+strconv.Itoa(b.last)
-	front, _, err := frontmatter(text)
-	at := slices.IndexFunc(front, func(p property) bool { return p.key == "lastTask" })
-	indent := ""
-	if len(front) > 0 { // frontmatter indented alike: the new line too
-		indent = front[0].raw[:len(front[0].raw)-len(strings.TrimLeft(front[0].raw, " "))]
-	}
-	switch {
-	case b.last <= b.kept || err != nil:
-	case at >= 0 && front[at].node.Anchor == "" && front[at].node.Kind == yaml.ScalarNode:
-		line, _, _ := strings.Cut(front[at].raw, "\n")
-		text = strings.Replace(text, "\n"+line+"\n", "\n"+indent+mark+"\n", 1)
-	case at >= 0:
-	case strings.HasPrefix(text, "---\n") && strings.Contains(text[3:], "\n---\n"):
-		text = "---\n" + indent + mark + "\n" + text[4:]
-	default:
-		text = "---\n" + mark + "\n---\n\n" + text
+	text := b.text()
+	if b.last > b.kept {
+		text = withLastTask(text, b.last)
 	}
 	return write(root, tasksPath, text)
+}
+
+// withLastTask is text with lastTask: t<last> in its frontmatter (made for it
+// if it has none), indented as the frontmatter is; text as it was when YAML
+// wouldn't read it back so (its frontmatter unreadable, an anchor others use).
+func withLastTask(text string, last int) string {
+	front, _, err := frontmatter(text)
+	if err != nil {
+		return text
+	}
+	mark := "lastTask: t" + strconv.Itoa(last)
+	if len(front) > 0 {
+		mark = front[0].raw[:len(front[0].raw)-len(strings.TrimLeft(front[0].raw, " "))] + mark
+	}
+	out := "---\n" + mark + "\n---\n\n" + text
+	if at := slices.IndexFunc(front, func(p property) bool { return p.key == "lastTask" }); at >= 0 {
+		out = strings.Replace(text, "\n"+front[at].raw+"\n", "\n"+mark+"\n", 1) // a block's lines too
+	} else if strings.HasPrefix(text, "---\n") && strings.Contains(text[3:], "\n---\n") {
+		out = "---\n" + mark + "\n" + text[4:]
+	}
+	if after, _, err := frontmatter(out); err != nil || lastTaskOf(after) != last {
+		return text
+	}
+	return out
+}
+
+// lastTaskOf is the frontmatter's lastTask (0: none, or not an id).
+func lastTaskOf(front []property) int {
+	for _, p := range front {
+		if v, ok := idNumber(p.text()); ok && p.key == "lastTask" {
+			return v
+		}
+	}
+	return 0
 }
 
 // Tasks is the board: its columns (a new board's, then any the person added)
