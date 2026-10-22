@@ -23,16 +23,16 @@ studioTabs.push((() => {
     ctx.rerender();
   };
 
+  const reading = kit.latest(() => state.picked);
   const pick = async (ctx, path, line = 0) => {
     const picked = state.picked = { path, file: null };
     state.line = line;
     state.draft = null;
     ctx.rerender();
-    const r = await ctx.call("file_read", { path }).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
-    if (state.picked === picked) {
-      picked.file = r && !r.isError ? { ...(r.structuredContent || {}), image: r._meta && r._meta["jm/image"] } : { error: said(r) || "Couldn't read it." };
-      ctx.rerender();
-    }
+    const r = await reading(() => ctx.call("file_read", { path }));
+    if (!r) return;  // another file was picked meanwhile
+    picked.file = !r.isError ? { ...(r.structuredContent || {}), image: r._meta && r._meta["jm/image"] } : { error: said(r) || "Couldn't read it." };
+    ctx.rerender();
   };
 
   const search = async (ctx, text) => {

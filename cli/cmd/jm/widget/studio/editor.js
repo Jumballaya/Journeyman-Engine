@@ -28,18 +28,16 @@ studioTabs.push((() => {
     const ctx = state.ctx;
     if (document.visibilityState !== "hidden") {
       const game = forGame(ctx);
-      try {
-        const r = await ctx.call("editor_state", {});
-        const editors = r && r.structuredContent && r.structuredContent.editors;
-        if (forGame(state.ctx) === game) {  // else: asked for a game no longer shown
-          if (!Array.isArray(editors)) throw new Error((r && r.content && r.content[0] && r.content[0].text) || "no answer");
-          const before = JSON.stringify(state.editor);
-          state.editor = { editors };
-          state.error = "";
-          draftNew(ctx, game, editors);
-          if (JSON.stringify(state.editor) !== before) ctx.rerender();
-        }
-      } catch (e) { if (state.game === game) state.error = String(e && e.message || e); }
+      const r = await kit.answer(ctx.call("editor_state", {}));
+      const editors = !r.isError && r.structuredContent && r.structuredContent.editors;
+      if (forGame(state.ctx) === game && !Array.isArray(editors)) state.error = kit.said(r) || "no answer";
+      else if (forGame(state.ctx) === game) {  // else: asked for a game no longer shown
+        const before = JSON.stringify(state.editor);
+        state.editor = { editors };
+        state.error = "";
+        draftNew(ctx, game, editors);
+        if (JSON.stringify(state.editor) !== before) ctx.rerender();
+      }
     }
     setTimeout(poll, 2000);
   };
@@ -78,18 +76,16 @@ studioTabs.push((() => {
   };
 
   // The engine's picture of scene, drawn on request (it builds and runs the game headless).
+  const renderAsks = {};  // scene_render's, a channel by scene
   const render = async (ctx, scene) => {
-    const game = forGame(ctx);
+    forGame(ctx);
     state.renders[scene] = { loading: true };
     ctx.rerender();
-    let picture;
-    try {
-      const r = await ctx.call("scene_render", { scene });
-      const src = r && r._meta && r._meta["jm/image"];
-      picture = src ? { src } : { error: (r && r.content && r.content[0] && r.content[0].text) || "No picture." };
-    } catch (e) { picture = { error: String(e && e.message || e) }; }
-    if (state.game !== game) return;  // another game's picture
-    state.renders[scene] = picture;
+    const ask = renderAsks[scene] ||= kit.latest(() => state.game);  // an earlier render's picture, or another game's, is dropped
+    const r = await ask(() => ctx.call("scene_render", { scene }));
+    if (!r) return;
+    const src = !r.isError && r._meta && r._meta["jm/image"];
+    state.renders[scene] = src ? { src } : { error: kit.said(r) || "No picture." };
     ctx.rerender();
   };
 
