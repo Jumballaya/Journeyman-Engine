@@ -19,7 +19,6 @@ import (
 // $JM_GAMES, else ~/Journeyman. The open game is the server's working folder.
 func (s *mcpServer) gameTools() []mcpTool {
 	home := gamesHome()
-	gameArg := strArg("a name or path from `games` (default: the open game)")
 	return []mcpTool{
 		{Name: "games", Title: "Journeyman", Meta: studio.toolMeta("Finding your games…", "Your games", entrypoint("global")), Description: "The game open now (if any) and the person's games: the ones they opened (here or in the editor), newest first, and the games folder's (" + home + "). " +
 			"Start here when you don't know which game the person means.",
@@ -76,8 +75,8 @@ func (s *mcpServer) gameTools() []mcpTool {
 				return textResult(s.openGame(dir), false)
 			}},
 		{Name: "project_open_editor", Title: "Open a game in the editor", Meta: callableMeta("Opening the editor…", "The editor is open"), Description: "Open a game in the Journeyman editor on the person's screen (jm editor). The open game stays open here.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg}),
-			run: inGame(home, func(dir string, _ toolArgs) toolResult {
+			Annotations: writes(), InputSchema: object(map[string]any{}),
+			onGame: func(dir string, _ toolArgs) toolResult {
 				editor, err := findEditor()
 				if err == nil {
 					err = startEditor(editor, dir)
@@ -86,12 +85,12 @@ func (s *mcpServer) gameTools() []mcpTool {
 					return textResult(err.Error(), true)
 				}
 				return textResult("The editor is open on "+dir+".", false)
-			})},
+			}},
 		{Name: "project_play", Title: "Play a game", Meta: callableMeta("Starting the game…", "The game is open"), Description: "Open a game in its own window for the person to play (jm run, built first if it needs it); the call doesn't wait. " +
 			"The play is recorded: open_game it, then play_show.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg,
+			Annotations: writes(), InputSchema: object(map[string]any{
 				"fullscreen": boolArg("true: open it fullscreen, false: in a window, whatever the game and the person's saved setting say (default: as they say)")}),
-			run: inGame(home, func(dir string, a toolArgs) toolResult {
+			onGame: func(dir string, a toolArgs) toolResult {
 				var how []string
 				if on, ok := a["fullscreen"].(bool); ok {
 					how = []string{map[bool]string{true: "--fullscreen", false: "--windowed"}[on]}
@@ -101,11 +100,11 @@ func (s *mcpServer) gameTools() []mcpTool {
 				}
 				_ = projects.Remember(dir)
 				return textResult("The game is open for the person to play ("+dir+").", false)
-			})},
+			}},
 		{Name: "project_export", Title: "Export a game", Meta: callableMeta("Exporting…", "Exported"), Description: "jm export on a game (default: the open game): build it and write a standalone executable (an .app on macOS) to its dist/. " +
 			"Leave target out to let the person choose (platform, server, Mac signing) in a form, where the host shows forms.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg, "target": exportTargetArg}),
-			run: inGame(home, func(dir string, a toolArgs) toolResult {
+			Annotations: writes(), InputSchema: object(map[string]any{"target": exportTargetArg}),
+			onGame: func(dir string, a toolArgs) toolResult {
 				args := exportArgs(a)
 				if a.str("target") == "" && !a.flag("server") {
 					form, outcome := s.exportForm(dir)
@@ -117,25 +116,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 					}
 				}
 				return textResult(jmIn(a.call(), dir, args...))
-			})},
-	}
-}
-
-// inGame runs a tool on the game its "game" argument names, else the open one.
-func inGame(home string, run func(dir string, a toolArgs) toolResult) func(toolArgs) toolResult {
-	return func(a toolArgs) toolResult {
-		game := a.str("game")
-		if game == "" {
-			if !exists(archive.ManifestEntryKey) {
-				return textResult("No game open: name one from games.", true)
-			}
-			game, _ = os.Getwd()
-		}
-		dir, err := findGame(home, game)
-		if err != nil {
-			return textResult(err.Error(), true)
-		}
-		return run(dir, a)
+			}},
 	}
 }
 
@@ -154,7 +135,7 @@ func gamesHome() string {
 // chat) works on the client's root that's a game, else the game opened last
 // (the shared list), as if opened here.
 func (s *mcpServer) openRecentIfNone() {
-	if exists(archive.ManifestEntryKey) {
+	if s.open != "" {
 		return
 	}
 	if game := s.rootGame(); game != "" {
@@ -162,9 +143,7 @@ func (s *mcpServer) openRecentIfNone() {
 		return
 	}
 	for _, p := range projects.List("") {
-		if p.Opened > 0 && !p.Missing {
-			s.stopDriver()       // whatever ran in the game that's gone
-			_ = os.Chdir(p.Path) // not Remember: the list stays as the person left it
+		if p.Opened > 0 && !p.Missing && s.setOpen(p.Path) == nil { // not Remember: the list stays as the person left it
 			s.byRecent = true
 			return
 		}
@@ -172,15 +151,25 @@ func (s *mcpServer) openRecentIfNone() {
 }
 
 func (s *mcpServer) openGame(dir string) string {
-	if cwd, _ := os.Getwd(); evalOrSelf(cwd) != evalOrSelf(dir) {
-		s.stopDriver() // another game's; opening the open one again keeps its game running
-	}
-	if err := os.Chdir(dir); err != nil {
+	if err := s.setOpen(dir); err != nil {
 		return err.Error()
 	}
 	s.byRecent = false
 	_ = projects.Remember(dir) // the person's list of games: a convenience, so best effort
 	return "Opened " + dir + ". Read its AGENTS.md first." + keepInMind(dir) + planned(dir)
+}
+
+// setOpen makes dir the game calls work on when they name none, stopping the
+// driven game if it's another game's. Also the working folder, while some tools still read it.
+func (s *mcpServer) setOpen(dir string) error {
+	if evalOrSelf(s.open) != evalOrSelf(dir) {
+		s.stopDriver()
+	}
+	if err := os.Chdir(dir); err != nil {
+		return err
+	}
+	s.open = dir
+	return nil
 }
 
 // newGame makes the game c names in home: an empty one (jm init) or a copy of
@@ -248,9 +237,9 @@ func findGame(home, game string) (string, error) {
 func (s *mcpServer) listGames(home string) toolResult {
 	var b strings.Builder
 	open := ""
-	if cwd, err := os.Getwd(); err == nil && exists(archive.ManifestEntryKey) {
-		open = evalOrSelf(cwd)
-		fmt.Fprintf(&b, "Open: %s (%s)%s%s\n", gameName(cwd), open, keepInMind(cwd), planned(cwd)) // opened without open_game (MCP started in it): its context here
+	if s.open != "" {
+		open = evalOrSelf(s.open)
+		fmt.Fprintf(&b, "Open: %s (%s)%s%s\n", gameName(s.open), open, keepInMind(s.open), planned(s.open)) // opened without open_game (MCP started in it): its context here
 	} else {
 		b.WriteString("No game open: new_game or open_game.\n")
 	}

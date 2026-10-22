@@ -105,7 +105,6 @@ func publicAddressOnly(_, address string, _ syscall.RawConn) error {
 }
 
 func (s *mcpServer) assetTools() []mcpTool {
-	home := gamesHome()
 	fileSchema := map[string]any{"type": "object", "description": "the file the person attached (the host fills it in)",
 		"properties": map[string]any{"download_url": strArg("its https link"), "file_id": strArg("the host's id for it"),
 			"mime_type": strArg("its type"), "file_name": strArg("its name")},
@@ -118,12 +117,12 @@ func (s *mcpServer) assetTools() []mcpTool {
 				fmt.Sprintf("Up to %d MB. Answers the saved path: put it in a scene or prefab next. ", assetLimit>>20) +
 				fmt.Sprintf("data instead of file: the bytes, base64, up to %d MB, with path (Studio sends them where the host takes no uploads).", inlineLimit>>20),
 			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": true}, // fetches from the host; replace overwrites
-			InputSchema: object(map[string]any{"game": gameOfTool, "file": fileSchema,
+			InputSchema: object(map[string]any{"file": fileSchema,
 				"data":    strArg("the file's bytes, base64, instead of file (needs path)"),
 				"path":    strArg("where to save it, under assets/, e.g. assets/sprites/hero.png"),
 				"replace": boolArg("save over a file already there")}),
 			OutputSchema: object(map[string]any{"path": typed("string"), "size": typed("integer"), "replaced": typed("boolean")}, "path", "size", "replaced"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			onGame: func(root string, a toolArgs) toolResult {
 				file, _ := a["file"].(map[string]any)
 				link, _ := file["download_url"].(string)
 				name, _ := file["file_name"].(string)
@@ -140,7 +139,7 @@ func (s *mcpServer) assetTools() []mcpTool {
 				}
 				return toolResult{Text: fmt.Sprintf("Saved %s (%s).", saved, sizeText(size)),
 					Structured: map[string]any{"path": saved, "size": size, "replaced": replaced}}
-			})},
+			}},
 	}
 }
 

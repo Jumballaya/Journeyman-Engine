@@ -13,14 +13,13 @@ import (
 // The game's memory (design/) as tools: what the agent reads before a change
 // and adds to after one, so the next conversation knows why the game is so.
 func (s *mcpServer) memoryTools() []mcpTool {
-	home := gamesHome() // now: the working folder moves with the open game
 	noteArg := strArg(`a note's title, e.g. "Pillars" (memory lists them)`)
 	return []mcpTool{
 		{Name: "memory", Meta: callableMeta("", ""), Title: "The game's design notes", Description: "Read before you change how the game plays: the game's design notes (design/: Pitch, Pillars, Levels, Systems, Decisions, Notes), " +
 			"or one note with what it links and what links it. [[Note]] links a note; game files are named in backticks.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "note": strArg(`one note to read, e.g. "Pillars" (default: the list)`),
+			Annotations: readOnly(), InputSchema: object(map[string]any{"note": strArg(`one note to read, e.g. "Pillars" (default: the list)`),
 				"kind": strArg(`only the dossiers of a kind, e.g. "character", with their properties`)}),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			onGame: func(root string, a toolArgs) toolResult {
 				if a.str("note") != "" {
 					n, ok := memory.Find(root, a.str("note"))
 					if !ok {
@@ -57,20 +56,20 @@ func (s *mcpServer) memoryTools() []mcpTool {
 					lines = append(lines, fmt.Sprintf("  %s (design/%s/): %s", k.Name, k.Folder, strings.Join(k.Props, ", ")))
 				}
 				return toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"notes": notes, "kinds": kinds}}
-			})},
+			}},
 		{Name: "memory_search", Meta: callableMeta("", ""), Title: "Search the design notes", Description: "Search the design notes and dossiers, best first, a hit per note with its best line (jm memory search). " +
 			`Words match in any form ("jumps" finds "jump"); "a phrase" as written; field:value in one field: type:character, title:mara, ` +
 			"or a property (faction:dorne, region:ashvale); +word must be there, -word mustn't.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "text": strArg(`what to find, e.g. "type:location region:ashvale" or "floaty jump"`)}, "text"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			Annotations: readOnly(), InputSchema: object(map[string]any{"text": strArg(`what to find, e.g. "type:location region:ashvale" or "floaty jump"`)}, "text"),
+			onGame: func(root string, a toolArgs) toolResult {
 				return jsonResult(map[string]any{"hits": memory.Search(root, a.str("text"))})
-			})},
+			}},
 		{Name: "memory_note", Title: "Note it in the design notes", Meta: callableMeta("Noting…", "Noted"),
 			Description: "Add an observation to a design note (jm memory note): what the person said about how it feels, a playtest finding, an idea. " +
 				"Notes is the default; a note of a new name is made. Link notes with [[Note]].",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "text": strArg("one line"), "note": noteArg,
+			Annotations: writes(), InputSchema: object(map[string]any{"text": strArg("one line"), "note": noteArg,
 				"category": strArg("what kind, e.g. feel, idea, bug, playtest, pillar (default note)")}, "text"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			onGame: func(root string, a toolArgs) toolResult {
 				note := a.str("note")
 				if note == "" {
 					note = "Notes"
@@ -80,19 +79,19 @@ func (s *mcpServer) memoryTools() []mcpTool {
 					return textResult(err.Error(), true)
 				}
 				return jsonResult(map[string]any{"ok": true, "note": n.Title, "path": n.Path})
-			})},
+			}},
 		{Name: "dossier_new", Title: "Write a dossier", Meta: callableMeta("Writing…", "Written"),
 			Description: "Start a dossier of the game's world: a character, item, location, faction, quest, lore entry, or a kind of the game's own " +
 				"(memory lists the kinds and their properties). It's a note in design/<Folder>/ from the kind's template, which Obsidian shows as a table. " +
 				`Link what it relates to: props like {"faction": "[[House Dorne]]", "home": "[[Irongate]]"}, and [[links]] in the summary. ` +
 				"Read what it relates to first (memory with note) so it agrees with them.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool,
+			Annotations: writes(), InputSchema: object(map[string]any{
 				"kind":    strArg(`e.g. "character", "location" (memory lists the kinds)`),
 				"name":    strArg(`its title, e.g. "Mara Dorne"`),
 				"summary": strArg("a line or two: who or what it is; [[links]] welcome"),
 				"props":   map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "its properties, as text"}},
 				"kind", "name"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			onGame: func(root string, a toolArgs) toolResult {
 				props := map[string]string{}
 				if given, ok := a["props"].(map[string]any); ok {
 					for key, v := range given {
@@ -104,33 +103,33 @@ func (s *mcpServer) memoryTools() []mcpTool {
 					return textResult(err.Error(), true)
 				}
 				return toolResult{Text: n.Text, Structured: map[string]any{"ok": true, "note": n, "path": n.Path, "obsidian": memory.ObsidianURL(root, n)}}
-			})},
+			}},
 		{Name: "onboard", Title: "Plan the game", Meta: callableMeta("", ""),
 			Description: "Plan a new game with the person (jm memory onboard), a step at a time: its pitch, feel, pillars, scope, world, " +
 				"characters, art and first level, and how the person likes to work. Gives each step, done or not as the notes say, " +
 				"and the next one: ask the person its question (with a concrete suggestion they can say yes to), wait, keep the answer " +
 				"as it says, then call onboard again for the next. skip a step the game has no need of (world, characters, you). " +
 				"Call it after new_game, and when a game's design notes are thin.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "skip": strArg("a step the game doesn't need: world, characters or you")}),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			Annotations: writes(), InputSchema: object(map[string]any{"skip": strArg("a step the game doesn't need: world, characters or you")}),
+			onGame: func(root string, a toolArgs) toolResult {
 				if skip := a.str("skip"); skip != "" {
 					if _, err := memory.Skip(root, skip); err != nil {
 						return textResult(err.Error(), true)
 					}
 				}
 				return onboarding(root)
-			})},
+			}},
 		{Name: "remember", Title: "Remember this", Meta: callableMeta("Remembering…", "Remembered"),
 			Description: "Keep a fact in mind for every conversation (jm memory remember): the game's canon (\"the Dornes were exiled from Varn\"), " +
 				"a rule, a constraint, what was tried and why it failed (scope game, in design/Memory.md); or the person's preference for all their games " +
 				"(scope you, ~/.jm/memory.md). One fact a call, in a sentence. The same again is kept once; when its answer lists similar facts, " +
 				"forget one that's now wrong, or remember with replaces (its id) to update it. Opening the game reads them back. " +
 				"What came up in play goes in memory_note; a settled design question in memory_decide.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "text": strArg("the fact, a sentence"),
+			Annotations: writes(), InputSchema: object(map[string]any{"text": strArg("the fact, a sentence"),
 				"category": strArg("canon, rule, constraint, preference, style, tried... (default fact)"),
 				"scope":    map[string]any{"type": "string", "enum": []string{"game", "you"}, "description": "game (default) or you: the person's, for every game"},
 				"replaces": strArg("the id of the fact this updates (it keeps the id)")}, "text"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			onGame: func(root string, a toolArgs) toolResult {
 				f, similar, err := factsOf(root, a.str("scope")).Remember(a.str("category"), a.str("text"), a.str("replaces"))
 				if err != nil {
 					return textResult(err.Error(), true)
@@ -143,39 +142,39 @@ func (s *mcpServer) memoryTools() []mcpTool {
 					similar = []memory.Fact{}
 				}
 				return toolResult{Text: text, Structured: map[string]any{"ok": true, "fact": f, "similar": similar}}
-			})},
+			}},
 		{Name: "recall", Meta: callableMeta("", ""), Title: "What's remembered",
 			Description: "The facts kept in mind (jm memory recall), the person's and the game's: those a query is about, best first, or all of them.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "query": strArg(`e.g. "Dorne exile" (default: all)`)}),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			Annotations: readOnly(), InputSchema: object(map[string]any{"query": strArg(`e.g. "Dorne exile" (default: all)`)}),
+			onGame: func(root string, a toolArgs) toolResult {
 				facts := memory.Recall(a.str("query"), factsOf(root, "you"), factsOf(root, "game"))
 				if len(facts) == 0 {
 					return toolResult{Text: "Nothing remembered yet.", Structured: map[string]any{"facts": []memory.Fact{}}}
 				}
 				return toolResult{Text: factLines(facts), Structured: map[string]any{"facts": facts}}
-			})},
+			}},
 		{Name: "forget", Title: "Forget a fact", Meta: callableMeta("Forgetting…", "Forgotten"),
 			Description: "Forget a remembered fact that's no longer so (jm memory forget), by its id (recall lists them).",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "id": strArg(`e.g. "f3a9c"`),
+			Annotations: writes(), InputSchema: object(map[string]any{"id": strArg(`e.g. "f3a9c"`),
 				"scope": map[string]any{"type": "string", "enum": []string{"game", "you"}, "description": "where it's kept (default game)"}}, "id"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			onGame: func(root string, a toolArgs) toolResult {
 				f, err := factsOf(root, a.str("scope")).Forget(a.str("id"))
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
 				return toolResult{Text: fmt.Sprintf("Forgot %s: %s", f.ID, f.Text), Structured: map[string]any{"ok": true, "fact": f}}
-			})},
+			}},
 		{Name: "memory_decide", Title: "Record a decision", Meta: callableMeta("Recording…", "Recorded"),
 			Description: "Record a design decision and why, once you and the person settle one (jm memory decide): its own note in design/decisions, listed in Decisions.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "title": strArg(`what was decided, e.g. "Jumps are variable height"`),
+			Annotations: writes(), InputSchema: object(map[string]any{"title": strArg(`what was decided, e.g. "Jumps are variable height"`),
 				"why": strArg("the reasons; [[links]] to the notes it serves")}, "title", "why"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			onGame: func(root string, a toolArgs) toolResult {
 				n, err := memory.Decide(root, a.str("title"), a.str("why"))
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
 				return jsonResult(map[string]any{"ok": true, "note": n.Title, "path": n.Path})
-			})},
+			}},
 	}
 }
 

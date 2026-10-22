@@ -213,3 +213,64 @@ func TestOpenGameTakesAListedNameOrAnAbsolutePath(t *testing.T) {
 		}
 	}
 }
+
+// Every tool says which game it works on: onGame gives it the call's game, or
+// it's listed here. A new tool that's on neither list fails this.
+func TestEveryToolSaysWhichGameItWorksOn(t *testing.T) {
+	noGame := map[string]bool{ // they choose a game, or need none
+		"games": true, "games_find": true, "new_game": true, "open_game": true, "doctor": true, "schema": true,
+		"companions": true, "studio": true, "playbook": true,
+	}
+	// Design debt: these still find their game themselves (their own "game", or the
+	// working folder). Each moves to onGame (todos: Design debt, G2–G6), then off this list.
+	ownWay := map[string]bool{
+		"build": true, "test": true, "golden": true, "generate": true, "fmt": true, "export": true, "session": true,
+		"drive_start": true, "drive": true, "drive_frame": true, "drive_profile": true, "drive_stop": true,
+		"play_show": true, "play_frame": true, "play_state": true, "play_inputs": true, "play_verify": true, "play_resume": true,
+		"play_live": true, "game_log": true, "scene_view": true, "scene_render": true, "file_view": true,
+		"mention_search": true, "settings_read": true, "settings_update": true, "pick": true,
+	}
+	for _, tool := range newMCPServer().tools {
+		listed := noGame[tool.Name] || ownWay[tool.Name]
+		switch {
+		case tool.onGame != nil && listed:
+			t.Errorf("%s works on the call's game now: take it off the list", tool.Name)
+		case tool.onGame == nil && !listed:
+			t.Errorf("%s: give it onGame (it works on a game), or list it", tool.Name)
+		}
+	}
+}
+
+// A call that names a game works on it, whatever's open; one that names none
+// works on the open game; a game that isn't one fails, never falls back.
+func TestAToolWorksOnTheGameTheCallNames(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"a", "b"} {
+		filesGame(t, filepath.Join(home, g))
+		os.WriteFile(filepath.Join(home, g, "which.txt"), []byte(g), 0o644)
+	}
+	t.Chdir(filepath.Join(home, "b"))
+	s := newMCPServer()
+	read := func(args toolArgs) toolResult {
+		args["path"] = "which.txt"
+		return toolOf(t, s, "file_read").run(args)
+	}
+	if got := read(toolArgs{"game": "a"}); got.Failed || !strings.Contains(got.Text, "a") {
+		t.Errorf("named a: %+v", got)
+	}
+	if got := read(toolArgs{}); got.Failed || !strings.Contains(got.Text, "b") {
+		t.Errorf("named none (b open): %+v", got)
+	}
+	for _, bad := range []any{"nope", 3} {
+		if got := read(toolArgs{"game": bad}); !got.Failed {
+			t.Errorf("named %v: worked on %q", bad, got.Text)
+		}
+	}
+	props := func(name string) map[string]any {
+		return toolOf(t, s, name).InputSchema["properties"].(map[string]any)
+	}
+	if _, ok := props("vcs_status")["game"]; !ok {
+		t.Error("a tool on a game doesn't say it takes game")
+	}
+}

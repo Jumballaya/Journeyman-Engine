@@ -14,23 +14,22 @@ import (
 // Project intelligence: the game's files and how they link (game_index), and
 // whether it's healthy (health: doctor, build, tests, goldens in one answer).
 func (s *mcpServer) intelTools() []mcpTool {
-	home := gamesHome()
 	return []mcpTool{
 		{Name: "game_index", Title: "The game's files and how they link",
 			Description: "The open game at a glance: every scene, prefab, script, asset, map, UI file, design doc and test, " +
 				"with what each uses and what uses it (\"used by\"), and the files nothing uses. " +
 				"With path: that file's links (and a picture of an image). Call it before changing or removing a shared file.",
 			Annotations: readOnly(), Meta: callableMeta("", ""),
-			InputSchema: object(map[string]any{"game": gameOfTool, "path": strArg("a file of the game, e.g. assets/textures/ship.png (default: the whole game)")}),
-			run:         inRoot(home, gameIndex)},
+			InputSchema: object(map[string]any{"path": strArg("a file of the game, e.g. assets/textures/ship.png (default: the whole game)")}),
+			onGame:      gameIndex},
 		{Name: "health", Title: "Is the game healthy?",
 			Description: "Checks the open game: doctor (setup), build (scripts and content), tests (tests/*.spec.ts), goldens (frames) " +
 				"world (what its design notes state twice and differently: a road of two lengths, a place inside itself) " +
 				"and art (the sprites, sheets and tilesets against design/Art.md's palette, sizes and animation sets; each dossier's sprite planned, drawn, exported or done), " +
 				"each with its problems and where they are. checks picks some (build and goldens take a while).",
 			Annotations: writes(), Meta: callableMeta("Checking the game…", "Checked"),
-			InputSchema: object(map[string]any{"game": gameOfTool, "checks": listArg(`some of "doctor", "build", "tests", "goldens", "world", "art" (default: all)`)}),
-			run:         inRoot(home, health)},
+			InputSchema: object(map[string]any{"checks": listArg(`some of "doctor", "build", "tests", "goldens", "world", "art" (default: all)`)}),
+			onGame:      health},
 	}
 }
 

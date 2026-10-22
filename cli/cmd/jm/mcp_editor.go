@@ -12,27 +12,26 @@ import (
 // selected, the things they point out to their agent there (Edit > Point Out
 // to Your Agent), and the agent showing them things in it.
 func (s *mcpServer) editorTools() []mcpTool {
-	home := gamesHome()
 	return []mcpTool{
 		{Name: "editor_state", Title: "What the person has open in the editor",
 			Description: "The editor running on the open game: the scene the person has open, what they selected, files with unsaved edits, " +
 				"and the notes they pointed out to you there (Edit > Point Out to Your Agent: a note about the selection). " +
 				"\"This\" and \"here\" usually mean their selection.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool}), Meta: callableMeta("", ""),
-			run: inRoot(home, func(root string, _ toolArgs) toolResult {
+			Annotations: readOnly(), InputSchema: object(map[string]any{}), Meta: callableMeta("", ""),
+			onGame: func(root string, _ toolArgs) toolResult {
 				live := liveEditors(root)
 				if live == nil {
 					live = []editorSession{}
 				}
 				return toolResult{Text: describeEditors(live), Structured: map[string]any{"editors": live}}
-			})},
+			}},
 		{Name: "editor_show", Title: "Show the person something in the editor",
 			Description: "Show the person something in the editor on their screen: open a scene, select and frame an entity (by name), with a note they see. " +
 				"Opens the editor first when it isn't running. It changes no file.",
 			Annotations: writes(), Meta: callableMeta("Showing it in the editor…", "Shown in the editor"),
-			InputSchema: object(map[string]any{"game": gameOfTool, "scene": strArg("a scene of the open game, e.g. scenes/main.scene.json (default: the one open there)"),
+			InputSchema: object(map[string]any{"scene": strArg("a scene of the open game, e.g. scenes/main.scene.json (default: the one open there)"),
 				"entity": strArg("an entity's name in that scene: it's selected and framed"), "note": strArg("what to tell the person about it, one line")}),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			onGame: func(root string, a toolArgs) toolResult {
 				scene, entity, note := a.str("scene"), a.str("entity"), a.str("note")
 				if scene == "" && entity == "" && note == "" {
 					return textResult("Say what to show: scene, entity or note.", true)
@@ -55,7 +54,7 @@ func (s *mcpServer) editorTools() []mcpTool {
 					return textResult(err.Error(), true)
 				}
 				return textResult("Shown in the editor. What the person says about it comes to you; editor_state has their selection.", false)
-			})},
+			}},
 	}
 }
 
