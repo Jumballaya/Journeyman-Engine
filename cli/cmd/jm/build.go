@@ -278,7 +278,7 @@ func writeBuiltPNG(rel string, img image.Image) error {
 func withNormalMaps(assets []string) []string {
 	out := slices.Clone(assets)
 	for _, a := range assets {
-		if f, _ := formats.Of(a); f.Archive != "image" || atlas.IsNormalMap(a) {
+		if f, _ := formats.Of(strings.ToLower(a)); f.Archive != "image" || atlas.IsNormalMap(a) {
 			continue
 		}
 		if n := atlas.NormalPath(a); !slices.Contains(out, n) && fileExists(n) {

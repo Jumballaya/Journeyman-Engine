@@ -215,21 +215,13 @@ func preferenceValue(key string) string {
 	return v
 }
 
-// pickKinds are the files pick offers, by kind.
-var pickKinds = func() map[string][]string {
-	kinds := map[string][]string{}
-	for _, f := range formats.All(func(f formats.Format) bool { return f.Pick != "" }) {
-		kinds[f.Pick] = append(kinds[f.Pick], f.Suffix)
-	}
-	return kinds
-}()
-
 func pickTool(s *mcpServer) mcpTool {
 	kinds := []string{}
-	for kind := range pickKinds {
-		kinds = append(kinds, kind)
+	for _, f := range formats.All(func(f formats.Format) bool { return f.Pick != "" }) {
+		kinds = append(kinds, f.Pick)
 	}
 	slices.Sort(kinds)
+	kinds = slices.Compact(kinds)
 	return mcpTool{Name: "pick", Title: "Ask the person to pick", Meta: callableMeta("", ""),
 		Description: "Ask the person to point at files of a game (scenes, prefabs, textures, scripts, sounds, UI, maps) in a picker with previews, " +
 			"when \"this one\" or \"that level\" is unclear. Gives the picked files' paths. Hosts without forms: lists the choices to ask about in chat.",
@@ -239,13 +231,11 @@ func pickTool(s *mcpServer) mcpTool {
 			"many":    boolArg("let them pick several"),
 		}, "kind"),
 		onGame: func(game string, a toolArgs) toolResult {
-			suffixes, ok := pickKinds[a.str("kind")]
-			if !ok {
+			kind := a.str("kind")
+			if !slices.Contains(kinds, kind) {
 				return textResult("kind: one of "+strings.Join(kinds, ", "), true)
 			}
-			files := gameFiles(game, func(rel string) bool {
-				return slices.ContainsFunc(suffixes, func(suffix string) bool { return strings.HasSuffix(rel, suffix) })
-			})
+			files := gameFiles(game, func(rel string) bool { f, _ := formats.Of(rel); return f.Pick == kind }) // a .spec.ts isn't a script
 			if len(files) == 0 {
 				return textResult("The game has no "+a.str("kind")+" files.", false)
 			}

@@ -142,6 +142,6 @@ func filesText(list []projectEntry) string {
 
 // imageFile says whether path is an image the engine reads (a PNG or JPEG).
 func imageFile(path string) bool {
-	f, _ := formats.Of(path)
+	f, _ := formats.Of(strings.ToLower(path))
 	return f.Archive == "image"
 }

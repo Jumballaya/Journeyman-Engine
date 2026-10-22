@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
@@ -72,8 +73,8 @@ func ReadBuild(dir string) Build {
 // game plays: scripts, data, and UI (its layout decides what a click hits).
 // Images, sounds and shaders only change how it looks or sounds.
 func playsDifferently(path string) bool {
-	f, ok := formats.Of(path)
-	return ok && !f.Look
+	f, _ := formats.Of(strings.ToLower(path))
+	return f.Plays
 }
 
 func short(sum []byte) string { return hex.EncodeToString(sum)[:16] }

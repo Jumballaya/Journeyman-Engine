@@ -41,7 +41,7 @@ const (
 
 // uploadFormat is the format asset_add takes rel as (any case), false for none.
 func uploadFormat(rel string) (formats.Format, bool) {
-	f, ok := formats.Of(rel)
+	f, ok := formats.Of(strings.ToLower(rel))
 	return f, ok && f.Upload
 }
 
@@ -287,12 +287,13 @@ func checkAsset(ext string, data []byte) error {
 	return nil
 }
 
-// assetExtensions are the endings asset_add takes, joined by sep.
+// assetExtensions are the file extensions asset_add takes (.json for every
+// JSON of the game's), joined by sep.
 func assetExtensions(sep string) string {
 	list := []string{}
 	for _, f := range formats.All(func(f formats.Format) bool { return f.Upload }) {
-		list = append(list, f.Suffix)
+		list = append(list, filepath.Ext(f.Suffix))
 	}
 	slices.Sort(list)
-	return strings.Join(list, sep)
+	return strings.Join(slices.Compact(list), sep)
 }

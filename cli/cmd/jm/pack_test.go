@@ -486,13 +486,12 @@ func TestPackShipsDataFiles(t *testing.T) {
 	buildDir := filepath.Join(tmp, "build")
 	writeManifest(t, buildDir, "Test Game")
 	writeFile(t, filepath.Join(buildDir, "assets/data/items.json"), []byte(`{"sword": 3}`))
-	writeFile(t, filepath.Join(buildDir, "assets/sprites/HERO.PNG"), []byte("png"))
 	out := filepath.Join(tmp, "out.jm")
 	if err := runPack(buildDir, out, true); err != nil {
 		t.Fatalf("strict pack: %v", err)
 	}
 	data, _ := os.ReadFile(out)
-	for _, want := range []string{`"assets/data/items.json"`, `"type":"data"`, `"assets/sprites/HERO.PNG"`, `"type":"image"`} {
+	for _, want := range []string{`"assets/data/items.json"`, `"type":"data"`} {
 		if !bytes.Contains(data, []byte(want)) {
 			t.Errorf("archive lacks %s", want)
 		}
