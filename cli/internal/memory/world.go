@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"maps"
+	"path"
 	"regexp"
 	"slices"
 	"sort"
@@ -296,7 +297,8 @@ func (w World) named(name string) []Note { return named(w.Notes, name) }
 
 // linkFor is the shortest name a [[link]] written in a note finds n alone by.
 func (w World) linkFor(n Note) (string, bool) {
-	for _, name := range shortNames(n) {
+	inVault := strings.TrimPrefix(n.Path, Dir+"/") // with its .md: Foo.md.md isn't Foo.md's
+	for _, name := range append(shortNames(n), path.Base(inVault), inVault) {
 		if w.writesLink(name, n) {
 			return name, true
 		}

@@ -160,6 +160,18 @@ func TestNotesOfOneTitleAreTwoPlaces(t *testing.T) {
 	}
 }
 
+// A file named Foo.md.md is linked by its name with .md, Foo.md being another.
+func TestARelationToAFileNamedWithItsExtension(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	os.WriteFile(filepath.Join(root, Dir, "Foo.md"), []byte("# Foo\n"), 0o644)
+	os.WriteFile(filepath.Join(root, Dir, "Foo.md.md"), []byte("# Foo.md\n"), 0o644)
+	n, err := Relate(root, "Pillars", Relation{Type: "uses", Target: "design/Foo.md.md"})
+	if err != nil || !slices.ContainsFunc(n.Relations, func(r Relation) bool { return r.Target == "Foo.md.md" }) {
+		t.Errorf("%v %+v", err, n.Relations)
+	}
+}
+
 // A link two notes answer by link rules is a conflict, though a tool's ref of
 // the same text is one note's path (design/Harbor.md).
 func TestALinkTwoNotesAnswerIsAConflict(t *testing.T) {
