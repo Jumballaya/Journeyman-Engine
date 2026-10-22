@@ -70,3 +70,18 @@ func TestASourceIsReadAsTheBuildCutsIt(t *testing.T) {
 		}
 	}
 }
+
+func TestASourceIsFoundWhereverItWasWritten(t *testing.T) {
+	game := files{"art/hero.png": pngOf(2, 2), "art/hero.json": sheetOf("hero.png", 1), "art/hero_1.png": pngOf(3, 3),
+		"art/wide.json": sheetOf("hero.png", 3)}
+	config := AtlasConfig{Sources: []string{`art\hero.json`, "art/hero_1.png"}} // written on Windows
+	if s := SourceOf(`art\hero.json`); s.Name != "hero" || !s.Sheet {
+		t.Errorf("SourceOf a Windows path = %+v", s)
+	}
+	if img, ok := config.Region(game.read, "hero_1", 16); !ok || img.Bounds().Dx() != 3 {
+		t.Error("hero_1 is the picture's: the one-frame sheet hero has no frame 1")
+	}
+	if _, _, err := (AtlasConfig{Sources: []string{"art/wide.json"}}).Read(game.read, 0); err == nil || !strings.Contains(err.Error(), "art/wide.json") {
+		t.Errorf("a frame outside its sheet names the sheet: %v", err)
+	}
+}

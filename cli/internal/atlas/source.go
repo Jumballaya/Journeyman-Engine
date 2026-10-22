@@ -24,8 +24,10 @@ type Source struct {
 	Sheet bool
 }
 
-// SourceOf is the source the atlas path names.
+// SourceOf is the source the atlas path names; a backslash separates its
+// parts, as on Windows (where the atlas was written isn't known).
 func SourceOf(p string) Source {
+	p = strings.ReplaceAll(p, `\`, "/")
 	base := path.Base(p)
 	return Source{Path: p, Name: strings.TrimSuffix(base, path.Ext(base)), Sheet: strings.EqualFold(path.Ext(base), ".json")}
 }
@@ -81,34 +83,45 @@ func (s Source) Read(read ReadFunc, side int) ([]SourceImage, map[string]Clip, e
 	if err != nil {
 		return nil, nil, err
 	}
-	return sheet.Cut(s.Name, img, normal)
+	regions, clips, err := sheet.Cut(s.Name, img, normal)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%q: %w", s.Path, err)
+	}
+	return regions, clips, nil
 }
 
 // Region is region as config's sources make it (a PNG's whole picture, or a
 // sheet's frame), no side over side pixels; false when none makes it.
 func (c AtlasConfig) Region(read ReadFunc, region string, side int) (image.Image, bool) {
 	for _, p := range c.Sources {
-		s := SourceOf(p)
-		frame, ok := s.frame(region)
-		if !ok {
-			continue
+		if img := SourceOf(p).region(read, region, side); img != nil {
+			return img, true
 		}
-		if !s.Sheet {
-			img, _, err := readPicture(read, s.Path, side, false)
-			return img, err == nil
-		}
-		sheet, picture, err := s.sheet(read)
-		if err != nil {
-			return nil, false
-		}
-		img, _, err := readPicture(read, picture, side, false)
-		if err != nil {
-			return nil, false
-		}
-		f, err := sheet.Frame(frame, img, side)
-		return f, err == nil
 	}
 	return nil, false
+}
+
+// region is region as s makes it; nil when it doesn't (hero_1 of a one-frame
+// sheet hero.json is another source's) or can't.
+func (s Source) region(read ReadFunc, region string, side int) image.Image {
+	frame, ok := s.frame(region)
+	if !ok {
+		return nil
+	}
+	if !s.Sheet {
+		img, _, _ := readPicture(read, s.Path, side, false)
+		return img
+	}
+	sheet, picture, err := s.sheet(read)
+	if err != nil {
+		return nil
+	}
+	img, _, err := readPicture(read, picture, side, false)
+	if err != nil {
+		return nil
+	}
+	f, _ := sheet.Frame(frame, img, side)
+	return f
 }
 
 // frame is which of its frames makes region (0 for a PNG's one); false when
