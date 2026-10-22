@@ -16,7 +16,7 @@ import (
 
 // An agent app may start jm mcp anywhere (Claude Desktop: no folder at all),
 // so the server can make and open games itself. They live in the games folder:
-// $JM_GAMES, else ~/Journeyman. The open game is the server's working folder.
+// $JM_GAMES, else ~/Journeyman. The open game is s.open (setOpen).
 func (s *mcpServer) gameTools() []mcpTool {
 	home := gamesHome()
 	return []mcpTool{

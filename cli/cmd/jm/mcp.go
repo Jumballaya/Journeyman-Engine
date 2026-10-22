@@ -227,6 +227,9 @@ func newMCPServer() *mcpServer {
 		if _, entry := tool.Meta["openai/ui"]; entry { // opened from the host's sidebar or tabs: jm's mark there
 			server.tools[i].Icons = serverIcons()
 		}
+		if (tool.run == nil) == (tool.onGame == nil) {
+			panic("tool " + tool.Name + ": give run or onGame, one of them")
+		}
 		if tool.onGame != nil {
 			server.tools[i].run = func(a toolArgs) toolResult { _, run := server.prepare(tool, a); return run() }
 			props, _ := tool.InputSchema["properties"].(map[string]any)
