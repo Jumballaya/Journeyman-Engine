@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"io"
 	"net/url"
 	"os"
@@ -178,6 +179,9 @@ type mcpTool struct {
 	// Host extras: a ChatGPT app's widget (openai/outputTemplate) and its kin.
 	Meta map[string]any `json:"_meta,omitempty"`
 	run  func(args toolArgs) toolResult
+	// A tool that works on a game gives onGame instead of run: it gets the game's
+	// root (the call's "game", else the open game) and the "game" argument is added.
+	onGame func(root string, a toolArgs) toolResult
 }
 
 // toolResult is a tool's answer: text (and images) for the model, structured
@@ -223,6 +227,21 @@ func newMCPServer() *mcpServer {
 		if _, entry := tool.Meta["openai/ui"]; entry { // opened from the host's sidebar or tabs: jm's mark there
 			server.tools[i].Icons = serverIcons()
 		}
+		if (tool.run == nil) == (tool.onGame == nil) {
+			panic("tool " + tool.Name + ": give run or onGame, one of them")
+		}
+		if tool.onGame != nil {
+			server.tools[i].run = func(a toolArgs) toolResult { _, run := server.prepare(tool, a); return run() }
+			props, _ := tool.InputSchema["properties"].(map[string]any)
+			if props == nil {
+				props = map[string]any{}
+				tool.InputSchema["properties"] = props
+			}
+			props["game"] = gameOfTool
+		}
+	}
+	if cwd, err := os.Getwd(); err == nil && exists(archive.ManifestEntryKey) { // started in a game (or --dir)
+		server.open = evalOrSelf(cwd)
 	}
 	return server
 }
@@ -291,6 +310,7 @@ type mcpServer struct {
 	home      string         // the games folder, absolute: as the tools have it (the working folder moves)
 	rootsWork sync.WaitGroup // roots answers being acted on
 	byRecent  bool           // the open game is only the one opened last: the client's root beats it
+	open      string         // the game calls work on when they name none ("": none); only setOpen changes it
 }
 
 func (s *mcpServer) answer(data []byte) {
@@ -526,8 +546,8 @@ func (s *mcpServer) callTool(ctx context.Context, params json.RawMessage, round 
 			s.calls.Lock()
 			defer s.calls.Unlock()
 			s.openRecentIfNone()
+			game, run := s.prepare(tool, call.Arguments)
 			if round != nil { // the game it runs in, now it's settled
-				game, _ := os.Getwd()
 				if err := round.bind(game); err != nil {
 					return nil, &rpcError{Code: -32602, Message: err.Error()}
 				}
@@ -540,12 +560,25 @@ func (s *mcpServer) callTool(ctx context.Context, params json.RawMessage, round 
 			outer := s.call // a form's wait can run a call inside this one
 			s.round, s.call = round, c
 			defer func() { s.round, s.call = nil, outer }() // before the unlock
-			game, _ := os.Getwd()
 			defer c.followEngineLog(game)()
-			return tool.run(call.Arguments).reply(), nil
+			return run().reply(), nil
 		}
 	}
 	return nil, &rpcError{Code: -32602, Message: "unknown tool " + call.Name}
+}
+
+// prepare readies a call: the game it runs in ("" for none) and how it runs.
+// A tool on a game gets the game the call names, else the open one; it's
+// resolved here, once, so the call's forms, log and work all agree on it.
+func (s *mcpServer) prepare(tool mcpTool, args toolArgs) (game string, run func() toolResult) {
+	if tool.onGame == nil {
+		return s.opened(), func() toolResult { return tool.run(args) }
+	}
+	root, err := s.gameRoot(args)
+	if err != nil {
+		return s.opened(), func() toolResult { return textResult(err.Error(), true) }
+	}
+	return root, func() toolResult { return tool.onGame(root, args) }
 }
 
 // mcpCapabilities: extensions (MCP Apps, OpenAI's) both where current

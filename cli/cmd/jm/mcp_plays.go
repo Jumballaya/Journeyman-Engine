@@ -37,8 +37,8 @@ func (s *mcpServer) playTools() []mcpTool {
 		{Name: "plays_list", Title: "List recorded plays",
 			Description: "Every play the person recorded, newest first: id, length, when each marker is, and whether an older build made it. " +
 				"For the latest play, call play_show instead (it shows the person the timeline).",
-			InputSchema: object(map[string]any{"game": strArg("a name or path from `games` (default: the open game)")}), Annotations: readOnly(), Meta: callableMeta("", ""),
-			run: inGame(gamesHome(), func(root string, _ toolArgs) toolResult {
+			InputSchema: object(map[string]any{}), Annotations: readOnly(), Meta: callableMeta("", ""),
+			onGame: func(root string, _ toolArgs) toolResult {
 				listing, err := listPlays(root)
 				if err != nil {
 					return textResult(err.Error(), true)
@@ -47,7 +47,7 @@ func (s *mcpServer) playTools() []mcpTool {
 					Game string `json:"game"` // whose plays: a page asking for one game's can tell
 					playListings
 				}{evalOrSelf(root), listing})
-			})},
+			}},
 		{Name: "play_show", Title: "Play review",
 			Description: "Call first whenever the person talks about playing the game: how it felt, a bug, a death, a marker, \"just now\", " +
 				"or how the game is going. Shows the person their play as a timeline they can scrub (latest play by default), " +
@@ -69,10 +69,9 @@ func (s *mcpServer) playTools() []mcpTool {
 				"has its world coordinates (y up), the entities there with their origins, and the tile map cells it covers (map, layer, tile coordinates from the bottom row, gids). " +
 				"What they picked is what they meant; origin, or the map, is the file to change. " +
 				"play_show lists every marker's picks.",
-			InputSchema: object(map[string]any{"play": playArg, "marker": strArg(`which marker: "m1" (default) or "1"`),
-				"game": strArg("a name or path from `games` (default: the open game)")}), Annotations: readOnly(),
-			Meta: callableMeta("Looking at that moment…", "That moment"),
-			run:  inGame(gamesHome(), playMoment)},
+			InputSchema: object(map[string]any{"play": playArg, "marker": strArg(`which marker: "m1" (default) or "1"`)}), Annotations: readOnly(),
+			Meta:   callableMeta("Looking at that moment…", "That moment"),
+			onGame: playMoment},
 		{Name: "play_state", Title: "A play's state at a moment",
 			Description: "The game's state at a moment of a recorded play, replayed exactly: entities with their components, " +
 				"session and save values, UI: the numbers behind what play_frame shows (positions, speeds, lives). parts narrows it like the driver's state: e.g. [\"session\"], [\"tag=Player\", \"TransformComponent\"].",

@@ -12,26 +12,25 @@ import (
 // The open game's files as tools: what a host without a shell (ChatGPT)
 // needs to manage them, each the same function jm files uses.
 func (s *mcpServer) fileTools() []mcpTool {
-	home := gamesHome() // now: the working folder moves with the open game
 	pathArg := strArg("a file of the open game, from its folder, e.g. scenes/main.scene.json")
 	return []mcpTool{
 		{Name: "files", Meta: callableMeta("", ""), Title: "The game's files", Description: "The open game's files (not .git, .jm, build, dist, node_modules) with sizes and git's mark for each changed one " +
 			"(M changed, A added, ? new to git, D deleted, U in conflict). jm files.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool}),
+			Annotations: readOnly(), InputSchema: object(map[string]any{}),
 			OutputSchema: object(map[string]any{"root": typed("string"), "game": typed("string"), "files": typed("array")}, "root", "game", "files"),
-			run: inRoot(home, func(root string, _ toolArgs) toolResult {
+			onGame: func(root string, _ toolArgs) toolResult {
 				list, err := listFiles(root)
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
 				return toolResult{Text: filesText(list), Structured: map[string]any{"root": root, "game": gameName(root), "files": list}}
-			})},
+			}},
 		{Name: "file_read", Meta: callableMeta("", ""), Title: "Read a file", Description: "A file of the open game: its text, an etag (give it to file_write so you don't save over someone's change) " +
 			"and what's wrong with it (JSON that doesn't parse or isn't in jm fmt's layout, a scene's or prefab's problems with the engine's schema). An image comes back as one.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "path": pathArg}, "path"),
+			Annotations: readOnly(), InputSchema: object(map[string]any{"path": pathArg}, "path"),
 			OutputSchema: object(map[string]any{"path": typed("string"), "text": typed("string"), "binary": typed("boolean"), "size": typed("integer"),
 				"etag": typed("string"), "problems": typed("array")}, "path", "text", "size", "etag"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			onGame: func(root string, a toolArgs) toolResult {
 				f, err := readGameFile(root, a.str("path"))
 				if err != nil {
 					return textResult(err.Error(), true)
@@ -46,15 +45,15 @@ func (s *mcpServer) fileTools() []mcpTool {
 					return imageResult(abs, text, f)
 				}
 				return jsonResult(f)
-			})},
+			}},
 		{Name: "file_write", Meta: callableMeta("", ""), Title: "Write a file", Description: "Save a file of the open game (made with its folders if new). JSON must parse; jm's JSON is saved in jm fmt's layout. " +
 			"With etag (from file_read), it's saved only over that version: \"\" means only if there's no file yet. Answers the saved etag and anything wrong with the file.",
 			Annotations: idempotent(map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": false}), // replaces the whole file
 			OutputSchema: object(map[string]any{"path": typed("string"), "etag": typed("string"), "text": typed("string"), "created": typed("boolean"),
 				"problems": typed("array")}, "path", "etag", "text"),
-			InputSchema: object(map[string]any{"game": gameOfTool, "path": pathArg, "text": strArg("the whole file"),
+			InputSchema: object(map[string]any{"path": pathArg, "text": strArg("the whole file"),
 				"etag": strArg("the version read (file_read); \"\": the file must be new")}, "path", "text"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			onGame: func(root string, a toolArgs) toolResult {
 				path, okPath := a["path"].(string)
 				text, okText := a["text"].(string)
 				var etag *string
@@ -74,37 +73,37 @@ func (s *mcpServer) fileTools() []mcpTool {
 					return textResult(err.Error(), true)
 				}
 				return jsonResult(done)
-			})},
+			}},
 		{Name: "file_move", Meta: callableMeta("", ""), Title: "Rename a file", Description: "Rename or move a file or folder of the open game (folders to it are made). " +
 			"Scenes and prefabs that name it aren't changed: search for its old path (files_search) and fix them.",
-			Annotations: idempotent(writes()), InputSchema: object(map[string]any{"game": gameOfTool, "from": pathArg, "to": strArg("its new path, which mustn't exist yet")}, "from", "to"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			Annotations: idempotent(writes()), InputSchema: object(map[string]any{"from": pathArg, "to": strArg("its new path, which mustn't exist yet")}, "from", "to"),
+			onGame: func(root string, a toolArgs) toolResult {
 				from, to, err := moveGameFile(root, a.str("from"), a.str("to"))
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
 				return jsonResult(map[string]any{"ok": true, "from": from, "to": to})
-			})},
+			}},
 		{Name: "file_delete", Meta: callableMeta("", ""), Title: "Delete a file", Description: "Delete a file or folder (and all in it) of the open game. Git can bring back what it tracked.",
 			Annotations: idempotent(map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": false}),
-			InputSchema: object(map[string]any{"game": gameOfTool, "path": pathArg}, "path"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			InputSchema: object(map[string]any{"path": pathArg}, "path"),
+			onGame: func(root string, a toolArgs) toolResult {
 				rel, err := deleteGameFile(root, a.str("path"))
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
 				return jsonResult(map[string]any{"ok": true, "deleted": rel})
-			})},
+			}},
 		{Name: "files_search", Meta: callableMeta("", ""), Title: "Search the game", Description: "Find text, in any case, in the open game's file names and lines: the first 200 hits, in path order. jm files search.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "text": strArg("what to find")}, "text"),
+			Annotations: readOnly(), InputSchema: object(map[string]any{"text": strArg("what to find")}, "text"),
 			OutputSchema: object(map[string]any{"hits": typed("array"), "truncated": typed("boolean")}, "hits"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			onGame: func(root string, a toolArgs) toolResult {
 				return jsonResult(searchFiles(root, a.str("text"), searchLimit))
-			})},
+			}},
 		{Name: "file_open", Title: "Open a file on the desktop", Meta: callableMeta("Opening…", "Opened"),
 			Description: "Open a file of the open game on the person's screen: text in their code editor (VS Code, Cursor, Zed, Sublime Text; else the plain text editor), others in their default app.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "path": pathArg}, "path"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			Annotations: writes(), InputSchema: object(map[string]any{"path": pathArg}, "path"),
+			onGame: func(root string, a toolArgs) toolResult {
 				f, err := readGameFile(root, a.str("path"))
 				if err != nil {
 					return textResult(err.Error(), true)
@@ -114,7 +113,7 @@ func (s *mcpServer) fileTools() []mcpTool {
 					return textResult(fmt.Sprintf("couldn't open %s in %s: %v", f.Path, app, err), true)
 				}
 				return textResult(fmt.Sprintf("Opened %s in %s.", f.Path, app), false)
-			})},
+			}},
 	}
 }
 
@@ -122,22 +121,18 @@ func (s *mcpServer) fileTools() []mcpTool {
 // game says which, so another caller opening a game in between can't redirect it.
 var gameOfTool = strArg("a name or path from `games` (default: the open game)")
 
-// inRoot runs a tool on the game a["game"] names (from home, the games folder), else the open game's folder.
-func inRoot(home string, run func(root string, a toolArgs) toolResult) func(toolArgs) toolResult {
-	return func(a toolArgs) toolResult {
-		if game := a.str("game"); game != "" {
-			root, err := findGame(home, game)
-			if err != nil {
-				return textResult(err.Error(), true)
-			}
-			return run(root, a)
-		}
-		root, err := projectRoot()
-		if err != nil {
-			return textResult("No game open: games, then open_game.", true)
-		}
-		return run(root, a)
+// gameRoot is the game a call works on: the one its "game" names (a name in
+// the games folder, or an absolute path), else the open game.
+func (s *mcpServer) gameRoot(a toolArgs) (string, error) {
+	if v, named := a["game"]; named && v != "" {
+		game, _ := v.(string) // mistyped: findGame says there's no such game
+		root, err := findGame(s.home, game)
+		return evalOrSelf(root), err
 	}
+	if root := s.opened(); root != "" {
+		return root, nil
+	}
+	return "", errors.New("No game open: games, then open_game.")
 }
 
 // filesText is the list for the model: what changed, then every path while there are few.

@@ -12,26 +12,25 @@ import (
 // typed relation added. It's the design notes' links: dossiers' properties
 // ([[links]]), their relations ("- located_in [[Ashvale]]") and mentions.
 func (s *mcpServer) worldTools() []mcpTool {
-	home := gamesHome()
 	return []mcpTool{
 		{Name: "world_context", Meta: callableMeta("", ""), Title: "What's around this in the world",
 			Description: "Before writing a new place, person or thing, or changing one: the note and what's connected to it within steps " +
 				"(default 2): each note's kind and summary, the connections (relations with their details, properties naming notes, mentions) " +
 				"and the names linked that have no note yet. E.g. making a second capital: world_context on its region or its nation.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "note": strArg(`a note's title, e.g. "Ashvale"`),
+			Annotations: readOnly(), InputSchema: object(map[string]any{"note": strArg(`a note's title, e.g. "Ashvale"`),
 				"steps": map[string]any{"type": "integer", "minimum": 1, "maximum": 4, "description": "how far out (default 2)"}}, "note"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			onGame: func(root string, a toolArgs) toolResult {
 				w := memory.WorldOf(root)
 				near, edges, err := w.Around(a.str("note"), int(a.num("steps", 2, 1, 4)))
 				if err != nil {
 					return textResult(err.Error()+": memory lists the notes", true)
 				}
 				return worldView(w, near, edges)
-			})},
+			}},
 		{Name: "world_path", Meta: callableMeta("", ""), Title: "How two things connect",
 			Description: "The shortest chain of connections between two notes (relations and properties first, then mentions), e.g. how Mara Dorne is tied to Ost.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "from": strArg("a note's title"), "to": strArg("another")}, "from", "to"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			Annotations: readOnly(), InputSchema: object(map[string]any{"from": strArg("a note's title"), "to": strArg("another")}, "from", "to"),
+			onGame: func(root string, a toolArgs) toolResult {
 				w := memory.WorldOf(root)
 				chain, err := w.Path(a.str("from"), a.str("to"))
 				if err != nil {
@@ -42,16 +41,16 @@ func (s *mcpServer) worldTools() []mcpTool {
 					out["path"] = []memory.Edge{}
 				}
 				return toolResult{Text: pathText(a.str("from"), a.str("to"), chain) + unread(w, out), Structured: out}
-			})},
+			}},
 		{Name: "world_link", Title: "Connect two things", Meta: callableMeta("Connecting…", "Connected"),
 			Description: "State a typed relation in a note: \"- type [[target]] (details)\" in its Relations, e.g. Irongate road_to Duskhold {distance: \"120 km\"}. " +
 				"State it once: the other side reads it (located_in/contains, owns/owned_by, ...; road_to, borders, rival_of, at_war_with read the same both ways; " +
 				"a note named Relations adds \"- [inverse] a b\" or \"- [symmetric] a\"). The target may not have a note yet.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "from": strArg("the note that states it"),
+			Annotations: writes(), InputSchema: object(map[string]any{"from": strArg("the note that states it"),
 				"type": strArg("one word: located_in, capital_of, member_of, road_to, ..."), "to": strArg("what it relates to"),
 				"details": map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": `e.g. {"distance": "120 km", "via": "[[Black Pass]]"}`}},
 				"from", "type", "to"),
-			run: inRoot(home, func(root string, a toolArgs) toolResult {
+			onGame: func(root string, a toolArgs) toolResult {
 				details := map[string]string{}
 				if given, ok := a["details"].(map[string]any); ok {
 					for k, v := range given {
@@ -70,7 +69,7 @@ func (s *mcpServer) worldTools() []mcpTool {
 					}
 				}
 				return toolResult{Text: text, Structured: map[string]any{"ok": true, "note": n.Title, "path": n.Path}}
-			})},
+			}},
 	}
 }
 

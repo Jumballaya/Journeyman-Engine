@@ -120,7 +120,9 @@ func TestMRTRStateIsTheCallsOwn(t *testing.T) {
 		t.Errorf("a state for another call: %v", r)
 	}
 	first := modernCall(t, s, 2, "pick", map[string]any{"kind": "scene"}, chatGPTCaps, nil, "")["result"].(map[string]any)
-	t.Chdir(t.TempDir())
+	other := t.TempDir()
+	os.WriteFile(filepath.Join(other, ".jm.json"), []byte(`{}`), 0o644)
+	s.openGame(other)
 	if r := modernCall(t, s, 3, "pick", map[string]any{"kind": "scene"}, chatGPTCaps, map[string]any{"form1": accept(nil)}, first["requestState"].(string)); r["error"] == nil {
 		t.Errorf("answers for another game: %v", r)
 	}
@@ -276,7 +278,7 @@ func TestMRTRRoundIsBoundToTheGameItRunsIn(t *testing.T) {
 	}
 	other := t.TempDir()
 	os.WriteFile(filepath.Join(other, ".jm.json"), []byte(`{}`), 0o644)
-	os.Chdir(other)
+	s.openGame(other)
 	if r := modernCall(t, s, 3, "pick", map[string]any{"kind": "scene"}, chatGPTCaps, answer, first["requestState"].(string)); r["error"] == nil {
 		t.Errorf("the retry after another game opened: %v", r)
 	}

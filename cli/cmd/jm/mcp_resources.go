@@ -530,14 +530,11 @@ func (s *mcpServer) askRoots() {
 // open is only the last opened (openRecentIfNone, while the roots were slow
 // to come): a game opened by name stays. The caller holds the calls lock.
 func (s *mcpServer) openRootIfDefault(game string) {
-	if exists(archive.ManifestEntryKey) && !s.byRecent {
+	if s.opened() != "" && !s.byRecent {
 		return
 	}
 	s.byRecent = false
-	if cwd, _ := os.Getwd(); evalOrSelf(cwd) != evalOrSelf(game) {
-		s.stopDriver()
-	}
-	_ = os.Chdir(game)
+	_ = s.setOpen(game)
 }
 
 // rootGame is the client's root that's a game, waiting a moment for roots
