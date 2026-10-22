@@ -84,9 +84,9 @@ func editorUnsaved(projectRoot string) []string {
 
 // warnAboutEditorEdits tells an agent which files the editor has unsaved edits
 // in: changing one now loads as "Change on Disk" there (a scene or prefab merges entity by entity).
-func warnAboutEditorEdits(projectRoot string) {
+func warnAboutEditorEdits(r *report, projectRoot string) {
 	for _, file := range editorUnsaved(projectRoot) {
-		emit(Diagnostic{Level: "warning", Category: "editor", File: file,
+		r.add(Diagnostic{Level: "warning", Category: "editor", File: file,
 			Message: "open in the editor with unsaved edits: a scene or prefab merges your change entity by entity (one you both changed takes yours), other files take your version, their edits one Undo back; ask the person to save first"})
 	}
 }

@@ -15,17 +15,19 @@ import (
 var version = "dev"
 
 func main() {
-	if err := newRootCmd().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err) // stdout is for results: --json output stays parseable
-		if strings.HasPrefix(err.Error(), "unknown command") {
-			fmt.Fprintln(os.Stderr, "Run 'jm --help' for usage.")
-		}
-		var me *migrateError
-		if errors.As(err, &me) {
-			os.Exit(me.code)
-		}
-		os.Exit(1)
+	err := newRootCmd().Execute()
+	if err == nil {
+		return
 	}
+	exit := exitCode{code: 1, msg: err.Error()}
+	errors.As(err, &exit)
+	if exit.msg != "" {
+		fmt.Fprintln(os.Stderr, exit.msg) // stdout is for results: --json output stays parseable
+	}
+	if strings.HasPrefix(exit.msg, "unknown command") {
+		fmt.Fprintln(os.Stderr, "Run 'jm --help' for usage.")
+	}
+	os.Exit(exit.code)
 }
 
 func newRootCmd() *cobra.Command {

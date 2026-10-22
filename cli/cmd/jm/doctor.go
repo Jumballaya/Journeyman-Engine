@@ -52,7 +52,7 @@ something would stop a build or a run.`,
 			r.print(cmd.OutOrStdout())
 		}
 		if !r.OK {
-			os.Exit(1)
+			return exitCode{code: 1} // it said what
 		}
 		return nil
 	},

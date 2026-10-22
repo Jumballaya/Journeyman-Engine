@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -23,10 +24,11 @@ type Diagnostic struct {
 	Column   int    `json:"column,omitempty"`
 }
 
+// A Diagnostic is an error too: a command returns the one that stops it.
+func (d Diagnostic) Error() string { return d.Message }
+
 // jsonOutput: progress is silent and problems are JSON lines (set by --json).
 var jsonOutput bool
-
-var errorCount, warningCount int
 
 // say prints progress, which --json leaves out.
 func say(format string, args ...any) {
@@ -42,12 +44,20 @@ func stage(format string, args ...any) {
 	}
 }
 
-func emit(d Diagnostic) {
+// A report is what a checking command (build, golden) finds: its problems as
+// it goes, then its outcome (end). Category is a stray error's.
+type report struct {
+	category         string
+	errors, warnings int
+}
+
+// add prints d: a line of JSON with --json, else as a compiler would.
+func (r *report) add(d Diagnostic) {
 	switch d.Level {
 	case "warning":
-		warningCount++
+		r.warnings++
 	case "error":
-		errorCount++
+		r.errors++
 	}
 	if jsonOutput {
 		line, _ := json.Marshal(d)
@@ -68,17 +78,20 @@ func emit(d Diagnostic) {
 	fmt.Println(prefix + where + d.Message)
 }
 
-// fail reports d and ends the command with exit code 1.
-func fail(d Diagnostic) {
-	d.Level = "error"
-	emit(d)
-	finish(false)
-}
-
-// finish ends a --json run with its result line; failed runs exit 1.
-func finish(ok bool) {
+// end is the command's outcome: failed (exit 1, said already) when err stopped
+// it or it found an error. err is reported first; --json's result line last.
+func (r *report) end(err error) error {
+	if err != nil {
+		var d Diagnostic
+		if !errors.As(err, &d) {
+			d = Diagnostic{Category: r.category, Message: err.Error()}
+		}
+		d.Level = "error"
+		r.add(d)
+	}
+	ok := r.errors == 0
 	if jsonOutput {
-		result := map[string]any{"result": "ok", "errors": errorCount, "warnings": warningCount}
+		result := map[string]any{"result": "ok", "errors": r.errors, "warnings": r.warnings}
 		if !ok {
 			result["result"] = "failed"
 		}
@@ -86,9 +99,39 @@ func finish(ok bool) {
 		fmt.Println(string(line))
 	}
 	if !ok {
-		os.Exit(1)
+		return exitCode{code: 1}
 	}
+	return nil
 }
+
+// readReportLine is a line of a --json run as add and end (or jm test's
+// reporter) print it: a problem, or (result non-nil) the run's result line;
+// neither for other output, a passing test's line among it.
+func readReportLine(line string) (problem *Diagnostic, result map[string]any) {
+	line = strings.TrimSpace(line)
+	var m map[string]any
+	if !strings.HasPrefix(line, "{") || json.Unmarshal([]byte(line), &m) != nil {
+		return nil, nil
+	}
+	if level := m["level"]; level == "error" || level == "warning" {
+		var d Diagnostic
+		if json.Unmarshal([]byte(line), &d) == nil {
+			return &d, nil
+		}
+	}
+	if m["result"] != nil && m["test"] == nil {
+		return nil, m
+	}
+	return nil, nil
+}
+
+// exitCode ends jm with code, printing msg first ("": said already, or nothing to say).
+type exitCode struct {
+	code int
+	msg  string
+}
+
+func (e exitCode) Error() string { return e.msg }
 
 // ascDiagnostic matches an AssemblyScript compiler message's first line, and
 // ascLocation the "in file(line,column)" that follows it.

@@ -76,7 +76,7 @@ func projectEngine(explicit string) (string, error) {
 // checkContent checks the scenes and prefabs being built against the engine's
 // schema, printing what's wrong. It warns rather than fails: an older engine
 // may not know a newer key. Without an engine to ask, it says so and skips.
-func checkContent(files []string) {
+func checkContent(r *report, files []string) {
 	engine, err := resolveEnginePath()
 	var s *schema.Schema
 	if err == nil {
@@ -100,7 +100,7 @@ func checkContent(files []string) {
 		if p.Where != "" {
 			message = p.Where + ": " + message
 		}
-		emit(Diagnostic{Level: "warning", Category: "content", File: p.File, Line: p.Line, Column: p.Column, Message: message})
+		r.add(Diagnostic{Level: "warning", Category: "content", File: p.File, Line: p.Line, Column: p.Column, Message: message})
 	}
 	if len(problems) > 0 {
 		say("%d problem(s) in scenes and prefabs (checked against %s --schema)", len(problems), engine)
