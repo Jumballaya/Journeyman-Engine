@@ -167,19 +167,22 @@ func named(all []Note, ref string) []Note {
 	return found
 }
 
-// NameOf is the shortest name a [[link]] finds n alone by: its title, else its
-// file name, else its folder/file, else its path.
+// NameOf is the shortest name Find gives n alone by (a tool's note argument):
+// its title, else its file name, else its folder/file, else its path.
+// A [[link]]'s name is World.linkFor's: links resolve by other rules.
 func NameOf(all []Note, n Note) string {
-	stem := strings.TrimSuffix(strings.TrimPrefix(n.Path, Dir+"/"), ".md")
-	for _, name := range []string{n.Title, path.Base(stem), stem} {
-		if strings.ContainsAny(name, "[]|#^\n") { // a [[link]] of it would end or split there
-			continue
-		}
+	for _, name := range shortNames(n) {
 		if found := named(all, name); len(found) == 1 && found[0].Path == n.Path {
 			return name
 		}
 	}
 	return n.Path
+}
+
+// shortNames are n's names, shortest kind first: title, file name, folder/file.
+func shortNames(n Note) []string {
+	stem := strings.TrimSuffix(strings.TrimPrefix(n.Path, Dir+"/"), ".md")
+	return []string{n.Title, path.Base(stem), stem}
 }
 
 // A Ref is a note as another shows it: by its title, found by its path.

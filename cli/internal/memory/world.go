@@ -290,6 +290,23 @@ func (w World) node(name string) (Note, error) {
 // named are the notes name may mean.
 func (w World) named(name string) []Note { return named(w.Notes, name) }
 
+// linkFor is the shortest name a [[link]] written in a note finds n alone by.
+func (w World) linkFor(n Note) (string, bool) {
+	for _, name := range shortNames(n) {
+		if w.writesLink(name, n) {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+// writesLink says whether [[name]], written in a note, reads back as a link
+// to n and no other note (C#, `C`: the parser reads another name).
+func (w World) writesLink(name string, n Note) bool {
+	read := parse("", "[["+name+"]]\n").Links
+	return len(read) == 1 && read[0] == name && w.linksOnly(name, n)
+}
+
 // linksOnly says whether [[link]] names n and no other note.
 func (w World) linksOnly(link string, n Note) bool {
 	return linksTo(link, n) && !slices.ContainsFunc(w.Notes, func(o Note) bool { return o.Path != n.Path && linksTo(link, o) })
@@ -553,9 +570,10 @@ func Relate(root, from string, r Relation) (Note, error) {
 	case len(named) > 1:
 		_, err := w.node(r.Target)
 		return Note{}, err
-	case len(named) == 1 && !w.linksOnly(r.Target, named[0]): // its path, say: written as a link that finds it alone
-		if r.Target = NameOf(w.Notes, named[0]); !w.linksOnly(r.Target, named[0]) {
-			return Note{}, fmt.Errorf("no [[link]] names %s alone (another note's path differs only in case): rename one", named[0].Path)
+	case len(named) == 1 && !w.writesLink(r.Target, named[0]): // its path, say: written as a link that finds it alone
+		var ok bool
+		if r.Target, ok = w.linkFor(named[0]); !ok {
+			return Note{}, fmt.Errorf("no [[link]] names %s alone (another note's name or path is the same): rename one", named[0].Path)
 		}
 	}
 	for _, have := range n.Relations {

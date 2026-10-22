@@ -359,14 +359,31 @@ func TestARelationsLinkFindsItsNoteAlone(t *testing.T) {
 	}
 }
 
-// A title a [[link]] can't hold (C#: the link ends at #) isn't the name
-// written: the note's file name is.
+// A title a [[link]] can't hold (C#: the link ends at #; `C`: a code span)
+// isn't the name written: the note's file name is.
 func TestARelationToATitleALinkCantHoldUsesItsFileName(t *testing.T) {
+	for file, title := range map[string]string{"csharp": "C#", "c": "`C`"} {
+		root := t.TempDir()
+		Scaffold(root)
+		os.WriteFile(filepath.Join(root, Dir, file+".md"), []byte("---\ntitle: \""+title+"\"\n---\n\n# "+title+"\n"), 0o644)
+		n, err := Relate(root, "Pillars", Relation{Type: "uses", Target: "design/" + file + ".md"})
+		if err != nil || !slices.ContainsFunc(n.Relations, func(r Relation) bool { return r.Target == file }) {
+			t.Errorf("%s: %v %+v", title, err, n.Relations)
+		}
+	}
+}
+
+// A link resolves by link rules, not a tool's: [[design/Harbor]] is
+// design/design/Harbor.md's (a note's path is past design/), so it's written.
+func TestARelationsLinkIsByLinkRules(t *testing.T) {
 	root := t.TempDir()
 	Scaffold(root)
-	os.WriteFile(filepath.Join(root, Dir, "csharp.md"), []byte("---\ntitle: \"C#\"\n---\n\n# C#\n"), 0o644)
-	n, err := Relate(root, "Pillars", Relation{Type: "uses", Target: "design/csharp.md"})
-	if err != nil || !slices.ContainsFunc(n.Relations, func(r Relation) bool { return r.Target == "csharp" }) {
+	os.MkdirAll(filepath.Join(root, Dir, "design"), 0o755)
+	for _, p := range []string{"Harbor.md", "design/Harbor.md"} {
+		os.WriteFile(filepath.Join(root, Dir, p), []byte("---\ntitle: \"Harbor\"\n---\n\n# Harbor\n"), 0o644)
+	}
+	n, err := Relate(root, "Pillars", Relation{Type: "mentions_place", Target: "design/design/Harbor.md"})
+	if err != nil || !slices.ContainsFunc(n.Relations, func(r Relation) bool { return r.Target == "design/Harbor" }) {
 		t.Errorf("%v %+v", err, n.Relations)
 	}
 }
