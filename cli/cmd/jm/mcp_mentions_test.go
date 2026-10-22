@@ -78,7 +78,7 @@ func TestMentionedThingsRead(t *testing.T) {
 	mentionGame(t)
 	links := map[string]string{}
 	for _, m := range mentionables(here(t)) {
-		links[m.kind+":"+m.name] = m.uri
+		links[m.kind+":"+m.name] = gameURI(here(t), m.link)
 	}
 	replies := mcpSession(t,
 		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"mention_search","arguments":{"query":"brick"}}}`,
@@ -90,7 +90,7 @@ func TestMentionedThingsRead(t *testing.T) {
 	items := replies[1]["result"].(map[string]any)["structuredContent"].(map[string]any)["items"].([]any)
 	link := items[0].(map[string]any)
 	if len(items) != 1 || link["type"] != "resource_link" || link["name"] != "Brick" || link["description"] != "entity · 2 in level1" ||
-		link["uri"] != entityURI("scenes/level1.scene.json", "Brick") {
+		link["uri"] != gameURI(evalOrSelf(here(t)), entityLink("scenes/level1.scene.json", "Brick")) {
 		t.Errorf("search: %v", items)
 	}
 	contents := func(id float64) []any { return replies[id]["result"].(map[string]any)["contents"].([]any) }
@@ -148,14 +148,14 @@ func TestMentionsReachChildrenButNotOutOfTheProject(t *testing.T) {
 	if !ok {
 		t.Fatalf("a child entity isn't offered: %v", mentionNames(mentionables(here(t))))
 	}
-	contents, _, err := readMentioned(here(t), light.uri)
+	contents, err := readBack(here(t), light.link)
 	if err != nil || !strings.Contains(contents[0]["text"].(string), `"where": "entities[0].children[0]"`) {
 		t.Errorf("child: %v %v", contents, err)
 	}
-	if text, _, err := readResource(here(t), found["scene:boss #2"].uri); err != nil || !strings.Contains(text, "Kage") {
-		t.Errorf("a scene named with # and a space reads back from its link %s: %v", found["scene:boss #2"].uri, err)
+	if contents, err := readBack(here(t), found["scene:boss #2"].link); err != nil || !strings.Contains(firstText(contents), "Kage") {
+		t.Errorf("a scene named with # and a space reads back from its link %s: %v", found["scene:boss #2"].link, err)
 	}
-	contents, _, err = readMentioned(here(t), found["marker:marker 1: too floaty"].uri)
+	contents, err = readBack(here(t), found["marker:marker 1: too floaty"].link)
 	if err != nil || len(contents) != 1 {
 		t.Errorf("a marker image linked from outside the play was read: %d contents, %v", len(contents), err)
 	}
@@ -190,7 +190,7 @@ func TestMentionsLeaveOutLinksIntoHiddenFolders(t *testing.T) {
 	if !ok {
 		t.Fatalf("a link to a scene of the project isn't offered: %v", mentionNames(mentionables(here(t))))
 	}
-	if text, _, err := readResource(here(t), again.uri); err != nil || !strings.Contains(text, "Player") {
+	if contents, err := readBack(here(t), again.link); err != nil || !strings.Contains(firstText(contents), "Player") {
 		t.Errorf("a link to a scene of the project doesn't read back: %v", err)
 	}
 }
@@ -212,8 +212,8 @@ func TestNotesThroughADesignLinkAreMentionedAndRead(t *testing.T) {
 	if _, ok := found["note:Pacing"]; !ok {
 		t.Errorf("no note mention: %s", mentionNames(mentionables(here(t))))
 	}
-	if text, _, err := readResource(here(t), "jm://memory"); err != nil || !strings.Contains(text, "Pacing") {
-		t.Errorf("jm://memory: %v %s", err, text)
+	if contents, err := readBack(here(t), "jm://memory"); err != nil || !strings.Contains(firstText(contents), "Pacing") {
+		t.Errorf("jm://memory: %v %v", err, contents)
 	}
 }
 
@@ -225,4 +225,17 @@ func here(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return wd
+}
+
+// readBack reads link as the game at root's resource.
+func readBack(root, link string) ([]map[string]any, error) {
+	return newMCPServer().readURI(gameURI(root, link))
+}
+
+func firstText(contents []map[string]any) string {
+	if len(contents) == 0 {
+		return ""
+	}
+	text, _ := contents[0]["text"].(string)
+	return text
 }
