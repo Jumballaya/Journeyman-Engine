@@ -66,6 +66,11 @@ public:
   // Same as above, but onto an already-created (component-less) entity —
   // used when the id had to be handed out before instantiation.
   void instantiatePrefabInto(EntityId entity, const Prefab& prefab, const nlohmann::json& overrides);
+  // Keep, from now on, the JSON each entity's components were made from (the
+  // prefab's with overrides merged: what fromJson read): what an inspection shows.
+  void keepComponentJson() { _keepJson = true; }
+  // {name: json} for an entity made while keeping; null otherwise.
+  const nlohmann::json* componentJson(EntityId id) const;
 
   // ENTITY HIERARCHY
   // A child is destroyed with its parent. What else being a child means (its
@@ -153,6 +158,9 @@ private:
   ArchetypeSet _archetypes;
   std::unordered_map<EntityId, EntityRecord> _entityRecords;  // one per live entity
   SystemScheduler _systemScheduler;
+
+  bool _keepJson = false;
+  std::unordered_map<EntityId, nlohmann::json> _componentJson;
 
   std::unordered_set<EntityId> _pendingDestroy;
   std::vector<EntityId> _pendingOrder;

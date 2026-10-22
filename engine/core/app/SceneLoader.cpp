@@ -13,9 +13,13 @@ std::vector<EntityId> SceneLoader::loadScene(const std::filesystem::path& sceneP
 
 std::vector<EntityId> SceneLoader::loadScene(const AssetHandle& handle) {
   const RawAsset& asset = _assetManager.getRawAsset(handle);
-  const nlohmann::json scene = nlohmann::json::parse(asset.data.begin(), asset.data.end());
+  return loadScene(nlohmann::json::parse(asset.data.begin(), asset.data.end()), asset.filePath.generic_string());
+}
+
+std::vector<EntityId> SceneLoader::loadScene(const nlohmann::json& scene, const std::string& path) {
   _groups.clear();
-  _scene = asset.filePath.generic_string();
+  _skipped.clear();
+  _scene = path;
   std::vector<EntityId> created;
   try {
     size_t index = 0;
@@ -23,7 +27,10 @@ std::vector<EntityId> SceneLoader::loadScene(const AssetHandle& handle) {
       const std::string key = std::to_string(index++);
       if (auto group = entry.value("group", std::string()); !group.empty()) {
         _groups[group].push_back(entry);
-      } else if (conditionsHold(entry)) {
+        _skipped.push_back({key, "group " + group});
+      } else if (auto unmet = unmetCondition(entry)) {
+        _skipped.push_back({key, std::move(*unmet)});
+      } else {
         created.push_back(createEntityFromJson(entry, key));
       }
     }
@@ -34,11 +41,11 @@ std::vector<EntityId> SceneLoader::loadScene(const AssetHandle& handle) {
   return created;
 }
 
-bool SceneLoader::conditionsHold(const nlohmann::json& entityJson) const {
-  if (!_condition) return true;
-  if (auto key = entityJson.value("if", std::string()); !key.empty() && !_condition(key)) return false;
-  if (auto key = entityJson.value("unless", std::string()); !key.empty() && _condition(key)) return false;
-  return true;
+std::optional<std::string> SceneLoader::unmetCondition(const nlohmann::json& entityJson) const {
+  if (!_condition) return std::nullopt;
+  if (auto key = entityJson.value("if", std::string()); !key.empty() && !_condition(key)) return "if " + key;
+  if (auto key = entityJson.value("unless", std::string()); !key.empty() && _condition(key)) return "unless " + key;
+  return std::nullopt;
 }
 
 EntityId SceneLoader::createEntityFromJson(const nlohmann::json& entityJson, const std::string& key) {

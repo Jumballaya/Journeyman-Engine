@@ -19,6 +19,7 @@ const Frame kB{TextureHandle{7}, {0.5f, 0.0f, 0.5f, 1.0f}, 1.0f};
 struct Fixture {
   World world;
   SpriteAnimationSystem system;
+  SpriteFrameSystem frames;
   EntityId id;
 
   explicit Fixture(std::vector<std::pair<std::string, Animation>> animations, std::string current) {
@@ -34,7 +35,11 @@ struct Fixture {
 
   SpriteAnimationComponent& anim() { return *world.getComponent<SpriteAnimationComponent>(id); }
   SpriteComponent& sprite() { return *world.getComponent<SpriteComponent>(id); }
-  void tick(float dt) { system.update(world, dt); }
+  void tick(float dt) {  // a step, then a draw
+    system.update(world, dt);
+    draw();
+  }
+  void draw() { frames.update(world, 0.0f); }
 };
 
 Fixture single(bool loop, std::vector<Frame> frames = {kA, kB}) {
@@ -84,6 +89,16 @@ TEST(SpriteAnimationSystem, WritesCurrentFrameIntoSprite) {
   EXPECT_EQ(f.sprite().texture.id, 7u);
   EXPECT_EQ(f.sprite().texRect, kA.texRect);
   f.tick(1.0f);
+  EXPECT_EQ(f.sprite().texRect, kB.texRect);
+}
+
+// A draw shows the frame an animation is on, with no step since it was played.
+TEST(SpriteAnimationSystem, ADrawShowsTheFramePlayedWithoutAStep) {
+  Fixture f({{"idle", Animation{{kA}, true}}, {"run", Animation{{kB}, true}}}, "idle");
+  f.draw();
+  EXPECT_EQ(f.sprite().texRect, kA.texRect);
+  f.anim().play("run");
+  f.draw();
   EXPECT_EQ(f.sprite().texRect, kB.texRect);
 }
 

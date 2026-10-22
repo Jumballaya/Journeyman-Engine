@@ -1,11 +1,13 @@
 #pragma once
 
 #include <optional>
+#include <utility>
 #include <unordered_map>
 #include <vector>
 
 #include <glm/glm.hpp>
 
+#include "../core/ecs/entity/EntityId.hpp"
 #include "Camera2D.hpp"
 #include "Lights.hpp"
 #include "GpuResources.hpp"
@@ -63,6 +65,14 @@ class Renderer2D {
   enum class Lit { Yes, No, Unshadowed };
   void drawSprite(const glm::mat4& transform, const glm::vec4& color, const glm::vec4& texRect, TextureHandle texture,
                   float z, Lit lit = Lit::Yes);
+  // What's drawn while one lives is `entity`'s (the draw list says so, for
+  // tools: an inspection, a moment's picks).
+  struct DrawnFor {
+    DrawnFor(Renderer2D& renderer, EntityId entity) : renderer(renderer), was(std::exchange(renderer._drawingFor, entity)) {}
+    ~DrawnFor() { renderer._drawingFor = was; }
+    Renderer2D& renderer;
+    EntityId was;
+  };
   // A line from a to b, `width` world units wide, at z: a thin solid quad.
   void drawLine(glm::vec2 a, glm::vec2 b, const glm::vec4& color, float width, float z, Lit lit = Lit::Yes);
   // What this frame's world sprites are lit by (the UI never is).
@@ -108,6 +118,7 @@ class Renderer2D {
     float z;
     Lit lit = Lit::Yes;
     TextureHandle normal;  // invalid: none
+    EntityId entity = kNoEntityId;  // whose it is (DrawnFor), for tools
     // Drawn in one instanced call with `other` when they're next to each other.
     bool batchesWith(const DrawItem& other) const {
       return texture == other.texture && normal == other.normal && lit == other.lit;
@@ -155,6 +166,7 @@ class Renderer2D {
   ShaderHandle _spriteShader;
   ShaderHandle _crossfade;
   TextureHandle _white;
+  EntityId _drawingFor = kNoEntityId;
 
   // The scene renders into _swap[0]; each fullscreen pass draws into the other.
   gl::FrameBuffer _swap[2];

@@ -74,8 +74,8 @@ void Renderer2D::setLogicalSizeOverride(std::optional<glm::ivec2> size) {
 
 void Renderer2D::drawSprite(const glm::mat4& transform, const glm::vec4& color, const glm::vec4& texRect,
                             TextureHandle texture, float z, Lit lit) {
-  _worldItems.push_back(
-      {SpriteInstance{transform, color, texRect}, texture.isValid() ? texture : _white, z, lit, normalMap(texture)});
+  _worldItems.push_back({SpriteInstance{transform, color, texRect}, texture.isValid() ? texture : _white, z, lit,
+                         normalMap(texture), _drawingFor});
 }
 
 TextureHandle Renderer2D::normalMap(TextureHandle texture) const {
@@ -101,7 +101,7 @@ void Renderer2D::drawScreenQuad(const glm::vec4& logicalRect, const glm::vec4& c
   glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(rect.x + rect.z * 0.5f, rect.y + rect.w * 0.5f, 0.0f));
   // Negative y: the screen projection is y-down, textures are authored y-up.
   m = glm::scale(m, glm::vec3(rect.z * 0.5f, -rect.w * 0.5f, 1.0f));
-  _screenItems.push_back({SpriteInstance{m, color, texRect}, texture.isValid() ? texture : _white, 0.0f});
+  _screenItems.push_back({SpriteInstance{m, color, texRect}, texture.isValid() ? texture : _white, 0.0f, Lit::Yes, {}, _drawingFor});
 }
 
 void Renderer2D::drawScreenLine(glm::vec2 a, glm::vec2 b, const glm::vec4& color, float width) {
@@ -114,7 +114,7 @@ void Renderer2D::drawScreenLine(glm::vec2 a, glm::vec2 b, const glm::vec4& color
   glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3((a + b) * 0.5f, 0.0f));
   m = glm::rotate(m, std::atan2(d.y, d.x), glm::vec3(0.0f, 0.0f, 1.0f));
   m = glm::scale(m, glm::vec3(length * 0.5f, width * s * 0.5f, 1.0f));
-  _screenItems.push_back({SpriteInstance{m, color, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)}, _white, 0.0f});
+  _screenItems.push_back({SpriteInstance{m, color, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)}, _white, 0.0f, Lit::Yes, {}, _drawingFor});
 }
 
 void Renderer2D::beginTransition(ShaderHandle shader) {

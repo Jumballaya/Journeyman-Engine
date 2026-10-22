@@ -32,6 +32,18 @@ class TransformHierarchySystem : public System {
   std::vector<std::pair<int, EntityId>> _order;
 };
 
+// Places what hangs below entity from where it is, so a chain attached bottom-up (as scenes load) is placed at once.
+void placeBelow(World& world, EntityId entity) {
+  const TransformComponent at = *world.getComponent<TransformComponent>(entity);
+  for (EntityId child : world.childrenOf(entity)) {
+    const auto* local = world.getComponent<LocalTransformComponent>(child);
+    auto* own = world.getComponent<TransformComponent>(child);
+    if (!local || !own) continue;
+    placeChild(at, *local, *own);
+    placeBelow(world, child);
+  }
+}
+
 }  // namespace
 
 template <>
@@ -100,6 +112,7 @@ void installTransformHierarchy(World& world) {
     if (auto* existing = world.getComponent<LocalTransformComponent>(child)) *existing = local;
     else world.addComponent<LocalTransformComponent>(child, local);
     placeChild(parent, local, *world.getComponent<TransformComponent>(child));
+    placeBelow(world, child);
   });
   world.registerSystem<TransformHierarchySystem>();
 }

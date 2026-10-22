@@ -67,7 +67,7 @@ void Engine::initialize() {
     setFramebufferSize(e.width, e.height);
   });
   _agent->start();  // before the entry scene: its entries' if/unless read the session
-  if (_options.loadEntryScene) loadEntryScene();
+  if (_options.loadEntryScene && !_agent->loadsEntryScene()) loadEntryScene();
 
   // A pause never leaks into the next scene (e.g. "Main Menu" from a pause menu).
   _eventBus.subscribe<events::SceneLoaded>(EVT_SceneLoaded, [this](const events::SceneLoaded&) {

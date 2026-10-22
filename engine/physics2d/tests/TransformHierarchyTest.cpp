@@ -44,6 +44,15 @@ TEST(TransformHierarchy, AuthoredChildrenFollowTheirParent) {
   EXPECT_EQ(s.transform(child).scale, glm::vec2(1));  // scale is its own
 }
 
+// A scene attaches a chain bottom-up: the grandchild is placed by where its parent ends up.
+TEST(TransformHierarchy, AChainAttachedBottomUpIsPlacedAtOnce) {
+  Scene s;
+  const EntityId root = s.at(10, 0), child = s.at(5, 0), grandchild = s.at(2, 0);
+  s.world.setParent(grandchild, child, World::Attach::AsAuthored);
+  s.world.setParent(child, root, World::Attach::AsAuthored);
+  EXPECT_EQ(s.transform(grandchild).position, glm::vec3(17, 0, 0));
+}
+
 // Attaching at run time keeps the child where it is; detaching leaves it there.
 TEST(TransformHierarchy, AttachingInPlaceKeepsTheChildStill) {
   Scene s;

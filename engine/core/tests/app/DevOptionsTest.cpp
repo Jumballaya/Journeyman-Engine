@@ -24,6 +24,7 @@ DevOptions underAgentSwitches() {
   setEnv("JM_CONTROL", "control");
   setEnv("JM_RECORD_DIR", "record");
   setEnv("JM_PROFILE", "profile.json");
+  setEnv("JM_INSPECT", "seen.json");
   setEnv("JM_NET_LATENCY", "100");
   return DevOptions::fromEnvironment();
 }
@@ -36,7 +37,7 @@ TEST(DevOptions, ThePlayerReadsNoSwitch) {
   EXPECT_EQ(o.exitAfterFrames, 0u);
   EXPECT_FLOAT_EQ(o.fixedDt, 0.0f);
   EXPECT_FALSE(o.seed);
-  EXPECT_TRUE(o.dumpDir.empty() && o.control.empty() && o.recordDir.empty() && o.profileOut.empty());
+  EXPECT_TRUE(o.dumpDir.empty() && o.control.empty() && o.recordDir.empty() && o.profileOut.empty() && o.inspectOut.empty());
   EXPECT_TRUE(o.netHost.empty());
   EXPECT_FLOAT_EQ(o.netLatency, 0.0f);
   EXPECT_EQ(o.debugDraw, false);  // Debug.* calls draw nothing
@@ -47,6 +48,7 @@ TEST(DevOptions, TheEngineReadsTheSwitches) {
   EXPECT_TRUE(o.headless && o.drive && o.strict && o.watch && o.automated());
   EXPECT_EQ(o.exitAfterFrames, 5u);
   EXPECT_EQ(o.dumpDir, "dump");
+  EXPECT_EQ(o.inspectOut, "seen.json");
   EXPECT_EQ(o.control, "control");
   EXPECT_EQ(o.netHost, "1");
   EXPECT_FLOAT_EQ(o.netLatency, 100.0f);

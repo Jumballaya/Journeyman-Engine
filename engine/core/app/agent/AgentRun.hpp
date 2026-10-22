@@ -30,6 +30,7 @@ class AgentRun final : public AgentTools {
   void start() override;
 
   bool runStarts() override;
+  bool loadsEntryScene() const override { return !_dev.inspectOut.empty(); }
   float beforeFrame() override;
   void runEnds() override;
   void frameDue() override;  // JM_WATCH: reloads what changed, every half second
@@ -137,6 +138,8 @@ class AgentRun final : public AgentTools {
   // Moment.cpp: origins as entities are built and spawned; the driver's
   // freeze, resume, picks and save; a marker, with the picks or without.
   void trackOrigins();
+  // Inspect.cpp: JM_INSPECT, the entry scene built and described, not run.
+  void inspect();
   void keepOrigin(EntityId id, nlohmann::json origin);
   nlohmann::json momentCommand(const std::string& verb, const std::string& args);
   int mark(const std::string& note, bool withPicks);

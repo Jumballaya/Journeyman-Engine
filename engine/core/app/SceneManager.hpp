@@ -48,6 +48,9 @@ class SceneManager {
   using Retry = std::function<void(const std::exception& failure)>;
   void loadScene(const std::filesystem::path& scenePath, const Retry& beforeRetry = {});
   void transitionTo(const std::filesystem::path& scenePath, TransitionConfig config = {});
+  // In place of the scene: one of the prefab at prefabPath, named for its
+  // file, as a scene's entry "0" (a prefab seen as the game makes it).
+  void loadPrefabScene(const std::filesystem::path& prefabPath);
 
   // For scripts: queued and applied by the next tick(), or once a
   // running transition ends. Latest wins; a failed load is logged, not thrown.
@@ -127,6 +130,9 @@ class SceneManager {
   AssetManager& _assetManager;
   EventBus& _eventBus;
   SceneLoader _loader;
+
+  // A scene is loaded while it has a path: a prefab shown as one has no handle.
+  bool hasScene() const { return !_currentScenePath.empty(); }
 
   std::string _currentScenePath;
   AssetHandle _currentSceneHandle;
