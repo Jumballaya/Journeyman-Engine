@@ -44,10 +44,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 --json prints no progress; each problem is a JSON line ({"level", "category",
 "message", "file", "line", "column"}) and the last line is the result
 ({"result": "ok"|"failed", "errors", "warnings"}).`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		r := &report{category: "build"}
-		return r.end(buildGame(r))
-	},
+	RunE: func(cmd *cobra.Command, args []string) error { return build() },
 }
 
 func init() {
@@ -665,6 +662,13 @@ func copyOf(root string) (game, kind string) {
 		return "", ""
 	}
 	return game, filepath.Base(kinds)
+}
+
+// build is jm build: the game in the working folder built into build/, its
+// problems reported, failed (exit 1, said already) on an error.
+func build() error {
+	r := &report{category: "build"}
+	return r.end(buildGame(r))
 }
 
 // buildGame builds the game in the working folder into build/, reporting its problems to r.
