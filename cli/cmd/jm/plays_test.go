@@ -161,8 +161,8 @@ func recordedPlay(t *testing.T, root, id string, frames int, by string, markers 
 // A comparison looks where the person meant: their latest play's last marker.
 func TestACompareLooksAtThePersonsLastMarker(t *testing.T) {
 	root := t.TempDir()
-	if p, f, err := compareMoment(root, "", ""); err != nil || p != nil || f != 120 {
-		t.Errorf("no plays: %v %d %v", p, f, err)
+	if m, err := compareMoment(root, "", ""); err != nil || m.Play != nil || m.Frame != 120 || m.At != "120" {
+		t.Errorf("no plays: %+v %v", m, err)
 	}
 	recordedPlay(t, root, "2000-01-01_000000", 300, "", 90, 200)
 	recordedPlay(t, root, "2000-01-02_000000", 300, plays.Agent, 50)
@@ -170,36 +170,37 @@ func TestACompareLooksAtThePersonsLastMarker(t *testing.T) {
 		play, at string
 		id       string
 		frame    uint64
+		named    string
 	}{
-		{"", "", "2000-01-01_000000", 200},  // the person's, not the agent's newer run; its last marker
-		{"", "m1", "2000-01-01_000000", 90}, // another moment of it
-		{"", "start", "2000-01-01_000000", 0},
-		{"2000-01-02_000000", "", "2000-01-02_000000", 50},
-		{"none", "", "", 120},
-		{"none", "45", "", 45},
+		{"", "", "2000-01-01_000000", 200, "m2"},  // the person's, not the agent's newer run; its last marker
+		{"", "m1", "2000-01-01_000000", 90, "m1"}, // another moment of it
+		{"", "start", "2000-01-01_000000", 0, "start"},
+		{"2000-01-02_000000", "", "2000-01-02_000000", 50, "m1"},
+		{"none", "", "", 120, "120"},
+		{"none", "45", "", 45, "45"},
 	} {
-		p, f, err := compareMoment(root, c.play, c.at)
+		m, err := compareMoment(root, c.play, c.at)
 		id := ""
-		if p != nil {
-			id = p.ID
+		if m.Play != nil {
+			id = m.Play.ID
 		}
-		if err != nil || id != c.id || f != c.frame {
-			t.Errorf("%q %q: %s %d %v; want %s %d", c.play, c.at, id, f, err, c.id, c.frame)
+		if err != nil || id != c.id || m.Frame != c.frame || m.At != c.named {
+			t.Errorf("%q %q: %s %+v %v; want %s %d %s", c.play, c.at, id, m, err, c.id, c.frame, c.named)
 		}
 	}
-	if _, _, err := compareMoment(root, "none", "m1"); err == nil || !strings.Contains(err.Error(), "at is a frame") {
+	if _, err := compareMoment(root, "none", "m1"); err == nil || !strings.Contains(err.Error(), "at is a frame") {
 		t.Errorf("a marker with no play: %v", err)
 	}
 	// Only an agent's runs: not played yet. Plays that can't be read aren't that.
 	agentOnly := t.TempDir()
 	recordedPlay(t, agentOnly, "2000-01-02_000000", 300, plays.Agent, 50)
-	if p, f, err := compareMoment(agentOnly, "", ""); err != nil || p != nil || f != 120 {
-		t.Errorf("only an agent's run: %v %d %v", p, f, err)
+	if m, err := compareMoment(agentOnly, "", ""); err != nil || m.Play != nil || m.Frame != 120 {
+		t.Errorf("only an agent's run: %+v %v", m, err)
 	}
 	broken := t.TempDir()
 	os.MkdirAll(filepath.Dir(plays.Root(broken)), 0o755)
 	os.WriteFile(plays.Root(broken), []byte("not a folder"), 0o644)
-	if _, _, err := compareMoment(broken, "", ""); err == nil {
+	if _, err := compareMoment(broken, "", ""); err == nil {
 		t.Error("an unreadable plays folder compared with no inputs, as if never played")
 	}
 }

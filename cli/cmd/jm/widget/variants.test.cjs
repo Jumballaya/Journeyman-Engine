@@ -7,8 +7,8 @@ const variants = { structuredContent: { variants: [{ name: 'floaty', dir: '/g/pi
   _meta: { 'jm/thumbs': { floaty: 'data:image/jpeg;base64,f' } } };
 const sandboxes = { structuredContent: { sandboxes: [{ name: 'sb1', dir: '/g/pip/.jm/sandboxes/sb1', made: 1, expires: 1792200000, changes: { 'scenes/main.scene.json': 'M' } }] },
   _meta: { 'jm/thumbs': { sb1: 'data:image/jpeg;base64,s' } } };
-const compared = { structuredContent: { a: 'floaty', b: 'game', frame: 30, errors: ['', ''], uncommitted: [0, 3],
-  changes: [{ path: 'scenes/main.scene.json', status: 'M', entities: [{ entity: 'Player', change: 'changed', changed: ['VelocityComponent'] }] }] },
+const compared = { structuredContent: { compared: { a: 'floaty', b: 'game', frame: 30, errors: ['', ''], uncommitted: [0, 3],
+  changes: [{ path: 'scenes/main.scene.json', status: 'M', entities: [{ entity: 'Player', change: 'changed', changed: ['VelocityComponent'] }] }] } },
   _meta: { 'jm/frames': ['data:image/jpeg;base64,a', 'data:image/jpeg;base64,b'] } };
 const answers = { variants, sandboxes, variant_compare: compared, plays_list: { structuredContent: { plays: [] } } };
 const open = async (context, more = {}) => {
@@ -46,7 +46,7 @@ test("compare goes to the person's last marker of their latest play, and plays t
     { id: 'agent1', started: '2026-10-15T11:00:00Z', seconds: 9, by: 'agent', marks: ['m1 0:01.0'] },
     { id: 'p2', started: '2026-10-15T10:15:00Z', seconds: 75, marks: ['m1 0:03.0', 'm2 0:40.0 "too floaty"'] },
     { id: 'p1', started: '2026-10-14T10:15:00Z', seconds: 20 }] } };
-  const s = await open_({ plays_list: plays, variant_compare: { ...compared, structuredContent: { ...compared.structuredContent, play: 'p2' } } });
+  const s = await open_({ plays_list: plays, variant_compare: { ...compared, structuredContent: { compared: { ...compared.structuredContent.compared, play: 'p2', at: 'm2' } } } });
   const args = () => s.calls().filter((c) => c.name === 'variant_compare').at(-1).arguments;
   const submit = async () => { s.find((e) => e.tag === 'form').at(-1).fire('submit'); await settle(8); };
   await submit();
@@ -74,6 +74,66 @@ test("while the plays are read, compare waits; if they can't be, jm picks the mo
   s.find((e) => e.tag === 'form').at(-1).fire('submit');
   await settle(8);
   assert.deepEqual(s.calls().find((c) => c.name === 'variant_compare').arguments, { a: 'floaty', game: '/g/pip' }, "jm's default: not no inputs");
+});
+
+test("the agent's compare opens here: the variant, both frames at the person's marker, and Play from there", async () => {
+  const theirs = { ...compared.structuredContent.compared, game: '/g/pip', a: 'floaty', play: 'p2', at: 'm2' };
+  const plays = { structuredContent: { plays: [{ id: 'p2', started: '2026-10-15T10:15:00Z', seconds: 75, marks: ['m1 0:03.0', 'm2 0:40.0'] }] } };
+  const s = await studio({ structuredContent: { ...listing.structuredContent, compared: theirs }, _meta: compared._meta },
+    { input: { a: 'floaty', at: 'm2' }, answers: { ...answers, plays_list: plays } });
+  await settle(8);
+  assert.match(s.app.text, /floaty · marker 2 \(frame 30\)/, 'its comparison, shown without comparing again');
+  assert.ok(!s.calls().some((c) => c.name === 'variant_compare'), 'not run again');
+  assert.equal(s.find((e) => e.tag === 'select' && e.attributes['aria-label'] === 'Moment')[0].children.find((o) => o.attributes.selected !== undefined).attributes.value, 'm2', 'the form at its moment');
+  s.button('Play floaty from there').fire('click');
+  await settle(8);
+  assert.deepEqual(s.calls().find((c) => c.name === 'variant_play').arguments, { name: 'floaty', play: 'p2', at: '30', game: '/g/pip' });
+  const other = await studio({ structuredContent: { ...listing.structuredContent, compared: { ...theirs, game: '/g/other' } }, _meta: compared._meta },
+    { input: { a: 'floaty', at: 'm2' }, answers: { ...answers, plays_list: plays } });
+  await settle(8);
+  assert.doesNotMatch(other.app.text, /frame 30/, "another game's comparison isn't shown as this one's");
+});
+
+test("an agent's comparison keeps its moment and its other side, and is shown once", async () => {
+  const plays = { structuredContent: { plays: [{ id: 'p2', started: '2026-10-15T10:15:00Z', seconds: 75, marks: ['m1 0:03.0'] }] } };
+  let open = '/g/pip';
+  const games = () => ({ structuredContent: { open, games: [{ name: 'Pip', path: '/g/pip', opened: 1, scenes: [] }, { name: 'Bo', path: '/g/bo', opened: 1, scenes: [] }] } });
+  const theirs = { ...compared.structuredContent.compared, game: '/g/pip', a: 'floaty', b: 'heavy', play: 'p2', at: '1:05', changes: [] };
+  const s = await studio({ structuredContent: { ...games().structuredContent, compared: theirs }, _meta: compared._meta },
+    { input: { a: 'floaty', b: 'heavy', at: '1:05' }, answers: { ...answers, games, plays_list: plays,
+      open_game: (g) => { open = g.game; return { content: [{ type: 'text', text: 'ok' }] }; } } });
+  await settle(8);
+  assert.match(s.app.text, /heavy · 1:05 \(frame 30\)/, 'against heavy, at the moment it named');
+  assert.match(s.app.text, /since it split from heavy\.[\s\S]*heavy has 3 uncommitted files/);
+  assert.equal(s.find((e) => e.tag === 'select' && e.attributes['aria-label'] === 'Moment')[0].children.find((o) => o.attributes.selected !== undefined).attributes.value, '1:05');
+  s.find((e) => e.tag === 'form').at(-1).fire('submit');
+  await settle(8);
+  assert.equal(s.calls().find((c) => c.name === 'variant_compare').arguments.at, '1:05', 'compared again at that moment, not the last marker');
+  for (const game of ['/g/bo', '/g/pip']) {  // the person goes to Bo's variants and back, the page's result still the agent's
+    await s.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: `/variants?game=${game}` } });
+    await settle(12);
+  }
+  assert.deepEqual(s.calls().filter((c) => c.name === 'open_game').map((c) => c.arguments.game), ['/g/bo', '/g/pip']);
+  assert.doesNotMatch(s.app.text, /1:05 \(frame 30\)/, 'back on its game: not shown again over what came after');
+});
+
+test("an agent's comparison of a sandbox outlasts the tab's first listing; one on another game opens that game", async () => {
+  const sb = { ...compared.structuredContent.compared, game: '/g/pip', a: 'sb1', sandbox: true, play: 'p2', at: 'm1', print: 'p1' };
+  let print = 'p1';
+  const listed = () => ({ ...sandboxes, structuredContent: { sandboxes: sandboxes.structuredContent.sandboxes.map((x) => ({ ...x, print })) } });
+  const s = await studio({ structuredContent: { ...listing.structuredContent, compared: sb }, _meta: compared._meta },
+    { input: { a: 'sb1', sandbox: true, game: '/g/pip' }, answers: { ...answers, sandboxes: listed } });  // names the open game: opened again, listed again
+  await settle(12);
+  assert.ok(s.calls().filter((c) => c.name === 'sandboxes').length >= 2, 'listed again after the game opened');
+  assert.match(s.app.text, /sb1 · marker 1 \(frame 30\)/, 'its files as compared: still shown');
+  print = 'p2';  // the agent changed the sandbox
+  await s.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: '/variants?sandbox=sb1' } });
+  await settle(12);
+  assert.doesNotMatch(s.app.text, /frame 30/, 'its files changed: what it showed may be no longer so');
+  const bo = await studio({ structuredContent: { ...listing.structuredContent, compared: { ...sb, game: '/g/bo' } }, _meta: compared._meta },
+    { input: { a: 'sb1', sandbox: true, game: '/g/bo' }, answers });
+  await settle(12);
+  assert.deepEqual(bo.calls().find((c) => c.name === 'open_game').arguments, { game: '/g/bo' });
 });
 
 test('merge and drop ask first; a new variant is made from its name', async () => {
@@ -128,7 +188,7 @@ test('a sandbox is compared with the game too: both frames, and its changes per 
   let changes = { 'scenes/main.scene.json': 'M' };
   const sb = () => ({ structuredContent: { sandboxes: [{ ...sandboxes.structuredContent.sandboxes[0], changes }] } });
   const s = await open({ 'openai/deepLink': { url: '/variants?sandbox=sb1' } },
-    { sandboxes: sb, variant_compare: { ...compared, structuredContent: { ...compared.structuredContent, a: 'sb1', sandbox: true } } });
+    { sandboxes: sb, variant_compare: { ...compared, structuredContent: { compared: { ...compared.structuredContent.compared, a: 'sb1', sandbox: true } } } });
   assert.match(s.app.text, /scenes\/main\.scene\.json\s+changed/);
   s.find((e) => e.tag === 'form').at(-1).fire('submit');
   await settle(8);

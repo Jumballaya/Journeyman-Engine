@@ -289,10 +289,12 @@ type comparison struct {
 	A, B    string       `json:"-"`
 	Changes []fileChange `json:"changes"`
 	Play    string       `json:"play,omitempty"` // whose inputs drove both: a recorded play's id ("": none)
+	At      string       `json:"at"`             // the moment as named: "m2", "end" (the frame with no play)
 	Frame   uint64       `json:"frame"`
 	Frames  [2]string    `json:"frames"` // image files
 	Errors  [2]string    `json:"errors"`
 	Sandbox bool         `json:"sandbox,omitempty"` // a is a sandbox: Changes are its files that differ from the game's now
+	Print   string       `json:"print,omitempty"`   // a sandbox's comparedPrint as compared (its listing's while it holds)
 	// Each side's uncommitted files: in its frame, not in Changes (a variant's commits).
 	Uncommitted [2]int `json:"uncommitted"`
 }
@@ -327,33 +329,44 @@ func (c comparison) inputs() string {
 	return " of play " + c.Play
 }
 
-// compareMoment is where a comparison looks: play's inputs (the person's
-// latest by default, none with "none") up to at, a moment of it (its last
-// marker by default, else its end); with no play, at is a frame (120).
-func compareMoment(root, play, at string) (*plays.Play, uint64, error) {
+// moment is where a comparison looks: Play's inputs (nil: none) up to Frame,
+// At as named ("m2", "end", "1:05"; with no play, the frame).
+type moment struct {
+	Play  *plays.Play
+	At    string
+	Frame uint64
+}
+
+// compareMoment is the moment play and at name: the person's latest play by
+// default (none with "none"), at its last marker by default, else its end;
+// with no play, at is a frame (120).
+func compareMoment(root, play, at string) (moment, error) {
 	var p *plays.Play
 	if play != "none" {
 		var err error
 		// Not played yet: no inputs, by default. Plays that can't be read say so.
 		if p, err = plays.Find(root, play); err != nil && (play != "" || !errors.Is(err, plays.ErrNoPlays)) {
-			return nil, 0, err
+			return moment{}, err
 		}
 	}
 	if p == nil {
 		if at == "" {
-			return nil, 120, nil
+			at = "120"
 		}
 		f, err := strconv.ParseUint(at, 10, 64)
 		if err != nil || f == 0 {
-			return nil, 0, fmt.Errorf("with no play's inputs, at is a frame (1 or more), not %q", at)
+			return moment{}, fmt.Errorf("with no play's inputs, at is a frame (1 or more), not %q", at)
 		}
-		return nil, f, nil
+		return moment{At: at, Frame: f}, nil
 	}
-	if at == "" && len(p.Meta.Markers) > 0 {
-		at = fmt.Sprintf("m%d", p.Meta.Markers[len(p.Meta.Markers)-1].N)
+	if at == "" {
+		at = "end"
+		if len(p.Meta.Markers) > 0 {
+			at = fmt.Sprintf("m%d", p.Meta.Markers[len(p.Meta.Markers)-1].N)
+		}
 	}
 	f, err := p.FrameAt(at)
-	return p, f, err
+	return moment{p, at, f}, err
 }
 
 // compareVariants compares variant a with b ("game": the game itself): what
@@ -387,7 +400,7 @@ func compareVariants(c *toolCall, root, a, b, play, at string, sandbox bool) (co
 	}
 	marks, before, after := map[string]string{}, func(string) []byte { return nil }, func(string) []byte { return nil }
 	if cmp.Sandbox {
-		marks = differences(root, sides[0].dir)
+		marks, cmp.Print = differences(root, sides[0].dir), comparedPrint(root, sides[0].dir)
 		before = func(path string) []byte {
 			data, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 			return data
@@ -417,11 +430,12 @@ func compareVariants(c *toolCall, root, a, b, play, at string, sandbox bool) (co
 		cmp.Uncommitted = [2]int{len(vcs.Status(sides[0].dir)), len(vcs.Status(sides[1].dir))}
 	}
 	sort.Slice(cmp.Changes, func(i, j int) bool { return cmp.Changes[i].Path < cmp.Changes[j].Path })
-	p, frame, err := compareMoment(root, play, at)
+	m, err := compareMoment(root, play, at)
 	if err != nil {
 		return cmp, err
 	}
-	cmp.Frame = frame
+	p := m.Play
+	cmp.At, cmp.Frame = m.At, m.Frame
 	if p != nil {
 		cmp.Play = p.ID
 	}

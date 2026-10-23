@@ -25,10 +25,11 @@ studioTabs.push((() => {
       return Array.isArray(items);
     };
     if (list("variants", v)) state.thumbs = (v._meta && v._meta["jm/thumbs"]) || {};
-    // A sandbox's files may have changed since it was compared (its list can't tell).
     const listed = list("sandboxes", s);
     if (listed) state.sandboxThumbs = (s._meta && s._meta["jm/thumbs"]) || {};
-    if (listed && state.compared && state.compared.kind === "sandbox" && state.compared.result) state.compared = null;
+    // The sandbox's files or the game's changed since it was compared: what it showed may be no longer so.
+    const c = state.compared, compared = c && c.kind === "sandbox" && c.result && !c.result.isError && c.result.structuredContent;
+    if (listed && compared && !state.sandboxes.some((x) => x.name === c.name && x.print === compared.print)) state.compared = null;
     if (!state.picked && state.variants && state.variants.length) state.picked = { kind: "variant", name: state.variants[0].name };
     ctx.rerender();
   };
@@ -46,6 +47,7 @@ studioTabs.push((() => {
   // The moment to compare at: a play of the game's (the person's latest unless
   // picked) and a marker of it or its end; with no plays, or "none" picked, a frame.
   // While the plays are read, none; if they can't be, jm's default (play, at: undefined).
+  const named = (at) => /^m\d+$/.test(at) ? `marker ${at.slice(1)}` : at === "end" ? "the end of the play" : at === "start" ? "the start" : /^\d+$/.test(at) ? `frame ${at}` : at;
   const momentOf = (ctx) => {
     const answer = ctx.plays();
     if (!answer) return null;
@@ -53,19 +55,39 @@ studioTabs.push((() => {
     const plays = answer.plays;
     const play = plays.find((p) => p.id === state.play) || (state.play === "none" ? null : plays.find((p) => p.by !== "agent"));
     if (!play) return { plays, play: "none", at: String(state.frame), marks: [] };
-    const marks = (play.marks || []).map((m) => ({ at: m.split(" ")[0], label: m }));
-    const at = state.at && (state.at === "end" || marks.some((m) => m.at === state.at)) ? state.at : marks.length ? marks.at(-1).at : "end";
+    const marks = (play.marks || []).map((m) => ({ at: m.split(" ")[0], label: `marker ${m.slice(1)}` }));
+    // A moment named otherwise (the agent's "1:05", "start"): kept, an option of its own.
+    if (state.at && state.at !== "end" && !marks.some((m) => m.at === state.at)) marks.push({ at: state.at, label: named(state.at) });
+    const at = state.at || (marks.length ? marks.at(-1).at : "end");
     return { plays, play: play.id, at, marks };
   };
 
+  // variant_compare's answer as a comparison: its result is the Studio's (games and all), the comparison in it.
+  const comparedOf = (r) => !r || r.isError || !r.structuredContent || !r.structuredContent.compared ? (r && r.isError ? r : { isError: true })
+    : { structuredContent: r.structuredContent.compared, _meta: r._meta };
+
+  // A comparison the agent made (variant_compare opened the Studio): shown as if
+  // compared here, with the form at its moment.
+  let adopted = null;  // the call's result shown already: once, not again on coming back to its game
+  const adopt = (ctx) => {
+    const r = ctx.host.result, s = r && r.structuredContent && r.structuredContent.compared;
+    if (!s || r === adopted || s.game !== state.game) return;  // another game's: not this tab's to show
+    adopted = r;
+    const kind = s.sandbox ? "sandbox" : "variant", frame = ((r._meta && r._meta["jm/frames"]) || [])[0];
+    state.picked = { kind, name: s.a };
+    if (s.play) Object.assign(state, { play: s.play, at: s.at }); else Object.assign(state, { play: "none", at: null, frame: s.frame });
+    state.compared = { name: s.a, kind, b: s.b || "game", play: s.play || "none", at: s.play ? s.at : String(s.frame), result: comparedOf(r) };
+    if (frame) (kind === "sandbox" ? state.sandboxThumbs : state.thumbs)[s.a] = frame;
+  };
+
   const compare = async (ctx, name, kind) => {
-    const { play, at } = momentOf(ctx) || {}, mine = state, c = state.compared = { name, kind, play, at, result: null };
+    const { play, at } = momentOf(ctx) || {}, mine = state, c = state.compared = { name, kind, b: "game", play, at, result: null };
     ctx.rerender();
     const r = await ctx.call("variant_compare", { a: name, ...(kind === "sandbox" ? { sandbox: true } : {}), play, at }).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
     if (mine !== state) return;  // another game shown meanwhile
-    const frame = r && !r.isError && r._meta && (r._meta["jm/frames"] || [])[0];
+    const result = comparedOf(r), frame = !result.isError && ((result._meta && result._meta["jm/frames"]) || [])[0];
     if (frame) (kind === "sandbox" ? state.sandboxThumbs : state.thumbs)[name] = frame;  // its picture now, as the next list says
-    if (state.compared === c) c.result = r || { isError: true };
+    if (state.compared === c) c.result = result;
     ctx.rerender();
   };
 
@@ -96,25 +118,25 @@ studioTabs.push((() => {
       atPick = el("input", { type: "number", min: "1", "aria-label": "Frame", class: "var-frame", "data-key": "var-frame",
         oninput: (e) => { state.frame = Math.max(1, Math.round(Number(e.target.value)) || 1); } });
       atPick.value = String(state.frame);
-    } else if (m.play) atPick = pick("Moment", [...m.marks.map((k) => ({ value: k.at, label: `marker ${k.label.slice(1)}` })), { value: "end", label: "its end" }], m.at, (v) => { state.at = v; });
-    const where = (x) => x.play === "none" ? `frame ${x.at}` : !x.play ? "your latest play's last marker" : x.at === "end" ? "the end of the play" : `marker ${x.at.slice(1)}`;
+    } else if (m.play) atPick = pick("Moment", [...m.marks.map((k) => ({ value: k.at, label: k.label })), { value: "end", label: "its end" }], m.at, (v) => { state.at = v; });
+    const where = (x) => x.play === "none" ? `frame ${x.at}` : !x.play ? "your latest play's last marker" : named(x.at);
     let body;
     if (!c) body = el("div", { class: "meta" }, "Compare runs both builds headless, with the play's inputs, and shows them at the same moment.");
     else if (!c.result) body = el("div", { class: "meta" }, `Comparing at ${where(c)}: building and running both…`);
     else if (c.result.isError) body = el("div", { class: "meta" }, said(c.result) || "Couldn't compare.");
     else {
-      const s = c.result.structuredContent || {}, frames = (c.result._meta && c.result._meta["jm/frames"]) || [];
+      const s = c.result.structuredContent || {}, frames = (c.result._meta && c.result._meta["jm/frames"]) || [], other = c.b === "game" ? "the game" : c.b;
       body = el("div", { class: "var-compare" },
-        el("div", { class: "var-ab" }, [item.name, "the game"].map((label, i) => el("figure", {},
+        el("div", { class: "var-ab" }, [item.name, other].map((label, i) => el("figure", {},
           frames[i] ? el("img", { src: frames[i], alt: `${label} at frame ${s.frame}` }) : el("div", { class: "var-noframe meta" }, (s.errors || [])[i] || "No frame."),
           el("figcaption", {}, `${label} · ${s.play ? `${where(c)} (frame ${s.frame})` : `frame ${s.frame}`}`)))),
         // Seen it there: now play it there.
         // The frame shown, not the moment again: a play still recording has a later end by now.
         kind === "variant" && s.play ? el("div", { class: "head" }, el("button", { disabled: ctx.busy,
           onclick: () => ctx.act("Starting the variant", "variant_play", { name: item.name, play: s.play, at: String(s.frame) }, () => `Variant ${item.name} is open at frame ${s.frame}.`) }, `Play ${item.name} from there`)) : null,
-        kind === "sandbox" ? null : (s.changes || []).length ? changesList(el, s.changes) : el("div", { class: "meta" }, "Its commits changed no files since it split from the game."),
+        kind === "sandbox" ? null : (s.changes || []).length ? changesList(el, s.changes) : el("div", { class: "meta" }, `Its commits changed no files since it split from ${other}.`),
         // Each frame runs its files as they are: say when uncommitted work, not the list, is part of the difference.
-        kind === "sandbox" ? null : [item.name, "the game"].map((label, i) => (s.uncommitted || [])[i] ? el("div", { class: "meta" }, `${label} has ${s.uncommitted[i]} uncommitted files: its frame shows them, the list doesn't.`) : null));
+        kind === "sandbox" ? null : [item.name, other].map((label, i) => (s.uncommitted || [])[i] ? el("div", { class: "meta" }, `${label} has ${s.uncommitted[i]} uncommitted files: its frame shows them, the list doesn't.`) : null));
     }
     const form = el("form", { class: "head", onsubmit: (e) => { e.preventDefault(); compare(ctx, item.name, kind); } },
       el("span", { class: "meta" }, "Against the game"), playPick ? [el("span", { class: "meta" }, "with"), playPick] : null,
@@ -239,6 +261,7 @@ studioTabs.push((() => {
     if (state.asking !== String(ctx.visit)) { state.asking = String(ctx.visit); load(ctx); }
     const route = ctx.params.variant || ctx.params.sandbox ? ctx.params : null;  // /variants?variant=floaty
     if (route && state.routed !== route) { state.routed = route; state.picked = ctx.params.variant ? { kind: "variant", name: ctx.params.variant } : { kind: "sandbox", name: ctx.params.sandbox }; }
+    adopt(ctx);
     if (!state.variants && !state.failed.variants) return kit.empty("Reading the variants…");  // both lists come back together
     const variants = state.variants || [];
     const failing = (key) => state.failed[key] ? el("div", { class: "meta" }, `${state.failed[key]}${state[key] ? " (this list may be out of date)" : ""} `,

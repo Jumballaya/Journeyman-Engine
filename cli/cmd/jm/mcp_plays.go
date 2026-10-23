@@ -30,13 +30,13 @@ var playsPage string
 var timeline = widget{name: "journeyman-plays", title: "Play timeline", html: playsPage, modes: []string{"inline", "fullscreen"},
 	description: "A recorded play: scrub its moments, see what the player saw, ask about one or play on from it."}
 
-// playRefArg and moment say how a tool names one of the person's plays and a moment in it.
+// playRefArg and momentArgText say how a tool names one of the person's plays and a moment in it.
 var playRefArg = strArg(`which play: an id, a unique start of one, "latest" (default: the person's newest), or "latest-1", "latest-2" for earlier ones; your own runs go by id`)
 
-const moment = `a moment: a frame ("420"), a time ("12.5s", "1:05"), a marker ("m2" or "marker:2"), `
+const momentArgText = `a moment: a frame ("420"), a time ("12.5s", "1:05"), a marker ("m2" or "marker:2"), `
 
 func (s *mcpServer) playTools() []mcpTool {
-	atArg, fromArg := strArg(moment+`"start" or "end" (default)`), strArg(moment+`"start" (default) or "end"`)
+	atArg, fromArg := strArg(momentArgText+`"start" or "end" (default)`), strArg(momentArgText+`"start" (default) or "end"`)
 	return []mcpTool{
 		{Name: "plays_list", Title: "List recorded plays",
 			Description: "Every play the person recorded, newest first: id, length, when each marker is, and whether an older build made it. " +
@@ -57,7 +57,7 @@ func (s *mcpServer) playTools() []mcpTool {
 				"or how the game is going. Shows the person their play as a timeline they can scrub (latest play by default), " +
 				"and gives you what happened: scenes over time, values that changed (lives, score, ...), and the moments they marked with F8 (what they meant is in what they tell you). " +
 				"Then play_frame / play_state at a marker. After a change, at opens it at their moment and replays it with the change beside what they saw: show them, don't just tell them.",
-			InputSchema: object(map[string]any{"play": playRefArg, "at": strArg(moment + `"start" or "end": open the timeline there (default: its first marker)`)}),
+			InputSchema: object(map[string]any{"play": playRefArg, "at": strArg(momentArgText + `"start" or "end": open the timeline there (default: its first marker)`)}),
 			Annotations: readOnly(),
 			Meta:        timeline.toolMeta("Opening the play…", "The play", entrypoint("thread")),
 			onGame:      playShow},

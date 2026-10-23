@@ -395,3 +395,22 @@ func TestAVariantBuildsWithItsGamesLibrary(t *testing.T) {
 		t.Errorf("the variant's build doesn't watch the game's library %s", shared)
 	}
 }
+
+// The agent's compare opens the Studio on it: the Studio's answer, the comparison in it.
+func TestTheAgentsCompareShowsInTheStudio(t *testing.T) {
+	game := variantGame(t)
+	if _, err := newVariant(game, "floaty", ""); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JM_ENGINE", filepath.Join(t.TempDir(), "none")) // no frames: the comparison still answers
+	tool := toolOf(t, newMCPServer(), "variant_compare")
+	if ui, _ := tool.Meta["ui"].(map[string]any); ui == nil || ui["resourceUri"] != studio.appURI() {
+		t.Errorf("not shown in the Studio: %v", tool.Meta)
+	}
+	r := tool.run(toolArgs{"game": game, "a": "floaty", "play": "none", "at": "60"})
+	sc, _ := r.Structured.(map[string]any)
+	compared, _ := sc["compared"].(map[string]any)
+	if r.Failed || sc["games"] == nil || compared == nil || compared["a"] != "floaty" || compared["game"] != evalOrSelf(game) || compared["at"] != "60" || r.Meta["jm/frames"] == nil {
+		t.Errorf("the Studio's answer with the comparison: %+v", r)
+	}
+}
