@@ -4,11 +4,11 @@
 studioTabs.push((() => {
   "use strict";
   // variants / sandboxes: their tools' answers. picked: { kind: "variant" | "sandbox", name }.
-  // compared: { name, frame, play, result | null } while/after comparing. plays: the game's recorded plays, to compare
-  // both with one's inputs (play: its id, "" none). confirm: the button asked once.
+  // compared: { name, kind, play, at, result | null } while/after comparing. play / at: the moment picked to compare at
+  // (null: the default, the person's latest play at its last marker); play "none": no inputs, at frame. confirm: the button asked once.
   // failed: { variants, sandboxes }: why the last ask for that list failed (its data then is the one before).
   const fresh = (game) => ({ game, asking: "", variants: null, thumbs: {}, sandboxes: null, sandboxThumbs: {}, failed: {}, picked: null, compared: null,
-                             frame: 120, plays: [], play: "", draft: null, newName: "", confirm: "", routed: null, ran: Object.create(null) });  // ran: by sandbox name (any name, "constructor" too)
+                             frame: 120, play: null, at: null, draft: null, newName: "", confirm: "", routed: null, ran: Object.create(null) });  // ran: by sandbox name (any name, "constructor" too)
   let state = fresh(null);
 
   const { said } = kit;
@@ -16,11 +16,9 @@ studioTabs.push((() => {
   // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
 
   const load = async (ctx) => {
-    const all = await loading(() => Promise.all(["variants", "sandboxes", "plays_list"].map((tool) => kit.answer(() => ctx.call(tool, {})))));
+    const all = await loading(() => Promise.all(["variants", "sandboxes"].map((tool) => kit.answer(() => ctx.call(tool, {})))));
     if (!all) return;
-    const [v, s, p] = all;
-    state.plays = (p && !p.isError && p.structuredContent && p.structuredContent.plays) || [];
-    if (state.play && !state.plays.some((x) => x.id === state.play)) state.play = "";
+    const [v, s] = all;
     const list = (key, r) => {  // a failed ask keeps what was there, said to be failing
       const items = r && !r.isError && r.structuredContent && r.structuredContent[key];
       if (Array.isArray(items)) { state[key] = items; delete state.failed[key]; } else state.failed[key] = said(r) || `Couldn't list the ${key}.`;
@@ -45,10 +43,21 @@ studioTabs.push((() => {
     await load(ctx);
   };
 
+  // The moment to compare at: a play of the game's (the person's latest unless
+  // picked) and a marker of it or its end; with no plays, or "none" picked, a frame.
+  const momentOf = (ctx) => {
+    const answer = ctx.plays(), plays = (answer && answer.plays) || [];
+    const play = plays.find((p) => p.id === state.play) || (state.play === "none" ? null : plays.find((p) => p.by !== "agent"));
+    if (!play) return { plays, play: "none", at: String(state.frame), marks: [] };
+    const marks = (play.marks || []).map((m) => ({ at: m.split(" ")[0], label: m }));
+    const at = state.at && (state.at === "end" || marks.some((m) => m.at === state.at)) ? state.at : marks.length ? marks.at(-1).at : "end";
+    return { plays, play: play.id, at, marks };
+  };
+
   const compare = async (ctx, name, kind) => {
-    const mine = state, c = state.compared = { name, kind, frame: state.frame, play: state.play, result: null };
+    const { play, at } = momentOf(ctx), mine = state, c = state.compared = { name, kind, play, at, result: null };
     ctx.rerender();
-    const r = await ctx.call("variant_compare", { a: name, ...(kind === "sandbox" ? { sandbox: true } : {}), frame: c.frame, ...(c.play ? { play: c.play } : {}) }).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
+    const r = await ctx.call("variant_compare", { a: name, ...(kind === "sandbox" ? { sandbox: true } : {}), play, at }).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
     if (mine !== state) return;  // another game shown meanwhile
     const frame = r && !r.isError && r._meta && (r._meta["jm/frames"] || [])[0];
     if (frame) (kind === "sandbox" ? state.sandboxThumbs : state.thumbs)[name] = frame;  // its picture now, as the next list says
@@ -72,27 +81,37 @@ studioTabs.push((() => {
   // sandbox lists its own (comparing adds each scene's per entity).
   const comparing = (ctx, item, kind) => {
     const { el } = ctx.kit, c = state.compared && state.compared.name === item.name && state.compared.kind === kind ? state.compared : null;
-    const frameInput = el("input", { type: "number", min: "1", "aria-label": "Frame", class: "var-frame", "data-key": "var-frame",
-      oninput: (e) => { state.frame = Math.max(1, Math.round(Number(e.target.value)) || 1); } });
-    frameInput.value = String(state.frame);
-    // Standing still, two takes look alike: a recorded play's inputs drive both the same way.
-    const playPick = state.plays.length ? el("select", { "aria-label": "Inputs", class: "var-play", onchange: (e) => { state.play = e.target.value; } },
-      [{ id: "", label: "no input" }, ...state.plays.map((p) => ({ id: p.id, label: `the inputs of ${new Date(p.started).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}'s play` }))]
-        .map((o) => el("option", { value: o.id, selected: o.id === state.play }, o.label))) : null;
+    const m = momentOf(ctx), pick = (label, options, value, set) => el("select", { "aria-label": label, class: "var-pick", onchange: (e) => { set(e.target.value); ctx.rerender(); } },
+      options.map((o) => el("option", { value: o.value, selected: o.value === value }, o.label)));
+    // Standing still, two takes look alike: a play's inputs drive both the same way, to the moment it marked.
+    const playPick = m.plays.length ? pick("Play", [...m.plays.map((p) => ({ value: p.id,
+      label: `${p.by === "agent" ? "an agent's run" : "your play"} of ${new Date(p.started).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}` })),
+    { value: "none", label: "no input" }], m.play, (v) => { state.play = v; state.at = null; }) : null;
+    let atPick;
+    if (m.play === "none") {
+      atPick = el("input", { type: "number", min: "1", "aria-label": "Frame", class: "var-frame", "data-key": "var-frame",
+        oninput: (e) => { state.frame = Math.max(1, Math.round(Number(e.target.value)) || 1); } });
+      atPick.value = String(state.frame);
+    } else atPick = pick("Moment", [...m.marks.map((k) => ({ value: k.at, label: `marker ${k.label.slice(1)}` })), { value: "end", label: "its end" }], m.at, (v) => { state.at = v; });
+    const where = (x) => x.play === "none" ? `frame ${x.at}` : x.at === "end" ? "the end of the play" : `marker ${x.at.slice(1)}`;
     let body;
-    if (!c) body = el("div", { class: "meta" }, "Compare runs both builds headless and shows them at the same frame.");
-    else if (!c.result) body = el("div", { class: "meta" }, `Comparing at frame ${c.frame}${c.play ? ", a play's inputs replayed" : ""}: building and running both…`);
+    if (!c) body = el("div", { class: "meta" }, "Compare runs both builds headless, with the play's inputs, and shows them at the same moment.");
+    else if (!c.result) body = el("div", { class: "meta" }, `Comparing at ${where(c)}: building and running both…`);
     else if (c.result.isError) body = el("div", { class: "meta" }, said(c.result) || "Couldn't compare.");
     else {
       const s = c.result.structuredContent || {}, frames = (c.result._meta && c.result._meta["jm/frames"]) || [];
       body = el("div", { class: "var-compare" },
         el("div", { class: "var-ab" }, [item.name, "the game"].map((label, i) => el("figure", {},
           frames[i] ? el("img", { src: frames[i], alt: `${label} at frame ${s.frame}` }) : el("div", { class: "var-noframe meta" }, (s.errors || [])[i] || "No frame."),
-          el("figcaption", {}, `${label} · frame ${s.frame}`)))),
+          el("figcaption", {}, `${label} · ${where(c)}${c.play === "none" ? "" : ` (frame ${s.frame})`}`)))),
+        // Seen it there: now play it there.
+        kind === "variant" && c.play !== "none" ? el("div", { class: "head" }, el("button", { disabled: ctx.busy,
+          onclick: () => ctx.act("Starting the variant", "variant_play", { name: item.name, play: c.play, at: c.at }, () => `Variant ${item.name} is open at ${where(c)}.`) }, `Play ${item.name} from there`)) : null,
         kind === "sandbox" ? null : (s.changes || []).length ? changesList(el, s.changes) : el("div", { class: "meta" }, "Its commits changed no files since it split from the game."));
     }
     const form = el("form", { class: "head", onsubmit: (e) => { e.preventDefault(); compare(ctx, item.name, kind); } },
-      el("span", { class: "meta" }, "Against the game at frame"), frameInput, playPick ? el("span", { class: "meta" }, "with") : null, playPick,
+      el("span", { class: "meta" }, "Against the game"), playPick ? [el("span", { class: "meta" }, "with"), playPick] : null,
+      el("span", { class: "meta" }, m.play === "none" ? "at frame" : "at"), atPick,
       el("button", { class: "primary", type: "submit", disabled: !!(c && !c.result) }, "Compare"));
     return { form, body, changes: c && c.result && !c.result.isError && (c.result.structuredContent || {}).changes };
   };
@@ -183,7 +202,7 @@ studioTabs.push((() => {
       .var-ran { display: grid; gap: 6px; } .var-ran .head { margin: 0; }
       .var-out { margin: 0; font: 12px/1.45 ui-monospace, Menlo, monospace; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
         padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; }
-      .var-grow { flex: 1; min-width: 140px; } .var-frame { width: 90px; }
+      .var-grow { flex: 1; min-width: 140px; } .var-frame { width: 90px; } .var-pick { max-width: 260px; }
       .var-list { display: grid; gap: 2px; }
       .var-row { all: unset; display: grid; grid-template-columns: 72px minmax(0, 1fr); column-gap: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
       .var-row:hover, .var-row:focus-visible { background: var(--raised); } .var-row.on { background: var(--accent-soft); }

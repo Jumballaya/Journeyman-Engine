@@ -204,11 +204,11 @@ func TestAPersonsPlayIsRecordedAndSteerable(t *testing.T) {
 	os.WriteFile(filepath.Join(root, archive.ManifestEntryKey), []byte(manifestJSON), 0o644)
 	os.WriteFile(filepath.Join(build, archive.ManifestEntryKey), []byte(manifestJSON), 0o644)
 	envFile := filepath.Join(t.TempDir(), "env")
-	t.Setenv("JM_ENGINE", fakeProgram(t, t.TempDir(), "engine", "env > "+envFile))
+	t.Setenv("JM_ENGINE", fakeProgram(t, t.TempDir(), "engine", "(echo \"ARGS=$*\"; env) > "+envFile))
 	for _, v := range []string{"JM_EXIT_AFTER_FRAMES", "JM_DRIVE", "JM_RECORD_DIR", "JM_CONTROL", "CODEX_SANDBOX"} {
 		t.Setenv(v, "")
 	}
-	launched := func(how string) {
+	launched := func(how, root string) {
 		t.Helper()
 		data, _ := os.ReadFile(envFile)
 		env := string(data)
@@ -227,7 +227,7 @@ func TestAPersonsPlayIsRecordedAndSteerable(t *testing.T) {
 	if err := runWith(build, runOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	launched("jm run")
+	launched("jm run", root)
 	p, err := plays.Create(root, plays.ReadBuild(build), version, "")
 	if err != nil {
 		t.Fatal(err)
@@ -239,11 +239,24 @@ func TestAPersonsPlayIsRecordedAndSteerable(t *testing.T) {
 		os.MkdirAll(later, 0o755)
 		os.WriteFile(filepath.Join(later, "session.json"), []byte(`{"format":1,"frames":1,"markers":[],"started":"2999-01-01T00:00:00Z"}`), 0o644)
 	}
-	if err := resumePlay(root, filepath.Base(p), "0"); err != nil {
+	if err := resumePlay(root, root, filepath.Base(p), "0"); err != nil {
 		t.Fatal(err)
 	}
-	launched("a resumed play")
+	launched("a resumed play", root)
 	if _, err := os.Stat(filepath.Join(p, "frames.bin")); err != nil {
 		t.Error("the play a resume replays went with older plays:", err)
 	}
+	// In a variant: the game's play, fast-forwarded with the variant's build, recorded as the variant's.
+	variant := t.TempDir()
+	os.MkdirAll(filepath.Join(variant, "build"), 0o755)
+	os.WriteFile(filepath.Join(variant, archive.ManifestEntryKey), []byte(manifestJSON), 0o644)
+	os.WriteFile(filepath.Join(variant, "build", archive.ManifestEntryKey), []byte(manifestJSON), 0o644)
+	if err := resumePlay(root, variant, filepath.Base(p), "0"); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(envFile)
+	if env := string(data); !strings.Contains(env, "JM_PLAY_SESSION="+p) || !strings.Contains(env, "ARGS="+filepath.Join(variant, "build")+"\n") {
+		t.Errorf("a resume in a variant doesn't replay the game's play with the variant's build: %s", env)
+	}
+	launched("a resume in a variant", variant)
 }

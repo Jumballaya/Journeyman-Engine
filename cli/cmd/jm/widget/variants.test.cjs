@@ -33,19 +33,34 @@ test('compare shows both frames side by side and what differs', async () => {
   key(s, 'var-frame').fire('input', { target: { value: '30' } });
   s.find((e) => e.tag === 'form').at(-1).fire('submit');
   await settle(8);
-  assert.deepEqual(s.calls().find((c) => c.name === 'variant_compare').arguments, { a: 'floaty', frame: 30, game: '/g/pip' });
+  assert.deepEqual(s.calls().find((c) => c.name === 'variant_compare').arguments, { a: 'floaty', play: 'none', at: '30', game: '/g/pip' }, 'no plays: at a frame');
   assert.deepEqual(s.find((e) => e.tag === 'img' && e.attributes.alt && e.attributes.alt.includes('frame 30')).map((e) => e.attributes.src),
     ['data:image/jpeg;base64,a', 'data:image/jpeg;base64,b']);
   assert.match(s.app.text, /changed Player: VelocityComponent/);
 });
 
-test("compare can replay a recorded play's inputs in both", async () => {
-  const plays = { structuredContent: { plays: [{ id: '20261015-101500', started: '2026-10-15T10:15:00Z', seconds: 75 }] } };
+test("compare goes to the person's last marker of their latest play, and plays the variant from there", async () => {
+  const plays = { structuredContent: { plays: [
+    { id: 'agent1', started: '2026-10-15T11:00:00Z', seconds: 9, by: 'agent', marks: ['m1 0:01.0'] },
+    { id: 'p2', started: '2026-10-15T10:15:00Z', seconds: 75, marks: ['m1 0:03.0', 'm2 0:40.0 "too floaty"'] },
+    { id: 'p1', started: '2026-10-14T10:15:00Z', seconds: 20 }] } };
   const s = await open_({ plays_list: plays });
-  s.find((e) => e.tag === 'select')[0].fire('change', { target: { value: '20261015-101500' } });
-  s.find((e) => e.tag === 'form').at(-1).fire('submit');
+  const args = () => s.calls().filter((c) => c.name === 'variant_compare').at(-1).arguments;
+  const submit = async () => { s.find((e) => e.tag === 'form').at(-1).fire('submit'); await settle(8); };
+  await submit();
+  assert.deepEqual(args(), { a: 'floaty', play: 'p2', at: 'm2', game: '/g/pip' }, "theirs, not the agent's newer run, at its last marker");
+  assert.match(s.app.text, /floaty · marker 2 \(frame 30\)/);
+  s.button('Play floaty from there').fire('click');
   await settle(8);
-  assert.deepEqual(s.calls().find((c) => c.name === 'variant_compare').arguments, { a: 'floaty', frame: 120, play: '20261015-101500', game: '/g/pip' });
+  assert.deepEqual(s.calls().find((c) => c.name === 'variant_play').arguments, { name: 'floaty', play: 'p2', at: 'm2', game: '/g/pip' });
+  const [playPick] = s.find((e) => e.tag === 'select' && e.attributes['aria-label'] === 'Play');
+  playPick.fire('change', { target: { value: 'p1' } });
+  await submit();
+  assert.deepEqual(args(), { a: 'floaty', play: 'p1', at: 'end', game: '/g/pip' }, 'a play with no markers: its end');
+  s.find((e) => e.tag === 'select' && e.attributes['aria-label'] === 'Play')[0].fire('change', { target: { value: 'none' } });
+  await submit();
+  assert.deepEqual(args(), { a: 'floaty', play: 'none', at: '120', game: '/g/pip' }, 'no input: a frame');
+  assert.ok(!s.button('Play floaty from there'), 'no play: no moment to play from');
 });
 
 test('merge and drop ask first; a new variant is made from its name', async () => {
@@ -104,7 +119,7 @@ test('a sandbox is compared with the game too: both frames, and its changes per 
   assert.match(s.app.text, /scenes\/main\.scene\.json\s+changed/);
   s.find((e) => e.tag === 'form').at(-1).fire('submit');
   await settle(8);
-  assert.deepEqual(s.calls().find((c) => c.name === 'variant_compare').arguments, { a: 'sb1', sandbox: true, frame: 120, game: '/g/pip' });
+  assert.deepEqual(s.calls().find((c) => c.name === 'variant_compare').arguments, { a: 'sb1', sandbox: true, play: 'none', at: '120', game: '/g/pip' });
   assert.deepEqual(s.find((e) => e.tag === 'img' && e.attributes.alt && e.attributes.alt.includes('frame 30')).map((e) => e.attributes.alt),
     ['sb1 at frame 30', 'the game at frame 30']);
   assert.equal(s.app.text.match(/changed Player: VelocityComponent/g).length, 1);

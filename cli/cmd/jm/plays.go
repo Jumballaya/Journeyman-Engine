@@ -116,9 +116,14 @@ func init() {
 	sub("drive [play] [moment]", "The stepped driver, starting at a moment of the play", 2, rooted(func(root string, cmd *cobra.Command, args []string) error {
 		return drivePlay(root, arg(args, 0), arg(args, 1))
 	}))
-	sub("resume [play] [moment]", "Play on yourself from a moment (recorded as a new play)", 2, rooted(func(root string, cmd *cobra.Command, args []string) error {
-		return resumePlay(root, arg(args, 0), arg(args, 1))
+	resume := sub("resume [play] [moment]", "Play on yourself from a moment (recorded as a new play)", 2, rooted(func(root string, cmd *cobra.Command, args []string) error {
+		in, _ := cmd.Flags().GetString("in")
+		if in == "" {
+			in = root
+		}
+		return resumePlay(root, in, arg(args, 0), arg(args, 1))
 	}))
+	resume.Flags().String("in", "", "the game to play it in: a variant's or sandbox's folder (default: this game; built as it is)")
 	sub("verify [play]", "Replay a play to its end: does it go the same way?", 1, rooted(func(root string, cmd *cobra.Command, args []string) error {
 		p, b, err := openPlay(root, arg(args, 0))
 		if err != nil {
@@ -646,18 +651,24 @@ func drivePlay(root, ref, at string) error {
 	return nil
 }
 
-// resumePlay hands the game to the person at frame f of a play: fast-forwarded
-// there, then theirs, recorded as a new play.
-func resumePlay(root, ref, at string) error {
-	p, b, f, err := openMoment(root, ref, at)
+// resumePlay hands the game in (root itself, or a variant or sandbox of it) to
+// the person at a moment of root's play: fast-forwarded there, then theirs,
+// recorded as a new play of in's.
+func resumePlay(root, in, ref, at string) error {
+	p, err := plays.Find(root, ref)
 	if err != nil {
 		return err
 	}
+	f, err := p.FrameAt(at)
+	if err != nil {
+		return err
+	}
+	b := plays.ReadBuild(filepath.Join(in, "build"))
 	engine, err := resolveEnginePath()
 	if err != nil {
 		return err
 	}
-	record, recording, err := personsPlay(root, b, p) // p: what it fast-forwards through
+	record, recording, err := personsPlay(in, b, p) // p: what it fast-forwards through
 	if err != nil {
 		return err
 	}
@@ -665,7 +676,7 @@ func resumePlay(root, ref, at string) error {
 	// person takes over where state, frame and drive show frame f.
 	p.CopyThumbs(record, f+1)
 	fmt.Fprintf(os.Stderr, "Resuming %s at frame %d (fast-forwarding there); recording as %s\n", p.ID, f, filepath.Base(record))
-	cmd := engineRun(context.Background(), engine, root, b.Dir)
+	cmd := engineRun(context.Background(), engine, in, b.Dir)
 	cmd.Env = append(append(os.Environ(), "JM_PLAY_SESSION="+p.Dir, fmt.Sprintf("JM_PLAY_UNTIL=%d", f+1), "JM_PLAY_THEN=live"), recording...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()

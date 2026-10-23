@@ -42,10 +42,15 @@ func (s *mcpServer) variantTools() []mcpTool {
 				return jsonResult(map[string]any{"ok": true, "variant": v, "next": "open_game its dir to change it; variant_compare to see it beside the game"})
 			}},
 		{Name: "variant_play", Meta: callableMeta("Starting the variant…", "The variant is open"), Title: "Play a variant",
-			Description: "Open a variant in its own window for the person to play (built first if it needs it).",
-			Annotations: writes(), InputSchema: object(map[string]any{"name": nameArg}, "name"),
+			Description: "Open a variant in its own window for the person to play (built first if it needs it). " +
+				"With at, it opens at that moment of one of their plays of the game (fast-forwarded there with the variant), " +
+				"so they try the variant from the spot they marked: \"play the variant from your marker 2\".",
+			Annotations: writes(), InputSchema: object(map[string]any{"name": nameArg, "play": playRefArg, "at": strArg(moment + `"start" or "end"; the play's (default: play it from the start)`)}, "name"),
 			onGame: func(root string, a toolArgs) toolResult {
 				v, err := findVariant(root, a.str("name"))
+				if err == nil && a.str("at") != "" {
+					return resumeIn(a.call(), root, v.Dir, a.str("play"), a.str("at"))
+				}
 				if err == nil {
 					err = playGame(a.call(), v.Dir)
 				}
