@@ -224,6 +224,28 @@ test('a replay is labeled by how far the game drifted', async () => {
     assert.equal(button(app, 'Exact frame').attributes.disabled, '');
   }
 });
+test('a marker replayed with a changed game shows what they saw and what it does now, a switch apart', async () => {
+  const marked = { ...play, stale: true, markers: [{ n: 1, frame: 60, time: 1, scene: '', note: 'too floaty' }] };
+  const meta = { ...metadata, 'jm/markers': [{ n: 1, src: 'data:image/jpeg;base64,SAW' }] };
+  const viewerSwitch = (app) => child(child(app, 'viewer'), 'then-now');
+  for (const [drift, compared] of [['game', true], ['same', false], ['look', false]]) {
+    const callTool = async () => replayed({ kind: 'replay', drift });
+    const { app } = widget(marked, meta, 60, null, { callTool });
+    assert.equal(viewerSwitch(app), undefined, 'nothing to compare before the replay');
+    button(app, 'Exact frame').listeners.click();
+    await settle();
+    assert.equal(!!viewerSwitch(app), compared, drift);
+    if (!compared) continue;
+    const [asPlayed, now] = viewerSwitch(app).children;
+    assert.deepEqual(shown(app), { src: 'data:image/png;base64,replayed', badge: 'replayed with the current build' });
+    assert.equal(now.attributes['aria-pressed'], 'true');
+    asPlayed.listeners.click();
+    assert.deepEqual(shown(app), { src: 'data:image/jpeg;base64,SAW', badge: 'what you saw' });
+    assert.equal(viewerSwitch(app).children[0].attributes['aria-pressed'], 'true');
+    viewerSwitch(app).children[1].listeners.click();
+    assert.equal(shown(app).src, 'data:image/png;base64,replayed');
+  }
+});
 test('a thumbnail fallback is not called exact, and the button stays usable', async () => {
   const app = await exactFrameAnswers(replayed({ kind: 'thumbnail', frame: 60 }));
   assert.equal(shown(app).badge, null);
@@ -367,6 +389,32 @@ test('an exact frame the same size as its thumbnail still reaches the model', as
                                     structuredContent: { play: 'test-run', game: '/g/void', frame: 120, time: 2, path: 'f.png', source: { kind: 'replay', drift: 'same' } } } });
   await settle();
   assert.equal(plain(last('ui/update-model-context').params).content[0].data, 'END');
+});
+
+test('the model is told which picture of a changed game it sees, as the person switches', async () => {
+  const w = mcpAppWidget();
+  const init = w.sent.find((m) => m.method === 'ui/initialize');
+  w.fromHost({ id: init.id, result: { hostCapabilities: { serverTools: {}, updateModelContext: { text: {}, image: {} } } } });
+  await settle();
+  const marked = { ...play, stale: true, markers: [{ n: 1, frame: 60, time: 1, scene: '', note: '' }] };
+  w.fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: marked,
+    _meta: { ...metadata, 'jm/markers': [{ n: 1, src: 'data:image/jpeg;base64,SAW' }] } } });
+  await settle();
+  const context = () => plain(w.sent.filter((m) => m.method === 'ui/update-model-context').at(-1).params);
+  assert.equal(context().structuredContent.picture, undefined);
+  button(w.app, 'Exact frame').listeners.click();
+  await settle();
+  const call = w.sent.filter((m) => m.method === 'tools/call' && m.params.name === 'play_frame').at(-1);
+  w.fromHost({ id: call.id, result: { content: [], _meta: { 'jm/image': 'data:image/png;base64,NOW' },
+    structuredContent: { play: 'test-run', frame: 60, time: 1, path: 'f.png', source: { kind: 'replay', drift: 'game' } } } });
+  await settle();
+  assert.equal(context().structuredContent.picture, 'replayed with the current build');
+  assert.match(context().content.at(-1).text, /the picture is this moment replayed with the current build \(they can switch\)/);
+  child(child(w.app, 'viewer'), 'then-now').children[0].listeners.click();
+  await settle();
+  assert.equal(context().structuredContent.picture, 'as played');
+  assert.equal(context().content[0].data, 'SAW');
+  assert.match(context().content.at(-1).text, /the picture is what they saw then/);
 });
 
 test('another play is picked from the list and shown in place', async () => {
