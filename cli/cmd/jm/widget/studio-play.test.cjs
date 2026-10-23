@@ -39,6 +39,7 @@ test('with no game running, the last play is the way back in: play on from its l
   s.button('Play on from marker 2').fire('click');
   await settle(6);
   assert.deepEqual(plain(s.calls().find((c) => c.name === 'play_resume').arguments), { play: '2026-10-22_165735', at: 'm2', game: '/g/pip' });
+  assert.match(s.app.text, /may not be quite the same spot/);
   s.button('Talk it over').fire('click');
   await settle(6);
   assert.match(s.sent.filter((m) => m.method === 'ui/message').at(-1).params.content[0].text, /Let's look at my play 2026-10-22_165735 \(1:05 long, 2 markers\)/);
@@ -55,6 +56,7 @@ test('a last play without markers plays on from its end', async () => {
   s.button('Play on from the end').fire('click');
   await settle(6);
   assert.deepEqual(plain(s.calls().find((c) => c.name === 'play_resume').arguments), { play: 'p1', game: '/g/pip' });
+  assert.doesNotMatch(s.app.text, /may not be quite the same spot/);
 });
 
 test('the Play tab follows the running game: its picture, pause, watched values', async () => {

@@ -110,3 +110,12 @@ func TestPlayReviewOpensAsAThreadEntrypoint(t *testing.T) {
 		t.Errorf("play_show {}: %v", result)
 	}
 }
+
+func TestResumingAChangedGameSaysTheSpotMayDiffer(t *testing.T) {
+	if text := resumedText("p", 90, false); strings.Contains(text, "changed") {
+		t.Errorf("an unchanged game warns: %s", text)
+	}
+	if text := resumedText("p", 90, true); !strings.Contains(text, "may not be quite their spot") {
+		t.Errorf("a changed game doesn't warn: %s", text)
+	}
+}

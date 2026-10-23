@@ -179,7 +179,8 @@ studioTabs.push((() => {
     const resume = el("button", { class: "primary", "data-key": "resume", disabled: ctx.busy,
       title: "Opens the game at that moment, replayed exactly; what you play from there is recorded as a new play",
       onclick: () => ctx.act("Opening the game there", "play_resume", { play: last.id, ...(at ? { at } : {}) },
-        () => "The game is open where you left off: what you play from there is recorded.") },
+        () => "The game is open where you left off: what you play from there is recorded." +
+          (last.stale ? " The game changed since, so it may not be quite the same spot." : "")) },
       at ? `Play on from marker ${last.markers}` : "Play on from the end");
     return el("div", { class: "last-play" },
       kit.section("Your last play",

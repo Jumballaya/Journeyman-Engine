@@ -262,7 +262,7 @@ func momentSummary(p *plays.Play, m plays.Marker) string {
 }
 
 func playResume(root string, a toolArgs) toolResult {
-	p, _, f, err := openMoment(root, a.str("play"), a.str("at"))
+	p, b, f, err := openMoment(root, a.str("play"), a.str("at"))
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
@@ -277,8 +277,18 @@ func playResume(root string, a toolArgs) toolResult {
 		return textResult(err.Error(), true)
 	}
 	go func() { _ = cmd.Wait() }()
-	return toolResult{Text: fmt.Sprintf("The game is open at frame %d of play %s; what they play from there is recorded as a new play (plays_list).", f, p.ID),
-		Structured: map[string]any{"play": p.ID, "frame": f, "opened": true}}
+	changed := p.DriftFrom(b) == plays.GameChanged
+	return toolResult{Text: resumedText(p.ID, f, changed), Structured: map[string]any{"play": p.ID, "frame": f, "opened": true, "gameChanged": changed}}
+}
+
+// resumedText says where the person was put. A changed game replays their
+// inputs differently, so the spot may not be theirs: they should hear that.
+func resumedText(play string, f uint64, changed bool) string {
+	text := fmt.Sprintf("The game is open at frame %d of play %s; what they play from there is recorded as a new play (plays_list).", f, play)
+	if changed {
+		text += " The game changed since that play, so the replay there may have gone differently: tell them it may not be quite their spot (play_verify says by when it differs)."
+	}
+	return text
 }
 
 // jpegOf reads an image and gives it back as a JPEG at most maxWidth wide.
