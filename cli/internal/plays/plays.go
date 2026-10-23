@@ -520,6 +520,16 @@ var markerSpec = regexp.MustCompile(`^(marker:|m\d)`)
 var timeSpec = regexp.MustCompile(`^(\d+(?:\.\d+)?)s$`)
 var clockSpec = regexp.MustCompile(`^(\d+):(\d{1,2}(?:\.\d+)?)$`)
 
+// MarkerOn is the marker on frame f, if there's one.
+func (p *Play) MarkerOn(f uint64) (Marker, bool) {
+	for _, m := range p.Meta.Markers {
+		if m.Frame == f {
+			return m, true
+		}
+	}
+	return Marker{}, false
+}
+
 // FrameAt resolves a moment in the play to a frame: a frame number ("420"),
 // a time ("12.5s", "1:05"), a marker ("marker:2", "m2"), "start" or "end".
 func (p *Play) FrameAt(spec string) (uint64, error) {

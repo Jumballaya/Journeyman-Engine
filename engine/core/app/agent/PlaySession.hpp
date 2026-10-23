@@ -32,8 +32,9 @@ namespace session {
 inline constexpr int kThumbWidth = 240;
 // 2: inputs given between frames ("pre"), set and scene events, sessionHash.
 // 3: a marker's picks (F8's moment): [{entity, origin, tags, state, rect}].
+// 4: "session" events (all session values replaced: a resume landing at its marker).
 // The stepped driver's ready line says it ("plays"): tools know what replays here.
-inline constexpr int kFormat = 3;
+inline constexpr int kFormat = 4;
 
 // A cheap, stable hash of the state's entities (what a replay must match).
 uint64_t entitiesHash(const nlohmann::json& state);

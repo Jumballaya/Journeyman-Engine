@@ -78,6 +78,13 @@ play now goes differently, `jm plays frame latest m1` again to see the
 difference → `jm plays resume latest m1` so the person tries the fix right
 where they were.
 
+Resuming replays the person's inputs into the game as it is now. A changed
+game can take them somewhere else, so a resume at a marker lands in the
+marker's scene: if the replay isn't there, the game loads that scene with
+the session values they had then (things in it where the scene starts them)
+and says so on screen. In the right scene, the replay's values stand: where
+they differ, that's the change to try. The new play records it all.
+
 ## Moments: what you picked
 
 A marker you saved with picks is a moment, and your agent sees what you

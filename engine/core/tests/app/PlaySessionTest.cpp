@@ -136,12 +136,14 @@ namespace {
 // Returns the driver's replies.
 std::string driveGame(const TempDir& game, const std::string& commands, Engine::ViewSize framebuffer,
                       const std::filesystem::path& record, const std::filesystem::path& play = {},
-                      const std::function<void(Engine&)>& setup = {}) {
+                      const std::function<void(Engine&)>& setup = {},
+                      const std::function<void(DevOptions&)>& configure = {}) {
   EngineOptions options;
   options.dev = DevOptions{};
   options.dev.drive = true;
   options.dev.recordDir = record;
   options.dev.playSession = play;
+  if (configure) configure(options.dev);
   if (play.empty()) options.dev.saveDir = game.path() / "save";
   Engine engine(game.path(), ".jm.json", options);
   engine.setFramebufferSize(framebuffer.width, framebuffer.height);  // as the renderer does, starting
@@ -739,4 +741,68 @@ TEST(PlaySession, AHeldFrameShowsTheLastStep) {
   engine.frame(0.0f);
   EXPECT_EQ(engine.frameCount(), 2u);
   EXPECT_EQ(engine.drawFraction(), 1.0f);
+}
+
+namespace {
+
+// What a changed game's new scripts might do: set "bonus" on the first
+// frame; with `sendsBack`, also go back to the main scene on the fifth.
+struct Changed : System {
+  Engine& engine;
+  bool sendsBack;
+  int frames = 0;
+  Changed(Engine& e, bool back) : engine(e), sendsBack(back) {}
+  void update(World&, float) override {
+    if (++frames == 1) engine.getSession().setJson("bonus", 1);
+    if (frames == 5 && sendsBack) engine.getSceneManager().loadScene("scenes/main.scene.json");
+  }
+};
+
+void writeTwoSceneGame(TempDir& game) {
+  game.writeFile(".jm.json", R"({"name": "Driven", "entryScene": "scenes/main.scene.json",
+                                "scenes": ["scenes/main.scene.json", "scenes/town.scene.json"], "assets": []})");
+  game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": []})");
+  game.writeFile("scenes/town.scene.json", R"({"name": "town", "entities": []})");
+}
+
+}  // namespace
+
+// A resume handing over just after a marker lands there: where the replay
+// got if that's the marker's scene (its values, changed or not, stand), else
+// the marker's scene loaded with the values then. The new play replays too.
+TEST(PlaySession, AResumeLandsAtItsMarker) {
+  TempDir game;
+  writeTwoSceneGame(game);
+  const auto play = game.path() / "play";
+  driveGame(game, "step 3\nscene scenes/town.scene.json\nset score 5\nstep 3\nmarker here\nstep 3\n", {640, 360}, play);
+  std::ifstream meta(play / "session.json");
+  const uint64_t marked = nlohmann::json::parse(meta)["markers"][0]["frame"].get<uint64_t>();
+  const std::string pastIt = "step " + std::to_string(marked + 2);  // the handover is before frame marked + 1
+  const auto resumeAtMarker = [&](DevOptions& dev) {
+    dev.playUntil = marked + 1;
+    dev.afterReplay = DevOptions::AfterReplay::Live;
+  };
+  const auto changed = [](bool sendsBack) {
+    return [sendsBack](Engine& e) { e.getWorld().registerSystem<Changed>(e, sendsBack); };
+  };
+  const auto resume = [&](const std::string& name, const std::function<void(Engine&)>& setup) {
+    return lastReply(driveGame(game, pastIt + "\nstate\n", {640, 360}, game.path() / name, play, setup, resumeAtMarker))["state"];
+  };
+  const auto given = [&](const std::string& name) { return fileText(game.path() / name / "inputs.jsonl").find("\"session\"") != std::string::npos; };
+
+  nlohmann::json state = resume("same", {});
+  EXPECT_EQ(state["scene"], "scenes/town.scene.json");
+  EXPECT_EQ(state["session"], (nlohmann::json{{"score", 5}}));
+  EXPECT_FALSE(given("same"));
+
+  state = resume("values", changed(false));
+  EXPECT_EQ(state["session"], (nlohmann::json{{"bonus", 1}, {"score", 5}}));  // in its scene: the change is theirs to try
+  EXPECT_FALSE(given("values"));
+
+  state = resume("back", changed(true));
+  EXPECT_EQ(state["scene"], "scenes/town.scene.json");
+  EXPECT_EQ(state["session"], (nlohmann::json{{"score", 5}}));  // the values then
+  EXPECT_TRUE(given("back"));
+  const std::string replies = driveGame(game, pastIt + "\nstate replay\n", {640, 360}, {}, game.path() / "back", changed(true));
+  EXPECT_TRUE(lastReply(replies)["state"]["replay"]["diverged"].is_null());
 }
