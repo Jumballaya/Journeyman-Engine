@@ -171,7 +171,9 @@
     const markerImage = marker && d.markerImages.find((m) => m.n === marker.n);
     const replayed = state.frames[frame];
     const time = marker ? marker.time : thumb && thumb.frame === frame ? thumb.time : timeOf(p, frame);
-    const saw = markerImage ? (marker.picks && marker.picks.length ? "what you saw · what you picked" : "what you saw") : null;
+    // The person's own play, or a run an agent drove to show them something.
+    const saw = !markerImage ? null : p.by === "agent" ? "the agent's run, as it went"
+      : marker.picks && marker.picks.length ? "what you saw · what you picked" : "what you saw";
     // The game changed since and the marker was replayed with it: then and now, a switch apart.
     const then = replayed && replayed.drift === "game" && markerImage ? markerImage.src : null;
     if (then && state.asPlayed === frame) return { frame, time, marker, src: then, badge: saw, then, asPlayed: true, scene: sceneAt(p, frame) };
@@ -531,7 +533,8 @@
     const it = describe(p, m);
     const content = [host.text(`${it.text}\n${JSON.stringify(it.facts)}`, { title: it.title })];
     if (m.src) content.push(host.image(m.src, { title: it.title }));
-    const question = picksOf(m).length ? `Look at what I picked at ${it.where} of my play ${p.id}: what's going on there?` : `Look at ${it.where} of my play ${p.id}: what's going on there?`;
+    const whose = p.by === "agent" ? "your run" : "my play";
+    const question = picksOf(m).length ? `Look at what I picked at ${it.where} of ${whose} ${p.id}: what's going on there?` : `Look at ${it.where} of ${whose} ${p.id}: what's going on there?`;
     host.message(content, { send: false, target, instead: question }).catch(() => {});
   };
 
