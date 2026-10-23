@@ -102,6 +102,7 @@ class SceneManager {
   const std::string& getCurrentScenePath() const { return _currentScenePath; }
   AssetHandle getCurrentSceneHandle() const { return _currentSceneHandle; }
   bool isTransitioning() const { return _transition.has_value(); }
+  bool changeRequested() const { return _request.has_value(); }  // a load or transition the next tick applies
   // A running transition: the scene it leaves (still on screen, fading out)
   // and how far along it is (0..1).
   struct TransitionState {

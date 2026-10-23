@@ -91,29 +91,31 @@ void AgentRun::startSession() {
 }
 
 void AgentRun::findLanding() {
-  if (!_playback || !_dev.playUntil || _dev.afterReplay != DevOptions::AfterReplay::Live) return;
-  for (const nlohmann::json& marker : _playback->meta().value("markers", nlohmann::json::array())) {
-    if (marker.value("frame", uint64_t{0}) + 1 != *_dev.playUntil) continue;
-    const int n = marker.value("n", 0);
-    std::ifstream in(_dev.playSession / "markers" / (std::to_string(n) + ".json"));
-    const nlohmann::json state = nlohmann::json::parse(in, nullptr, false);
-    if (!state.is_object()) return;  // no checkpoint: the replay's spot is the one
-    _landing = Landing{n, state.value("scene", std::string()), state.value("session", nlohmann::json::object())};
-    return;
-  }
+  if (!_playback || !_dev.playUntil || _dev.playMarker <= 0 || _dev.afterReplay != DevOptions::AfterReplay::Live) return;
+  const int n = _dev.playMarker;
+  std::ifstream in(_dev.playSession / "markers" / (std::to_string(n) + ".json"));
+  const nlohmann::json state = nlohmann::json::parse(in, nullptr, false);
+  if (!state.is_object()) return;  // no checkpoint: the replay's spot is the one
+  _landing = Landing{n, state.value("scene", std::string()), state.value("session", nlohmann::json::object())};
 }
 
 void AgentRun::land() {
   const Landing landing = *std::exchange(_landing, std::nullopt);
   // In its scene, the replay's values stand: where they differ, that's the change to try.
-  if (_engine.getSceneManager().getCurrentScenePath() == landing.scene) return;
+  const auto same = [](const std::filesystem::path& a, const std::filesystem::path& b) {
+    return a.lexically_normal() == b.lexically_normal();
+  };
+  if (same(_engine.getSceneManager().getCurrentScenePath(), landing.scene)) return;
   JM_LOG_INFO("[Session] the replay didn't reach marker {}'s scene: starting there, with the values then", landing.n);
+  const nlohmann::json before = _engine.stateJson(false);
   try {
     // Values first: the scene's scripts start with them, as they did then.
     giveInput({{"type", "session"}, {"values", landing.session}});
     giveInput({{"type", "scene"}, {"path", landing.scene}});
   } catch (const std::exception& e) {
+    // The failed load changed the run as no recorded input can say: the play ends before it.
     JM_LOG_ERROR("[Session] marker {}'s scene didn't load: {}", landing.n, e.what());
+    endRecording(before, "No marker: the recording ended when marker " + std::to_string(landing.n) + "'s scene didn't load.");
     return;
   }
   _engine.notify("The game changed since this play: you're at marker " + std::to_string(landing.n) +
@@ -214,8 +216,9 @@ void AgentRun::frameDue() {
 
 float AgentRun::stepDue(float dt) {
   const uint64_t frame = _engine.frameCount();
-  // A scene can't change mid-transition: the landing waits for it to end.
-  if (_landing && frame >= *_dev.playUntil && !_engine.getSceneManager().isTransitioning()) land();
+  // Once the scene settles: a fade can't be cut, and a queued change would undo the landing.
+  const SceneManager& scenes = _engine.getSceneManager();
+  if (_landing && frame >= *_dev.playUntil && !scenes.isTransitioning() && !scenes.changeRequested()) land();
   if (!replayingAt(frame)) return dt;
   // What the driver gave between frames, before the frame starts as it was then.
   replay(_playback->eventsBefore(frame));
@@ -274,13 +277,16 @@ void AgentRun::frameDrawn(uint64_t firstStep) {
 }
 
 void AgentRun::assetsReloaded() {
+  // A replay needs the files the play ran with.
+  if (_recorder) endRecording(_engine.stateJson(false), "No marker: the recording ended at a reload. Play again to record.");
+}
+
+void AgentRun::endRecording(const nlohmann::json& last, std::string notice) {
   if (!_recorder) return;
-  // A replay needs the files the play ran with: the recording ends here, replayable up to now.
-  const auto last = _engine.stateJson(false);
   _recorder->end(&last);
   _recorder.reset();
-  _notRecordingNotice = "No marker: the recording ended at a reload. Play again to record.";
-  JM_LOG_INFO("[Session] the recorded play ends at this reload");
+  JM_LOG_INFO("[Session] the recorded play ends here: {}", notice);
+  _notRecordingNotice = std::move(notice);
 }
 
 void AgentRun::shutdown() {

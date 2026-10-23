@@ -73,6 +73,7 @@ below) or state for state (`JM_DUMP_DIR`).
 | `JM_CONTROL=dir` | steer a live run from outside: append `{"id","command"}` lines to `dir/in` (the driver's commands, plus `pause`, `resume`, `speed 0.1..1`, `status`); each answer is `dir/answers/<id>.json`, and `dir/status.json` says it's live (`jm run` does this when you play: `.jm/live/<run>`, which MCP's `play_live` uses) |
 | `JM_PLAY_SESSION=dir` | replay a recorded play exactly (its seed, save, inputs and frame times); the state's `replay.diverged` says where it went differently |
 | `JM_PLAY_UNTIL=n` | the replay stops at frame n (with the driver: yours from there) |
+| `JM_PLAY_MARKER=n` | with `JM_PLAY_THEN=live`: if the replay isn't in marker n's scene at the handover, that scene loads with the session values then (`jm plays resume` at a marker) |
 | `JM_PLAY_THEN=live` | after the replay, the player takes over (it fast-forwards there: nothing drawn or heard) |
 
 Replay files have one event per line, `<frame> down|up <KeyName>`

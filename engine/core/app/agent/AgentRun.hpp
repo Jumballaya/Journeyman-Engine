@@ -134,7 +134,9 @@ class AgentRun final : public AgentTools {
   void startSession();                     // JM_SESSION, or a replay's starting values
   void startReplay();                      // the recording's framebuffer size, before the first frame
   void startRecording();
-  void findLanding();  // a resume handing over just after a marker: that marker
+  void findLanding();  // JM_PLAY_MARKER's: its scene and values
+  // Replayable up to here, `last` the state its last frame left; F8 says `notice`.
+  void endRecording(const nlohmann::json& last, std::string notice);
   // The person lands at the marker: where the replay got, if that's in its
   // scene; else its scene, loaded with the values then (a changed game).
   void land();

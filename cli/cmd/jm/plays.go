@@ -682,6 +682,9 @@ func resumePlay(root, in, ref, at string) error {
 	fmt.Fprintf(os.Stderr, "Resuming %s at frame %d (fast-forwarding there); recording as %s\n", p.ID, f, filepath.Base(record))
 	cmd := engineRun(context.Background(), engine, in, b.Dir)
 	cmd.Env = append(append(os.Environ(), "JM_PLAY_SESSION="+p.Dir, fmt.Sprintf("JM_PLAY_UNTIL=%d", f+1), "JM_PLAY_THEN=live"), recording...)
+	if m, ok := p.Marker(at); ok { // a changed game's replay may not get there: it lands in the marker's scene
+		cmd.Env = append(cmd.Env, fmt.Sprintf("JM_PLAY_MARKER=%d", m.N))
+	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()
 }

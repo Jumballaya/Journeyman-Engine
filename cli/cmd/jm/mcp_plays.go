@@ -298,22 +298,22 @@ func resumeIn(c *toolCall, root, in, play, at string) toolResult {
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
-	cmd := exec.Command(self, "plays", "resume", p.ID, fmt.Sprint(f), "--in", in)
+	cmd := exec.Command(self, "plays", "resume", p.ID, at, "--in", in) // at, not f: a marker lands in its scene
 	cmd.Dir = root
 	if err := cmd.Start(); err != nil {
 		return textResult(err.Error(), true)
 	}
 	go func() { _ = cmd.Wait() }()
 	changed := p.DriftFrom(plays.ReadBuild(filepath.Join(in, "build"))) == plays.GameChanged
-	return toolResult{Text: resumedText(p, f, changed), Structured: map[string]any{"play": p.ID, "frame": f, "opened": true, "gameChanged": changed}}
+	return toolResult{Text: resumedText(p, at, f, changed), Structured: map[string]any{"play": p.ID, "frame": f, "opened": true, "gameChanged": changed}}
 }
 
 // resumedText says where the person was put. A changed game replays their
 // inputs differently, so the spot may not be theirs: they should hear that.
 // At a marker the engine lands them in its scene if the replay doesn't get there.
-func resumedText(p *plays.Play, f uint64, changed bool) string {
+func resumedText(p *plays.Play, at string, f uint64, changed bool) string {
 	text := fmt.Sprintf("The game is open at frame %d of play %s; what they play from there is recorded as a new play (plays_list).", f, p.ID)
-	m, atMarker := p.MarkerOn(f)
+	m, atMarker := p.Marker(at)
 	switch {
 	case !changed:
 	case atMarker:
