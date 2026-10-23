@@ -143,7 +143,7 @@
     // A failed call's own words (e.g. "no plays yet"), when the host passes them on.
     const said = out && Array.isArray(out.content)
       ? out.content.filter((c) => c && c.type === "text").map((c) => c.text).join(" ") : "";
-    return { play, loading, unreadable, said, server: (out && out.structuredContent && out.structuredContent.jm) || "",
+    return { answer: out, play, loading, unreadable, said, server: (out && out.structuredContent && out.structuredContent.jm) || "",
              thumbs: metadata["jm/thumbs"] || [], markerImages: metadata["jm/markers"] || [] };
   };
 
@@ -154,10 +154,10 @@
   // host's answer it covers; shared: the moment last given to the model;
   // asPlayed: the frame showing what they saw, not its replay with the changed game.
   // frames hold each replay's build: one of another build than the answer's
-  // (the game changed again) isn't shown. opened: the play, at and build last
-  // gone to; compared: the moments (play, at, build) replayed unasked, once each.
+  // (the game changed again) isn't shown. opened: the answer whose at was gone
+  // to; compared: the moments (play, at, build) replayed unasked, once an answer.
   const state = { play: null, selected: null, frames: {}, pending: null, replaying: null, notice: "", plays: null, picked: null, shared: "", asPlayed: null,
-                  opened: "", compared: new Set() };
+                  opened: null, compared: new Set() };
   try { if (host.widgetState && Number.isFinite(host.widgetState.selected)) state.selected = host.widgetState.selected; } catch (e) {}
   const save = () => { try { host.setWidgetState({ selected: state.selected }); } catch (e) {} };
 
@@ -398,9 +398,10 @@
     // An answer with at (the agent's "look here") opens there over any saved
     // scrub, and asks afresh: the game may have changed again since.
     const at = Number.isFinite(p.at) && p.at >= 0 && p.at < p.frames ? p.at : null;
-    const opening = `${playKey(p)}@${at}#${p.build || ""}`;
-    if (at !== null && state.opened !== opening) {
-      Object.assign(state, { opened: opening, selected: at, asPlayed: null });
+    // (The bridge gives a new answer only when the host does.)
+    if (at !== null && state.opened !== d.answer) {
+      Object.assign(state, { opened: d.answer, selected: at, asPlayed: null });
+      state.compared.delete(`${playKey(p)}@${at}#${p.build || ""}`);  // asked again: tried again
       save();
     }
     if (!Number.isFinite(state.selected) || state.selected < 0 || state.selected >= p.frames) {
@@ -506,7 +507,6 @@
   const onGame = (p, name, args) => host.callTool(name, p.game ? { ...args, game: p.game } : args);
   const exactFrame = async (p, frame) => {
     let shown = false;
-    const build = p.build || "";  // what jm replays it with: the build it answered about
     state.pending = "exact"; state.replaying = `${playKey(p)}#${frame}`; state.notice = "Replaying to that frame…"; render();
     try {
       const r = await onGame(p, "play_frame", { play: p.id, at: String(frame) });
@@ -518,6 +518,8 @@
       else if (source.kind === "thumbnail") {
         state.notice = `Nothing here can replay it (${source.why || "no display"}): the nearest thumbnail is frame ${source.frame ?? "?"}.`;
       } else if (state.play === playKey(p)) {  // still this play's: another may show by now
+        // The build jm replayed it with (a rebuild may have come between), else the answer's.
+        const build = (r.structuredContent && r.structuredContent.build) || p.build || "";
         state.frames[frame] = { src, build, drift: source.drift, label: REPLAY_LABELS[source.drift] || REPLAY_LABELS.same };
         state.notice = "";
         shown = true;

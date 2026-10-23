@@ -322,9 +322,27 @@ test('the agent\'s at wins over a saved scrub; a replay counts for the build it 
   image(3, 'data:image/png;base64,B3'); await settle();
   assert.equal(shown(w.app).src, 'data:image/png;base64,B3');
 
+  // Asked for the same moment again after scrubbing away: it goes back there.
+  const line = child(w.app, 'timeline');
+  line.listeners.pointerdown({ pointerId: 1, clientX: 800 }); line.listeners.pointerup({ pointerId: 1 });
+  assert.match(w.app.text, /frame 120/);
+  answer({ build: 'b3' }); await settle(); await settle();
+  assert.match(w.app.text, /frame 60/);
+  assert.equal(shown(w.app).src, 'data:image/png;base64,B3');
+
   // A newer build's answer elsewhere (at 120, or none) leaves no older replay passing for current.
   answer({ build: 'b4', at: undefined }); await settle(); await settle();
   assert.notEqual(shown(w.app).src, 'data:image/png;base64,B3');
+
+  // A rebuild between the answer and its replay: the replay says its build, and isn't the answer's.
+  answer({ build: 'b5' }); await settle(); await settle();
+  const n = replays().length - 1;
+  w.fromHost({ id: replays()[n].id, result: { ...replayed({ kind: 'replay', drift: 'game' }),
+    structuredContent: { play: 'test-run', frame: 60, time: 1, path: 'f.png', source: { kind: 'replay', drift: 'game' }, build: 'b6' },
+    _meta: { 'jm/image': 'data:image/png;base64,B6' } } });
+  await settle(); await settle();
+  assert.notEqual(shown(w.app).src, 'data:image/png;base64,B6');
+  assert.equal(replays().length, n + 1, 'and it is not retried on its own');
 });
 
 test('a thumbnail fallback is not called exact, and the button stays usable', async () => {

@@ -537,6 +537,7 @@ type frameResult struct {
 	Time   float64     `json:"time"`
 	Path   string      `json:"path"`
 	Source frameSource `json:"source"`
+	Build  string      `json:"build,omitempty"` // what replayed it (frameCacheKey), as play_show says the current one
 }
 
 func (r frameResult) text() string { return r.Path + "\n" }
@@ -545,8 +546,8 @@ func (r frameResult) text() string { return r.Path + "\n" }
 // (or software GL), else the nearest thumbnail. A replay goes to out, or by
 // default to the play's frames, kept per build and engine.
 func frameImage(c *toolCall, root string, p *plays.Play, b plays.Build, f uint64, out string) (frameResult, error) {
-	r := frameResult{Play: p.ID, Frame: f, Time: p.TimeOf(f)}
 	key := frameCacheKey(b.Look)
+	r := frameResult{Play: p.ID, Frame: f, Time: p.TimeOf(f), Build: key}
 	cached := out == "" && key != ""
 	if out == "" {
 		out = p.FramePath(key, f)
