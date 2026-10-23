@@ -27,7 +27,7 @@ studioTabs.push((() => {
     if (list("variants", v)) state.thumbs = (v._meta && v._meta["jm/thumbs"]) || {};
     const listed = list("sandboxes", s);
     if (listed) state.sandboxThumbs = (s._meta && s._meta["jm/thumbs"]) || {};
-    // A sandbox's files changed since it was compared: what it showed may be no longer so.
+    // The sandbox's files or the game's changed since it was compared: what it showed may be no longer so.
     const c = state.compared, compared = c && c.kind === "sandbox" && c.result && !c.result.isError && c.result.structuredContent;
     if (listed && compared && !state.sandboxes.some((x) => x.name === c.name && x.print === compared.print)) state.compared = null;
     if (!state.picked && state.variants && state.variants.length) state.picked = { kind: "variant", name: state.variants[0].name };

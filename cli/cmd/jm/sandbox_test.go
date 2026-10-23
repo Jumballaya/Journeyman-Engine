@@ -276,6 +276,11 @@ func TestASandboxIsComparedWithTheGameAsItIsNow(t *testing.T) {
 	if list, _ := sandboxesOf(game); len(list) != 1 || list[0].Print == cmp.Print {
 		t.Error("the sandbox changed and its print didn't")
 	}
+	before, _ := sandboxesOf(game)
+	os.WriteFile(filepath.Join(game, "scenes/main.scene.json"), []byte(`{"entities":[]}`), 0o644) // the game made like it
+	if list, _ := sandboxesOf(game); len(list) != 1 || list[0].Print == before[0].Print {
+		t.Error("the game changed and the comparison's print didn't")
+	}
 	if compareImage(game, "sandbox", "game") == compareImage(game, "game", "game") {
 		t.Error("the sandbox game's frame and the game's are one file")
 	}
