@@ -251,7 +251,8 @@ func TestAPersonsPlayIsRecordedAndSteerable(t *testing.T) {
 	os.MkdirAll(filepath.Join(variant, "build"), 0o755)
 	os.WriteFile(filepath.Join(variant, archive.ManifestEntryKey), []byte(manifestJSON), 0o644)
 	os.WriteFile(filepath.Join(variant, "build", archive.ManifestEntryKey), []byte(manifestJSON), 0o644)
-	if err := resumePlay(root, variant, filepath.Base(p), "0"); err != nil {
+	rel, _ := filepath.Rel(root, variant) // as typed after --in: from the game, not from where the engine runs
+	if err := resumePlay(root, rel, filepath.Base(p), "0"); err != nil {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(envFile)

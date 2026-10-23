@@ -655,6 +655,10 @@ func drivePlay(root, ref, at string) error {
 // the person at a moment of root's play: fast-forwarded there, then theirs,
 // recorded as a new play of in's.
 func resumePlay(root, in, ref, at string) error {
+	in, err := filepath.Abs(in) // the engine runs in it: paths from here would be read from there
+	if err != nil {
+		return err
+	}
 	p, err := plays.Find(root, ref)
 	if err != nil {
 		return err

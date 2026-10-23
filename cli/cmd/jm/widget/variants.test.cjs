@@ -10,7 +10,7 @@ const sandboxes = { structuredContent: { sandboxes: [{ name: 'sb1', dir: '/g/pip
 const compared = { structuredContent: { a: 'floaty', b: 'game', frame: 30, errors: ['', ''], uncommitted: [0, 3],
   changes: [{ path: 'scenes/main.scene.json', status: 'M', entities: [{ entity: 'Player', change: 'changed', changed: ['VelocityComponent'] }] }] },
   _meta: { 'jm/frames': ['data:image/jpeg;base64,a', 'data:image/jpeg;base64,b'] } };
-const answers = { variants, sandboxes, variant_compare: compared };
+const answers = { variants, sandboxes, variant_compare: compared, plays_list: { structuredContent: { plays: [] } } };
 const open = async (context, more = {}) => {
   const s = await studio(listing, { answers: { ...answers, ...more }, context });
   if (!context) s.tab('Variants').fire('click');
@@ -46,7 +46,7 @@ test("compare goes to the person's last marker of their latest play, and plays t
     { id: 'agent1', started: '2026-10-15T11:00:00Z', seconds: 9, by: 'agent', marks: ['m1 0:01.0'] },
     { id: 'p2', started: '2026-10-15T10:15:00Z', seconds: 75, marks: ['m1 0:03.0', 'm2 0:40.0 "too floaty"'] },
     { id: 'p1', started: '2026-10-14T10:15:00Z', seconds: 20 }] } };
-  const s = await open_({ plays_list: plays });
+  const s = await open_({ plays_list: plays, variant_compare: { ...compared, structuredContent: { ...compared.structuredContent, play: 'p2' } } });
   const args = () => s.calls().filter((c) => c.name === 'variant_compare').at(-1).arguments;
   const submit = async () => { s.find((e) => e.tag === 'form').at(-1).fire('submit'); await settle(8); };
   await submit();
@@ -54,7 +54,7 @@ test("compare goes to the person's last marker of their latest play, and plays t
   assert.match(s.app.text, /floaty · marker 2 \(frame 30\)/);
   s.button('Play floaty from there').fire('click');
   await settle(8);
-  assert.deepEqual(s.calls().find((c) => c.name === 'variant_play').arguments, { name: 'floaty', play: 'p2', at: 'm2', game: '/g/pip' });
+  assert.deepEqual(s.calls().find((c) => c.name === 'variant_play').arguments, { name: 'floaty', play: 'p2', at: '30', game: '/g/pip' }, 'the frame shown');
   const [playPick] = s.find((e) => e.tag === 'select' && e.attributes['aria-label'] === 'Play');
   playPick.fire('change', { target: { value: 'p1' } });
   await submit();
@@ -62,7 +62,18 @@ test("compare goes to the person's last marker of their latest play, and plays t
   s.find((e) => e.tag === 'select' && e.attributes['aria-label'] === 'Play')[0].fire('change', { target: { value: 'none' } });
   await submit();
   assert.deepEqual(args(), { a: 'floaty', play: 'none', at: '120', game: '/g/pip' }, 'no input: a frame');
-  assert.ok(!s.button('Play floaty from there'), 'no play: no moment to play from');
+});
+
+test("while the plays are read, compare waits; if they can't be, jm picks the moment", async () => {
+  let answer;
+  const s = await open_({ plays_list: new Promise((resolve) => { answer = resolve; }) });
+  assert.equal(s.button('Compare').attributes.disabled, '', 'not with no inputs while the plays are read');
+  assert.match(s.app.text, /reading the plays/);
+  answer({ isError: true, content: [{ type: 'text', text: 'no plays folder' }] });
+  await settle(8);
+  s.find((e) => e.tag === 'form').at(-1).fire('submit');
+  await settle(8);
+  assert.deepEqual(s.calls().find((c) => c.name === 'variant_compare').arguments, { a: 'floaty', game: '/g/pip' }, "jm's default: not no inputs");
 });
 
 test('merge and drop ask first; a new variant is made from its name', async () => {

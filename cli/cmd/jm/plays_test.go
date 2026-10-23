@@ -173,6 +173,7 @@ func TestACompareLooksAtThePersonsLastMarker(t *testing.T) {
 	}{
 		{"", "", "2000-01-01_000000", 200},  // the person's, not the agent's newer run; its last marker
 		{"", "m1", "2000-01-01_000000", 90}, // another moment of it
+		{"", "start", "2000-01-01_000000", 0},
 		{"2000-01-02_000000", "", "2000-01-02_000000", 50},
 		{"none", "", "", 120},
 		{"none", "45", "", 45},

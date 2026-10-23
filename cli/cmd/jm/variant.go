@@ -40,9 +40,9 @@ variant's changes into the game; drop throws it away.
   jm variant                      the variants (--json for tools)
   jm variant new <name> [--from v] a variant from the last commit (or version v)
   jm variant play <name>          play it in its own window
-  jm variant compare <a> [b] [--frame 120] [--play id]
+  jm variant compare <a> [b] [--play id] [--at m2]
                                   what differs, and a frame of each (b: the game)
-                                  at the same moment, with a recorded play's inputs
+                                  at your moment: your latest play's last marker
   jm variant merge <name>         commit what it has and merge it into the game
   jm variant drop <name>          remove its folder (its branch stays unless merged)
 
@@ -352,7 +352,7 @@ func compareMoment(root, play, at string) (*plays.Play, uint64, error) {
 		at = fmt.Sprintf("m%d", p.Meta.Markers[len(p.Meta.Markers)-1].N)
 	}
 	f, err := p.FrameAt(at)
-	return p, max(f, 1), err
+	return p, f, err
 }
 
 // compareVariants compares variant a with b ("game": the game itself): what

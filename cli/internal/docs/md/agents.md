@@ -142,7 +142,8 @@ To try an idea without risking the game, make a variant (`jm variant new
 floaty-jump`; `variant_new`): a branch in its own folder that builds and plays
 on its own. Work there (`open_game` its dir; cd over the shell), commit, then
 `variant_compare` shows what differs and a frame of each at the same moment
-(with `play`, the person's inputs in both); `variant_play` lets them feel it.
+(the person's latest play's inputs in both, to its last marker; `play`, `at`
+pick another); `variant_play` with `at` lets them feel it from that spot.
 They choose: `variant_merge` brings it in, `variant_drop` throws it away.
 An experiment of your own that may go nowhere (a refactor, a tuning sweep)
 goes in a sandbox, never the game: `sandbox_new` (`jm sandbox new`) copies the
