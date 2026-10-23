@@ -29,7 +29,13 @@ studioTabs.push((() => {
     }
     return true;
   };
-  const lose = () => { state.live = null; state.speedAsked = undefined; if (state.run) { state.run = ""; state.gen++; } };  // gone: the next run is found anew
+  // Gone: the next run is found anew. One that was running left a play behind.
+  const lose = () => {
+    const ended = !!state.live;
+    state.live = null; state.speedAsked = undefined;
+    if (state.run) { state.run = ""; state.gen++; }
+    if (ended && state.ctx) state.ctx.playsChanged();
+  };
 
   const { said } = kit;
 
@@ -172,7 +178,7 @@ studioTabs.push((() => {
     const { kit } = ctx, { el } = kit;
     const start = (label, primary) => el("button", { class: primary ? "primary" : null, "data-key": "start", disabled: ctx.busy,
       onclick: () => ctx.act("Starting the game", "project_play", {}, () => "The game is open in its own window: what you play is recorded.") }, label);
-    const answer = ctx.plays(), last = answer && answer.plays && answer.plays[0];
+    const answer = ctx.plays(), last = answer && answer.plays && answer.plays.find((p) => p.by !== "agent");  // theirs, not an agent's run
     if (!last) return kit.empty("The game isn't running. Play it in its own window and follow it here.", start("Play", true));
     const marks = last.marks || [];  // "m2 0:07.0: walked into town", in order
     const at = last.markers ? `m${last.markers}` : "";

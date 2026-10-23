@@ -27,6 +27,7 @@ test('with no game running, Play starts one', async () => {
 test('with no game running, the last play is the way back in: play on from its last marker, or talk it over', async () => {
   const notRunning = { isError: true, content: [{ type: 'text', text: "The game isn't running" }] };
   const plays = { structuredContent: { game: '/g/pip', plays: [
+    { id: '2026-10-23_090000', started: '2026-10-23T09:00:00Z', seconds: 5, markers: 1, by: 'agent', marks: ['m1 0:04.0: the bug'] },
     { id: '2026-10-22_165735', started: '2026-10-22T16:57:35Z', seconds: 65.2, markers: 2, stale: true,
       marks: ['m1 0:04.5: the jump is floaty', 'm2 1:01.0: stuck on the ledge'] },
     { id: '2026-10-21_101010', started: '2026-10-21T10:10:10Z', seconds: 30, markers: 0 }] } };
@@ -36,6 +37,7 @@ test('with no game running, the last play is the way back in: play on from its l
   assert.match(s.app.text, /Your last play/);
   assert.match(s.app.text, /1:05 · the game changed since/);
   assert.match(s.app.text, /m2 1:01.0: stuck on the ledge/);
+  assert.doesNotMatch(s.app.text, /the bug/, "an agent's run isn't their last play");
   s.button('Play on from marker 2').fire('click');
   await settle(6);
   assert.deepEqual(plain(s.calls().find((c) => c.name === 'play_resume').arguments), { play: '2026-10-22_165735', at: 'm2', game: '/g/pip' });
@@ -136,6 +138,27 @@ test('the frame-time strip draws a row a part', async () => {
   await tick(); await settle(6);
   assert.match(s.app.text, /Physics/);
   assert.doesNotMatch(s.app.text, /\[object/);
+});
+
+test('when the game followed ends, its new play becomes the last play without leaving the tab', async () => {
+  let playing = false, recorded = [{ id: 'old', started: '2026-10-21T10:10:10Z', seconds: 30, markers: 1, marks: ['m1 0:10.0'] }];
+  const asked = [];
+  const s = await studio(games, { widgetState: { route: '/play' }, answers: {
+    play_live: (args) => playing ? running(asked)(args) : { isError: true, content: [{ type: 'text', text: "The game isn't running" }] },
+    plays_list: () => ({ structuredContent: { game: '/g/pip', plays: recorded } }) } });
+  await tick(); await settle(6);
+  assert.match(s.app.text, /Play on from marker 1/);
+  playing = true;  // they play (from the Studio, or a window of their own)
+  await tick(); await settle(6);
+  assert.match(s.app.text, /level · frame 120/);
+  playing = false;
+  recorded = [{ id: 'new', started: '2026-10-22T10:10:10Z', seconds: 65, markers: 3, marks: ['m1 0:01.0', 'm2 0:02.0', 'm3 1:00.0'] }, ...recorded];
+  await tick(); await settle(6);
+  await tick(); await settle(6);
+  assert.match(s.app.text, /Your last play/);
+  s.button('Play on from marker 3').fire('click');
+  await settle(6);
+  assert.deepEqual(plain(s.calls().find((c) => c.name === 'play_resume').arguments), { play: 'new', at: 'm3', game: '/g/pip' });
 });
 
 test('a run that ended isn\'t followed: the next one is found', async () => {

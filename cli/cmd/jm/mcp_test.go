@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -204,6 +205,13 @@ func TestARecordedRunDrawsWhereItCan(t *testing.T) {
 	t.Setenv("JM_RENDERER", "none")
 	if (gameOptions{Record: true}).draws() {
 		t.Error("a recorded run draws where nothing can")
+	}
+	if runtime.GOOS == "darwin" {
+		t.Setenv("JM_RENDERER", "")
+		t.Setenv("CODEX_SANDBOX", "seatbelt")
+		if (gameOptions{Record: true}).draws() {
+			t.Error("a recorded run draws in Codex's sandbox, where GL hangs or aborts")
+		}
 	}
 }
 

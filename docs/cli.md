@@ -747,7 +747,8 @@ your inputs and frame timing (enough to replay it exactly), the state every
 Your agent can then see what you saw, at the moment you mean.
 
 A play is named by its id, a unique start of it, "latest" (the default),
-or "latest-1", "latest-2" for the ones before. A moment in it is a frame ("420"), a time
+or "latest-1", "latest-2" for the ones before: yours, as an agent's own
+runs (drive_start with record) go by their ids. A moment in it is a frame ("420"), a time
 ("12.5s", "1:05"), a marker ("marker:2" or "m2"), "start" or "end".
 
 ```text

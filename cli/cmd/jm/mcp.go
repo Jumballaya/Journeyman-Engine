@@ -141,7 +141,7 @@ const mcpInstructions = "Journeyman: you and the person build a 2D game together
 	"(a scene's entry, or the prefab and the script that spawned it); a point or area pick gives world coordinates, the entities and tile map cells there; a pick's note is what the person said about it; play_state at its frame for more. " +
 	"After a change: build, play_verify on their play, then offer play_resume so they try it from the same spot. " +
 	"Use these tools instead of running jm in a shell: the same commands, but play_show shows the person the timeline. " +
-	"To play it yourself: drive_start (gl: true to see, record: true to keep it), drive, drive_frame, drive_stop, then play_show. " +
+	"To play it yourself: drive_start (gl: true to see, record: true to keep it and show the person), drive (marker notes what to look at), drive_frame, drive_stop, then play_show with the play id it gives: \"latest\" is always the person's. " +
 	"The game is files (scenes and prefabs JSON, AssemblyScript scripts, HTML/CSS UI): edit them directly; schema lists component keys. " +
 	"No game open? games, then open_game or new_game."
 

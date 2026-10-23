@@ -221,6 +221,7 @@
       picker(p),
       p.ended && p.ended !== "quit" ? $("span", { class: "badge" }, p.ended === "running" ? "still running (or crashed)" : p.ended) : null,
       p.stale ? $("span", { class: "badge", title: "The game changed since: replays may go differently" }, "older build") : null,
+      p.by === "agent" ? $("span", { class: "badge", title: "An agent drove this run to show you something; not a play of yours" }, "an agent's run") : null,
       $("span", { class: "spacer" }),
       // Expanded already (the host says so), or a host that can't: nothing to expand.
       host.can("displayMode") && host.displayMode === "inline" && (!host.displayModes || host.displayModes.includes("fullscreen"))
@@ -234,7 +235,7 @@
     const when = (q) => q.started ? new Date(q.started).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : q.id;
     return $("select", { class: "plays", title: "Another play", disabled: state.pending !== null, onchange: (e) => pick(p, e.target.value) },
       list.map((q) => $("option", { value: q.id, selected: q.id === p.id },
-        `${when(q)} · ${clock(q.seconds)}${q.markers ? ` · ${q.markers} marker${q.markers > 1 ? "s" : ""}` : ""}`)));
+        `${when(q)} · ${clock(q.seconds)}${q.markers ? ` · ${q.markers} marker${q.markers > 1 ? "s" : ""}` : ""}${q.by === "agent" ? " · an agent's run" : ""}`)));
   };
 
   // How long a replay to frame takes: as long as the game took to get there.

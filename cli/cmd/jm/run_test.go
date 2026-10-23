@@ -228,7 +228,7 @@ func TestAPersonsPlayIsRecordedAndSteerable(t *testing.T) {
 		t.Fatal(err)
 	}
 	launched("jm run")
-	p, err := plays.Create(root, plays.ReadBuild(build), version)
+	p, err := plays.Create(root, plays.ReadBuild(build), version, "")
 	if err != nil {
 		t.Fatal(err)
 	}

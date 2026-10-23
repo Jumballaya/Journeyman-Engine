@@ -88,7 +88,14 @@ type Info struct {
 	Method int    `json:"method,omitempty"` // how Build was fingerprinted (fingerprintMethod)
 	JM     string `json:"jm"`
 	Pinned string `json:"pinned,omitempty"`
+	By     string `json:"by,omitempty"` // Agent: an agent drove the run; else the person played it
 }
+
+// Agent is Info.By for a run an agent drove (drive_start with record).
+const Agent = "agent"
+
+// ByAgent is whether an agent drove this run rather than the person playing it.
+func (p *Play) ByAgent() bool { return p.Info().By == Agent }
 
 // fingerprintMethod changes when what counts as the game changes (2: UI and
 // fonts count): a Build made another way can't be compared with this one.
@@ -147,7 +154,7 @@ func (p *Play) DriftFrom(b Build) Drift {
 
 // Create makes a new play's folder, named for when it starts, noting b as its
 // build (in .jm/, never committed).
-func Create(projectRoot string, b Build, jmVersion string) (string, error) {
+func Create(projectRoot string, b Build, jmVersion, by string) (string, error) {
 	if _, err := jmfolder.Make(projectRoot, "plays"); err != nil {
 		return "", err
 	}
@@ -163,7 +170,7 @@ func Create(projectRoot string, b Build, jmVersion string) (string, error) {
 		}
 		dir = fmt.Sprintf("%s_%d", base, i)
 	}
-	(&Play{Dir: dir}).writeInfo(Info{Build: b.Game, Look: b.Look, Method: fingerprintMethod, JM: jmVersion})
+	(&Play{Dir: dir}).writeInfo(Info{Build: b.Game, Look: b.Look, Method: fingerprintMethod, JM: jmVersion, By: by})
 	return dir, nil
 }
 

@@ -31,7 +31,7 @@ var timeline = widget{name: "journeyman-plays", title: "Play timeline", html: pl
 	description: "A recorded play: scrub its moments, see what the player saw, ask about one or play on from it."}
 
 func (s *mcpServer) playTools() []mcpTool {
-	playArg := strArg(`which play: an id, a unique start of one, "latest" (default), or "latest-1", "latest-2" for earlier ones`)
+	playArg := strArg(`which play: an id, a unique start of one, "latest" (default: the person's newest), or "latest-1", "latest-2" for earlier ones; your own runs go by id`)
 	moment := `a moment: a frame ("420"), a time ("12.5s", "1:05"), a marker ("m2" or "marker:2"), `
 	atArg, fromArg := strArg(moment+`"start" or "end" (default)`), strArg(moment+`"start" (default) or "end"`)
 	return []mcpTool{

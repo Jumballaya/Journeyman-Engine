@@ -31,7 +31,8 @@ your inputs and frame timing (enough to replay it exactly), the state every
 Your agent can then see what you saw, at the moment you mean.
 
 A play is named by its id, a unique start of it, "latest" (the default),
-or "latest-1", "latest-2" for the ones before. A moment in it is a frame ("420"), a time
+or "latest-1", "latest-2" for the ones before: yours, as an agent's own
+runs (drive_start with record) go by their ids. A moment in it is a frame ("420"), a time
 ("12.5s", "1:05"), a marker ("marker:2" or "m2"), "start" or "end".
 
   jm plays                         the plays, newest first
@@ -140,15 +141,16 @@ func init() {
 	prune.Flags().IntVar(&playsPruneKeep, "keep", keptPlays, "how many to keep")
 }
 
-// newPlay is a new play of the game at root, made with build b (older
-// unmarked plays go first, but those the run reads), and what a run needs to record into it.
-func newPlay(root string, b plays.Build, reads ...*plays.Play) (string, []string, error) {
+// newPlay is a new play of the game at root, made with build b and played by
+// by (plays.Agent, or "" for the person; older unmarked plays go first, but
+// those the run reads), and what a run needs to record into it.
+func newPlay(root string, b plays.Build, by string, reads ...*plays.Play) (string, []string, error) {
 	spare := make([]string, len(reads))
 	for i, p := range reads {
 		spare[i] = p.Dir
 	}
 	_, _ = plays.Prune(root, keptPlays, true, spare...)
-	dir, err := plays.Create(root, b, version)
+	dir, err := plays.Create(root, b, version, by)
 	if err != nil {
 		return "", nil, err
 	}
@@ -157,7 +159,7 @@ func newPlay(root string, b plays.Build, reads ...*plays.Play) (string, []string
 
 // personsPlay is newPlay for a run a person plays: play_live steers it too.
 func personsPlay(root string, b plays.Build, reads ...*plays.Play) (string, []string, error) {
-	dir, env, err := newPlay(root, b, reads...)
+	dir, env, err := newPlay(root, b, "", reads...)
 	if err != nil {
 		return "", nil, err
 	}
@@ -244,7 +246,8 @@ type playListing struct {
 	Stale   bool     `json:"stale,omitempty"` // made with a build that played differently
 	Marks   []string `json:"marks,omitempty"` // "m1 0:03.0", plus a driver marker's note
 	// The markers that are moments (picks: what the person pointed at), by number.
-	Moments []int `json:"moments,omitempty"`
+	Moments []int  `json:"moments,omitempty"`
+	By      string `json:"by,omitempty"` // "agent": an agent's own run, not the person's
 }
 
 // playListings are the plays, and the play folders that can't be read.
@@ -262,7 +265,7 @@ func listPlays(root string) (playListings, error) {
 	listing := playListings{Plays: []playListing{}, Unreadable: plays.Unreadable(root)}
 	for _, p := range all {
 		listing.Plays = append(listing.Plays, playListing{p.ID, p.Meta.Started, p.Meta.Seconds, p.Meta.Frames, len(p.Meta.Markers),
-			p.Meta.Ended, p.DriftFrom(b) == plays.GameChanged, marks(p.Meta.Markers), moments(p.Meta.Markers)})
+			p.Meta.Ended, p.DriftFrom(b) == plays.GameChanged, marks(p.Meta.Markers), moments(p.Meta.Markers), p.Info().By})
 	}
 	return listing, nil
 }
@@ -319,6 +322,9 @@ func (l playListings) text() string {
 		if p.Stale {
 			note += ", older build"
 		}
+		if p.By == plays.Agent {
+			note += ", an agent's run"
+		}
 		fmt.Fprintf(&out, "%s  %s%s\n", p.ID, clock(p.Seconds), note)
 	}
 	if len(l.Unreadable) > 0 {
@@ -336,16 +342,20 @@ type playOverview struct {
 	Dir   string `json:"dir"`
 	Stale bool   `json:"stale"` // made with a build that plays differently
 	JM    string `json:"jm"`
+	By    string `json:"by,omitempty"` // "agent": an agent's own run, not the person's
 }
 
 func overviewOf(root string, p *plays.Play, b plays.Build) (playOverview, error) {
 	s, err := p.Summarize()
-	return playOverview{s, evalOrSelf(root), p.Dir, p.DriftFrom(b) == plays.GameChanged, version}, err
+	return playOverview{s, evalOrSelf(root), p.Dir, p.DriftFrom(b) == plays.GameChanged, version, p.Info().By}, err
 }
 
 func (o playOverview) text() string {
 	var out strings.Builder
 	fmt.Fprintf(&out, "%s: %s of %s (%d frames), %s\n", o.ID, clock(o.Seconds), o.Name, o.Frames, endedText(o.Ended))
+	if o.By == plays.Agent {
+		fmt.Fprintln(&out, "(an agent's run, not the person's play)")
+	}
 	if o.Stale {
 		fmt.Fprintln(&out, "(made with an older build: replays may go differently; verify says)")
 	}
@@ -546,7 +556,7 @@ func frameImage(c *toolCall, root string, p *plays.Play, b plays.Build, f uint64
 		return r, nil
 	}
 	why := "nothing here can draw: replaying needs a display or software GL (xvfb-run)"
-	if hasDisplay() {
+	if canDraw() {
 		err := replayImage(c, root, p, f, out)
 		if err == nil {
 			r.Path, r.Source = out, replay
@@ -594,11 +604,11 @@ func frameCacheKey(look string) string {
 	return hex.EncodeToString(sum[:])[:16]
 }
 
-// hasDisplay says whether GL can draw here (so captures work): macOS and
-// Windows always can, Linux with an X or Wayland display, and nothing when
-// JM_RENDERER=none says not to try.
-func hasDisplay() bool {
-	if os.Getenv("JM_RENDERER") == "none" {
+// canDraw says whether GL can draw here (so captures work): macOS and
+// Windows can, Linux with an X or Wayland display; nothing when JM_RENDERER=none
+// says not to try, or a sandbox blocks windows (windowsBlocked).
+func canDraw() bool {
+	if os.Getenv("JM_RENDERER") == "none" || windowsBlocked() != nil {
 		return false
 	}
 	return runtime.GOOS != "linux" || os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != ""
@@ -609,7 +619,7 @@ func drivePlay(root, ref, at string) error {
 	if err != nil {
 		return err
 	}
-	g, err := startGame(root, gameOptions{Play: p, Until: f + 1, GL: hasDisplay()})
+	g, err := startGame(root, gameOptions{Play: p, Until: f + 1, GL: canDraw()})
 	if err != nil {
 		return err
 	}

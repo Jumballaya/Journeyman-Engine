@@ -246,6 +246,10 @@ test('a marker replayed with a changed game shows what they saw and what it does
     assert.equal(shown(app).src, 'data:image/png;base64,replayed');
   }
 });
+test('an agent\'s run says so, so it isn\'t taken for the person\'s play', () => {
+  assert.match(widget({ ...play, by: 'agent' }, metadata).app.text, /an agent's run/);
+  assert.doesNotMatch(widget(play, metadata).app.text, /an agent's run/);
+});
 test('a thumbnail fallback is not called exact, and the button stays usable', async () => {
   const app = await exactFrameAnswers(replayed({ kind: 'thumbnail', frame: 60 }));
   assert.equal(shown(app).badge, null);

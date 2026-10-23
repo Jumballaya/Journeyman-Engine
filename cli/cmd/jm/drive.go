@@ -33,7 +33,7 @@ type gameOptions struct {
 
 // draws is whether the run renders. A recorded run is a play like the
 // person's, so it draws wherever something can: its thumbnails and marker pictures.
-func (o gameOptions) draws() bool { return o.GL || o.Visible || o.Record && hasDisplay() }
+func (o gameOptions) draws() bool { return o.GL || o.Visible || o.Record && canDraw() }
 
 // replyTimeout is how long a command may take (a long step, a slow capture)
 // before the game is taken to be stuck; readyTimeout how long it may take to
@@ -124,7 +124,7 @@ func startGame(root string, o gameOptions) (*drivenGame, error) {
 	}
 	if o.Record {
 		var recording []string
-		if g.play, recording, err = newPlay(root, plays.ReadBuild(build)); err != nil {
+		if g.play, recording, err = newPlay(root, plays.ReadBuild(build), plays.Agent); err != nil {
 			return fail(err)
 		}
 		env = append(env, recording...)

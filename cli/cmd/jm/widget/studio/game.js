@@ -74,7 +74,7 @@ studioTabs.push((() => {
     const playList = kit.section("Recent plays", !plays ? el("div", { class: "meta" }, can ? "Reading the plays…" : "")
       : plays.error ? el("div", { class: "meta" }, plays.error)
       : plays.plays.length ? kit.tree({ label: "Recent plays", items: plays.plays.slice(0, 12).map((p) => ({ id: p.id, title: p.id, label: kit.started(p.started),
-          meta: `${kit.duration(p.seconds)}${p.markers ? ` · ${p.markers} marker${p.markers === 1 ? "" : "s"}` : ""}${p.stale ? " · older build" : ""}` })),
+          meta: `${kit.duration(p.seconds)}${p.markers ? ` · ${p.markers} marker${p.markers === 1 ? "" : "s"}` : ""}${p.stale ? " · older build" : ""}${p.by === "agent" ? " · an agent's run" : ""}` })),
           onPick: (item) => ctx.reviewPlay(plays.plays.find((p) => p.id === item.id)) })
       : el("div", { class: "meta" }, "No plays yet: Play records one."));
     // The latest moments, newest first (plays come newest first): markers the person picked things in.

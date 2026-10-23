@@ -254,3 +254,26 @@ func TestAMarkersPicksSayWhereTheyCameFrom(t *testing.T) {
 		t.Errorf("picks read as:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }
+
+func TestLatestIsThePersonsPlayNotAnAgentsRun(t *testing.T) {
+	root := t.TempDir()
+	writePlay(t, root, "2026-10-20_000000")
+	writePlay(t, root, "2026-10-21_000000")
+	agents := writePlay(t, root, "2026-10-22_000000")
+	agents.writeInfo(Info{By: Agent})
+	for ref, want := range map[string]string{"": "2026-10-21_000000", "latest": "2026-10-21_000000", "latest-1": "2026-10-20_000000",
+		"2026-10-22_000000": "2026-10-22_000000"} {
+		if p, err := Find(root, ref); err != nil || p.ID != want {
+			t.Errorf("%q: got %v, %v; want %s", ref, p, err, want)
+		}
+	}
+	if _, err := Find(root, "latest-2"); err == nil || !strings.Contains(err.Error(), "only 2 plays of the person's") {
+		t.Errorf("counting back past the person's plays: %v", err)
+	}
+
+	only := t.TempDir()
+	writePlay(t, only, "2026-10-22_000000").writeInfo(Info{By: Agent})
+	if _, err := Find(only, "latest"); err == nil || !strings.Contains(err.Error(), "only an agent's runs (by id, newest 2026-10-22_000000)") {
+		t.Errorf("with only an agent's runs: %v", err)
+	}
+}
