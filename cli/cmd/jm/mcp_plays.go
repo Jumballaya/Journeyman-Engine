@@ -30,9 +30,12 @@ var playsPage string
 var timeline = widget{name: "journeyman-plays", title: "Play timeline", html: playsPage, modes: []string{"inline", "fullscreen"},
 	description: "A recorded play: scrub its moments, see what the player saw, ask about one or play on from it."}
 
+// playRefArg and moment say how a tool names one of the person's plays and a moment in it.
+var playRefArg = strArg(`which play: an id, a unique start of one, "latest" (default: the person's newest), or "latest-1", "latest-2" for earlier ones; your own runs go by id`)
+
+const moment = `a moment: a frame ("420"), a time ("12.5s", "1:05"), a marker ("m2" or "marker:2"), `
+
 func (s *mcpServer) playTools() []mcpTool {
-	playArg := strArg(`which play: an id, a unique start of one, "latest" (default: the person's newest), or "latest-1", "latest-2" for earlier ones; your own runs go by id`)
-	moment := `a moment: a frame ("420"), a time ("12.5s", "1:05"), a marker ("m2" or "marker:2"), `
 	atArg, fromArg := strArg(moment+`"start" or "end" (default)`), strArg(moment+`"start" (default) or "end"`)
 	return []mcpTool{
 		{Name: "plays_list", Title: "List recorded plays",
@@ -54,14 +57,14 @@ func (s *mcpServer) playTools() []mcpTool {
 				"or how the game is going. Shows the person their play as a timeline they can scrub (latest play by default), " +
 				"and gives you what happened: scenes over time, values that changed (lives, score, ...), and the moments they marked with F8 (what they meant is in what they tell you). " +
 				"Then play_frame / play_state at a marker. After a change, at opens it at their moment and replays it with the change beside what they saw: show them, don't just tell them.",
-			InputSchema: object(map[string]any{"play": playArg, "at": strArg(moment + `"start" or "end": open the timeline there (default: its first marker)`)}),
+			InputSchema: object(map[string]any{"play": playRefArg, "at": strArg(moment + `"start" or "end": open the timeline there (default: its first marker)`)}),
 			Annotations: readOnly(),
 			Meta:        timeline.toolMeta("Opening the play…", "The play", entrypoint("thread")),
 			onGame:      playShow},
 		{Name: "play_frame", Title: "See a moment of a play",
 			Description: "An image of a moment in a recorded play, replayed exactly (or the nearest thumbnail where nothing can draw: source says which). " +
 				"Use it to see what the person saw, e.g. at: \"m1\" for their first marker.",
-			InputSchema: object(map[string]any{"play": playArg, "at": atArg}), Annotations: readOnly(),
+			InputSchema: object(map[string]any{"play": playRefArg, "at": atArg}), Annotations: readOnly(),
 			Meta:   callableMeta("Replaying to that moment…", "That moment"),
 			onGame: playFrame},
 		{Name: "play_moment", Title: "What the person pointed at",
@@ -71,13 +74,13 @@ func (s *mcpServer) playTools() []mcpTool {
 				"has its world coordinates (y up), the entities there with their origins, and the tile map cells it covers (map, layer, tile coordinates from the bottom row, gids). " +
 				"What they picked is what they meant; origin, or the map, is the file to change. " +
 				"play_show lists every marker's picks.",
-			InputSchema: object(map[string]any{"play": playArg, "marker": strArg(`which marker: "m1" (default) or "1"`)}), Annotations: readOnly(),
+			InputSchema: object(map[string]any{"play": playRefArg, "marker": strArg(`which marker: "m1" (default) or "1"`)}), Annotations: readOnly(),
 			Meta:   callableMeta("Looking at that moment…", "That moment"),
 			onGame: playMoment},
 		{Name: "play_state", Title: "A play's state at a moment",
 			Description: "The game's state at a moment of a recorded play, replayed exactly: entities with their components, " +
 				"session and save values, UI: the numbers behind what play_frame shows (positions, speeds, lives). parts narrows it like the driver's state: e.g. [\"session\"], [\"tag=Player\", \"TransformComponent\"].",
-			InputSchema: object(map[string]any{"play": playArg, "at": atArg, "parts": listArg("which parts (default: all but the draw list)")}),
+			InputSchema: object(map[string]any{"play": playRefArg, "at": atArg, "parts": listArg("which parts (default: all but the draw list)")}),
 			Annotations: readOnly(), Meta: callableMeta("", ""),
 			onGame: func(root string, a toolArgs) toolResult {
 				p, _, f, err := openMoment(root, a.str("play"), a.str("at"))
@@ -94,7 +97,7 @@ func (s *mcpServer) playTools() []mcpTool {
 			Description: "The keys and mouse buttons the person held in a recorded play, when and for how long (e.g. Space 0:12.3–0:12.7, 0.42 s). " +
 				"Use it when how they played matters: a jump that felt floaty or short, a missed dodge. from/to are moments (default: the whole play); " +
 				"play_show already lists what was pressed just before each marker.",
-			InputSchema: object(map[string]any{"play": playArg, "from": fromArg, "to": atArg}), Annotations: readOnly(), Meta: callableMeta("", ""),
+			InputSchema: object(map[string]any{"play": playRefArg, "from": fromArg, "to": atArg}), Annotations: readOnly(), Meta: callableMeta("", ""),
 			onGame: func(root string, a toolArgs) toolResult {
 				l, err := pressesBetween(root, a.str("play"), a.str("from"), a.str("to"))
 				if err != nil {
@@ -107,7 +110,7 @@ func (s *mcpServer) playTools() []mcpTool {
 				"and if not, by when and how its end differs (session values). Run it after build to check a change against how they actually played, " +
 				"and tell the person both: after a change their play is expected to go differently; how it ends says what the change did. " +
 				"To let them see it, play_show the play: at a marker, its \"See it now\" replays the moment with the change, beside what they saw.",
-			InputSchema: object(map[string]any{"play": playArg}), Annotations: readOnly(), Meta: callableMeta("", ""),
+			InputSchema: object(map[string]any{"play": playRefArg}), Annotations: readOnly(), Meta: callableMeta("", ""),
 			onGame: func(root string, a toolArgs) toolResult {
 				p, b, err := openPlay(root, a.str("play"))
 				if err != nil {
@@ -122,7 +125,7 @@ func (s *mcpServer) playTools() []mcpTool {
 		{Name: "play_resume", Title: "Let the person play on from a moment",
 			Description: "Opens the game for the person at a moment of a recorded play (fast-forwarded there, then theirs to play), " +
 				"recorded as a new play. Use it to hand them the exact spot to try a change: \"play on from your marker 2\".",
-			InputSchema: object(map[string]any{"play": playArg, "at": atArg}), Annotations: writes(),
+			InputSchema: object(map[string]any{"play": playRefArg, "at": atArg}), Annotations: writes(),
 			Meta:   callableMeta("Opening the game…", "The game is open"),
 			onGame: playResume},
 	}
@@ -273,7 +276,20 @@ func momentSummary(p *plays.Play, m plays.Marker) string {
 }
 
 func playResume(root string, a toolArgs) toolResult {
-	p, b, f, err := openMoment(root, a.str("play"), a.str("at"))
+	return resumeIn(a.call(), root, root, a.str("play"), a.str("at"))
+}
+
+// resumeIn opens game in (root, or a variant or sandbox of it; built first if
+// it needs it) for the person at a moment of root's play. It doesn't wait for them.
+func resumeIn(c *toolCall, root, in, play, at string) toolResult {
+	p, err := plays.Find(root, play)
+	if err != nil {
+		return textResult(err.Error(), true)
+	}
+	f, err := p.FrameAt(at)
+	if err == nil {
+		err = freshBuild(c, in)
+	}
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
@@ -281,14 +297,13 @@ func playResume(root string, a toolArgs) toolResult {
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
-	// The person plays; the call doesn't wait for them to finish.
-	cmd := exec.Command(self, "plays", "resume", p.ID, fmt.Sprint(f))
+	cmd := exec.Command(self, "plays", "resume", p.ID, fmt.Sprint(f), "--in", in)
 	cmd.Dir = root
 	if err := cmd.Start(); err != nil {
 		return textResult(err.Error(), true)
 	}
 	go func() { _ = cmd.Wait() }()
-	changed := p.DriftFrom(b) == plays.GameChanged
+	changed := p.DriftFrom(plays.ReadBuild(filepath.Join(in, "build"))) == plays.GameChanged
 	return toolResult{Text: resumedText(p.ID, f, changed), Structured: map[string]any{"play": p.ID, "frame": f, "opened": true, "gameChanged": changed}}
 }
 

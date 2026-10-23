@@ -839,7 +839,10 @@ Play on yourself from a moment (recorded as a new play).
 
 
 ```text
-Usage: jm plays resume [play] [moment]
+Usage: jm plays resume [play] [moment] [flags]
+
+Flags:
+      --in string   the game to play it in: a variant's or sandbox's folder (default: this game; built as it is)
 ```
 
 ## jm plays show
@@ -1224,9 +1227,9 @@ variant's changes into the game; drop throws it away.
   jm variant                      the variants (--json for tools)
   jm variant new <name> [--from v] a variant from the last commit (or version v)
   jm variant play <name>          play it in its own window
-  jm variant compare <a> [b] [--frame 120] [--play id]
+  jm variant compare <a> [b] [--play id] [--at m2]
                                   what differs, and a frame of each (b: the game)
-                                  at the same moment, with a recorded play's inputs
+                                  at your moment: your latest play's last marker
   jm variant merge <name>         commit what it has and merge it into the game
   jm variant drop <name>          remove its folder (its branch stays unless merged)
 ```
@@ -1251,8 +1254,8 @@ What differs, and a frame of each at the same moment.
 Usage: jm variant compare <a> [b] [flags]
 
 Flags:
-      --frame int     the frame to show both at (default 120)
-      --play string   replay this recorded play's inputs in both (plays list; default: none)
+      --at string     the moment to show both at: of the play, a marker (m2), time or frame (default: its last marker, else its end); with no play, a frame (default 120)
+      --play string   replay this recorded play's inputs in both (default: your latest; "none": no input)
       --sandbox       a is a sandbox (b: the game): its files that differ from the game's now
 ```
 

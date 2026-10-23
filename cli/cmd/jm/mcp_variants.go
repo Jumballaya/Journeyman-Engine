@@ -42,10 +42,15 @@ func (s *mcpServer) variantTools() []mcpTool {
 				return jsonResult(map[string]any{"ok": true, "variant": v, "next": "open_game its dir to change it; variant_compare to see it beside the game"})
 			}},
 		{Name: "variant_play", Meta: callableMeta("Starting the variant…", "The variant is open"), Title: "Play a variant",
-			Description: "Open a variant in its own window for the person to play (built first if it needs it).",
-			Annotations: writes(), InputSchema: object(map[string]any{"name": nameArg}, "name"),
+			Description: "Open a variant in its own window for the person to play (built first if it needs it). " +
+				"With at, it opens at that moment of one of their plays of the game (fast-forwarded there with the variant), " +
+				"so they try the variant from the spot they marked: \"play the variant from your marker 2\".",
+			Annotations: writes(), InputSchema: object(map[string]any{"name": nameArg, "play": playRefArg, "at": strArg(moment + `"start" or "end"; the play's (default: play it from the start)`)}, "name"),
 			onGame: func(root string, a toolArgs) toolResult {
 				v, err := findVariant(root, a.str("name"))
+				if err == nil && a.str("at") != "" {
+					return resumeIn(a.call(), root, v.Dir, a.str("play"), a.str("at"))
+				}
 				if err == nil {
 					err = playGame(a.call(), v.Dir)
 				}
@@ -56,19 +61,20 @@ func (s *mcpServer) variantTools() []mcpTool {
 			}},
 		{Name: "variant_compare", Meta: callableMeta("Comparing…", "Compared"), Title: "Compare a variant",
 			Description: "A variant beside the game (or another variant): the files a's commits changed since it split from b (a scene's per entity) and a frame of each at the same moment, " +
-				"both run headless with GL, with a recorded play's inputs if given. With sandbox: true, a is a sandbox: the files it differs in from the game now. Show the person both frames.",
+				"both run headless with GL on the person's latest play's inputs to its last marker (their moment, so the change shows where they meant). With sandbox: true, a is a sandbox: the files it differs in from the game now. Show the person both frames.",
 			Annotations: writes(), InputSchema: object(map[string]any{"a": strArg("the variant's name (or the sandbox's)"), "sandbox": boolArg("a is a sandbox, compared with the game"), "b": strArg(`another variant, or "game" (default)`),
-				"frame": intArg("the frame to show both at (default 120)"), "play": strArg("replay this recorded play's inputs in both (plays_list)")}, "a"),
+				"play": strArg(`replay this recorded play's inputs in both (default: the person's latest; "none": no input)`),
+				"at":   strArg(`the moment to show both at: of the play, a marker ("m2"), time or frame (default: its last marker, else its end); with no play, a frame (default 120)`)}, "a"),
 			onGame: func(root string, a toolArgs) toolResult {
 				b := a.str("b")
 				if b == "" {
 					b = "game"
 				}
-				cmp, err := compareVariants(a.call(), root, a.str("a"), b, int(a.num("frame", 120, 1, 1e6)), a.str("play"), a.flag("sandbox"))
+				cmp, err := compareVariants(a.call(), root, a.str("a"), b, a.str("play"), a.str("at"), a.flag("sandbox"))
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				result := toolResult{Text: cmp.text(), Structured: map[string]any{"a": cmp.A, "b": cmp.B, "frame": cmp.Frame, "changes": cmp.Changes, "errors": cmp.Errors, "sandbox": cmp.Sandbox}}
+				result := toolResult{Text: cmp.text(), Structured: map[string]any{"a": cmp.A, "b": cmp.B, "play": cmp.Play, "frame": cmp.Frame, "changes": cmp.Changes, "errors": cmp.Errors, "sandbox": cmp.Sandbox, "uncommitted": cmp.Uncommitted}}
 				frames := []string{}
 				for _, f := range cmp.Frames {
 					uri := ""
