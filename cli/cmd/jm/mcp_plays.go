@@ -289,7 +289,7 @@ func resumeIn(c *toolCall, root, in, play, at string) toolResult {
 	}
 	f, err := p.FrameAt(at)
 	if err == nil {
-		err = freshBuild(c, in)
+		err = freshBuild(c, in) // here, not only in plays resume: a failure is the call's answer, and its progress the call's
 	}
 	if err != nil {
 		return textResult(err.Error(), true)

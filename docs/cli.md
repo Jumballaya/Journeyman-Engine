@@ -842,7 +842,7 @@ Play on yourself from a moment (recorded as a new play).
 Usage: jm plays resume [play] [moment] [flags]
 
 Flags:
-      --in string   the game to play it in: a variant's or sandbox's folder (default: this game; built as it is)
+      --in string   the game to play it in: a variant's or sandbox's folder (default: this game), built first if its build isn't of its files
 ```
 
 ## jm plays show

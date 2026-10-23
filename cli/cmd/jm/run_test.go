@@ -239,8 +239,26 @@ func TestAPersonsPlayIsRecordedAndSteerable(t *testing.T) {
 		os.MkdirAll(later, 0o755)
 		os.WriteFile(filepath.Join(later, "session.json"), []byte(`{"format":1,"frames":1,"markers":[],"started":"2999-01-01T00:00:00Z"}`), 0o644)
 	}
+	// A resume plays the game's files as they are now: built first when its build isn't of them.
+	var built []string
+	failBuild := false
+	saved := runJM
+	runJM = func(_ *toolCall, dir string, a ...string) (string, bool) {
+		if strings.Join(a, " ") != "build --json" {
+			t.Fatalf("jm %v", a)
+		}
+		built = append(built, dir)
+		if failBuild {
+			return `{"problem":"broken"}`, true
+		}
+		return "", recordSources(filepath.Join(dir, "build"), buildSources(dir)) != nil
+	}
+	t.Cleanup(func() { runJM = saved })
 	if err := resumePlay(root, root, filepath.Base(p), "0"); err != nil {
 		t.Fatal(err)
+	}
+	if len(built) != 1 || built[0] != root {
+		t.Errorf("a resume of a game not built from its files didn't build it: %v", built)
 	}
 	if data, _ := os.ReadFile(envFile); strings.Contains(string(data), "JM_PLAY_MARKER=") {
 		t.Error("a resume at a frame lands at a marker")
@@ -253,6 +271,9 @@ func TestAPersonsPlayIsRecordedAndSteerable(t *testing.T) {
 		t.Errorf("a resume at a marker doesn't land there: %s", data)
 	}
 	launched("a resume at a marker", root)
+	if len(built) != 1 {
+		t.Errorf("a game built from its files now was built again: %v", built)
+	}
 	if _, err := os.Stat(filepath.Join(p, "frames.bin")); err != nil {
 		t.Error("the play a resume replays went with older plays:", err)
 	}
@@ -270,4 +291,17 @@ func TestAPersonsPlayIsRecordedAndSteerable(t *testing.T) {
 		t.Errorf("a resume in a variant doesn't replay the game's play with the variant's build: %s", env)
 	}
 	launched("a resume in a variant", variant)
+	if len(built) != 2 || built[1] != variant {
+		t.Errorf("a resume in a variant didn't build the variant: %v", built)
+	}
+	// A build that fails: no game, no new play.
+	os.WriteFile(filepath.Join(variant, "notes.md"), []byte("edited"), 0o644)
+	failBuild = true
+	before, _ := os.ReadDir(plays.Root(variant))
+	if err := resumePlay(root, variant, filepath.Base(p), "0"); err == nil || !strings.Contains(err.Error(), "broken") {
+		t.Errorf("a resume whose build failed: %v", err)
+	}
+	if after, _ := os.ReadDir(plays.Root(variant)); len(built) != 3 || len(after) != len(before) || exists(envFile) {
+		t.Errorf("a resume whose build failed went on: built %v, plays %d then %d", built, len(before), len(after))
+	}
 }
