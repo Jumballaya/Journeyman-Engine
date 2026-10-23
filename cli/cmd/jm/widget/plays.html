@@ -153,7 +153,8 @@
   // game's listing to pick from; picked: a play_show answer the picker got, and the
   // host's answer it covers; shared: the moment last given to the model;
   // asPlayed: the frame showing what they saw, not its replay with the changed game.
-  const state = { play: null, selected: null, frames: {}, pending: null, replaying: null, notice: "", plays: null, picked: null, shared: "", asPlayed: null };
+  // compared: the play whose at (a changed game's) was replayed on its own once.
+  const state = { play: null, selected: null, frames: {}, pending: null, replaying: null, notice: "", plays: null, picked: null, shared: "", asPlayed: null, compared: null };
   try { if (host.widgetState && Number.isFinite(host.widgetState.selected)) state.selected = host.widgetState.selected; } catch (e) {}
   const save = () => { try { host.setWidgetState({ selected: state.selected }); } catch (e) {} };
 
@@ -389,7 +390,13 @@
       Object.assign(state, { play: playKey(p), frames: {}, notice: "", asPlayed: null });
     }
     if (!Number.isFinite(state.selected) || state.selected < 0 || state.selected >= p.frames) {
-      state.selected = (p.markers && p.markers.length) ? p.markers[0].frame : (d.thumbs.length ? d.thumbs[d.thumbs.length - 1].frame : 0);
+      state.selected = Number.isFinite(p.at) && p.at < p.frames ? p.at
+        : (p.markers && p.markers.length) ? p.markers[0].frame : (d.thumbs.length ? d.thumbs[d.thumbs.length - 1].frame : 0);
+    }
+    // Opened at a moment of a changed game (the agent's "look"): replayed with the change, unasked.
+    if (p.stale && p.at === state.selected && state.compared !== playKey(p) && !state.frames[p.at] && state.pending === null && host.can("callTool")) {
+      state.compared = playKey(p);
+      Promise.resolve().then(() => exactFrame(p, p.at));  // after this render
     }
     const m = momentAt(d, state.selected);
     const mismatch = versionMismatch(d.server);

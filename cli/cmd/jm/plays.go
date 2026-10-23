@@ -338,16 +338,17 @@ func (l playListings) text() string {
 // (the timeline widget reads it, and checks JM against its own version).
 type playOverview struct {
 	plays.Summary
-	Game  string `json:"game"` // its folder: what follow-up calls name
-	Dir   string `json:"dir"`
-	Stale bool   `json:"stale"` // made with a build that plays differently
-	JM    string `json:"jm"`
-	By    string `json:"by,omitempty"` // "agent": an agent's own run, not the person's
+	Game  string  `json:"game"` // its folder: what follow-up calls name
+	Dir   string  `json:"dir"`
+	Stale bool    `json:"stale"` // made with a build that plays differently
+	JM    string  `json:"jm"`
+	By    string  `json:"by,omitempty"` // "agent": an agent's own run, not the person's
+	At    *uint64 `json:"at,omitempty"` // the frame play_show opens at
 }
 
 func overviewOf(root string, p *plays.Play, b plays.Build) (playOverview, error) {
 	s, err := p.Summarize()
-	return playOverview{s, evalOrSelf(root), p.Dir, p.DriftFrom(b) == plays.GameChanged, version, p.Info().By}, err
+	return playOverview{Summary: s, Game: evalOrSelf(root), Dir: p.Dir, Stale: p.DriftFrom(b) == plays.GameChanged, JM: version, By: p.Info().By}, err
 }
 
 func (o playOverview) text() string {

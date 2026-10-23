@@ -53,10 +53,11 @@ func (s *mcpServer) playTools() []mcpTool {
 			Description: "Call first whenever the person talks about playing the game: how it felt, a bug, a death, a marker, \"just now\", " +
 				"or how the game is going. Shows the person their play as a timeline they can scrub (latest play by default), " +
 				"and gives you what happened: scenes over time, values that changed (lives, score, ...), and the moments they marked with F8 (what they meant is in what they tell you). " +
-				"Then play_frame / play_state at a marker.",
-			InputSchema: object(map[string]any{"play": playArg}), Annotations: readOnly(),
-			Meta:   timeline.toolMeta("Opening the play…", "The play", entrypoint("thread")),
-			onGame: playShow},
+				"Then play_frame / play_state at a marker. After a change, at opens it at their moment and replays it with the change beside what they saw: show them, don't just tell them.",
+			InputSchema: object(map[string]any{"play": playArg, "at": strArg(moment + `"start" or "end": open the timeline there (default: its first marker)`)}),
+			Annotations: readOnly(),
+			Meta:        timeline.toolMeta("Opening the play…", "The play", entrypoint("thread")),
+			onGame:      playShow},
 		{Name: "play_frame", Title: "See a moment of a play",
 			Description: "An image of a moment in a recorded play, replayed exactly (or the nearest thumbnail where nothing can draw: source says which). " +
 				"Use it to see what the person saw, e.g. at: \"m1\" for their first marker.",
@@ -136,6 +137,13 @@ func playShow(root string, a toolArgs) toolResult {
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
+	if at := a.str("at"); at != "" {
+		f, err := p.FrameAt(at)
+		if err != nil {
+			return textResult(err.Error(), true)
+		}
+		o.At = &f
+	}
 	// The pictures go to the widget only (_meta): the model reads the summary.
 	thumbs := []map[string]any{}
 	for _, t := range thumbsToShow(o.Thumbs, 48) {
@@ -150,6 +158,9 @@ func playShow(root string, a toolArgs) toolResult {
 		}
 	}
 	text := o.text() + "play_frame shows any moment; play_state gives the state there."
+	if o.At != nil && o.Stale {
+		text += fmt.Sprintf(" The person sees frame %d replayed with the current build, beside what they saw.", *o.At)
+	}
 	o.Thumbs = nil // a path per second of play: the widget's images say it
 	return toolResult{Text: text, Structured: o, Meta: map[string]any{"jm/thumbs": thumbs, "jm/markers": markers}}
 }

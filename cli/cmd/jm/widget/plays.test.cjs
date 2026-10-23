@@ -258,6 +258,32 @@ test('an agent\'s run says so, so it isn\'t taken for the person\'s play', async
   await settle();
   assert.match(JSON.stringify(sent), /of your run test-run/);
 });
+test('opened at a moment of a changed game (the agent\'s "look"), it replays it with the change unasked, once', async () => {
+  const marked = { ...play, stale: true, at: 60, markers: [{ n: 1, frame: 30, time: 0.5, scene: '' }, { n: 2, frame: 60, time: 1, scene: '' }] };
+  const meta = { ...metadata, 'jm/markers': [{ n: 2, src: 'data:image/jpeg;base64,SAW' }] };
+  const calls = [];
+  const callTool = async (name, args) => { calls.push({ name, args }); return replayed({ kind: 'replay', drift: 'game' }); };
+  const { app } = widget(marked, meta, null, null, { callTool });
+  await settle(); await settle();
+  assert.match(app.text, /0:01.0 · frame 60/);
+  assert.deepEqual(calls.filter((c) => c.name === 'play_frame').map((c) => c.args.at), ['60']);
+  assert.equal(child(child(app, 'viewer'), 'then-now').children.length, 2);
+  // Scrubbing back to it doesn't replay it again.
+  await settle();
+  assert.equal(calls.filter((c) => c.name === 'play_frame').length, 1);
+
+  const fresh = [];
+  widget({ ...marked, stale: false }, meta, null, null, { callTool: async (name, args) => { fresh.push(name); return replayed({ kind: 'replay', drift: 'same' }); } });
+  await settle(); await settle();
+  assert.equal(fresh.filter((n) => n === 'play_frame').length, 0, 'an unchanged game has nothing to compare');
+
+  let failed = 0;
+  const { app: broken } = widget(marked, meta, null, null, { callTool: async (name) => { if (name === 'play_frame') failed++; return { isError: true, content: [{ type: 'text', text: 'no display' }] }; } });
+  for (let i = 0; i < 4; i++) await settle();
+  assert.equal(failed, 1, 'a replay that fails is not tried again on its own');
+  assert.match(broken.text, /Couldn't replay: no display/);
+});
+
 test('a thumbnail fallback is not called exact, and the button stays usable', async () => {
   const app = await exactFrameAnswers(replayed({ kind: 'thumbnail', frame: 60 }));
   assert.equal(shown(app).badge, null);
