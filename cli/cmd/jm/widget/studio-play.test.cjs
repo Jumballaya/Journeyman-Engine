@@ -41,7 +41,7 @@ test('with no game running, the last play is the way back in: play on from its l
   s.button('Play on from marker 2').fire('click');
   await settle(6);
   assert.deepEqual(plain(s.calls().find((c) => c.name === 'play_resume').arguments), { play: '2026-10-22_165735', at: 'm2', game: '/g/pip' });
-  assert.match(s.app.text, /may not be quite the same spot/);
+  assert.match(s.app.text, /if the replay doesn't get you to marker 2's scene, you start there with your values from then/);
   s.button('Talk it over').fire('click');
   await settle(6);
   assert.match(s.sent.filter((m) => m.method === 'ui/message').at(-1).params.content[0].text, /Let's look at my play 2026-10-22_165735 \(1:05 long, 2 markers\)/);

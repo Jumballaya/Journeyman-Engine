@@ -136,12 +136,14 @@ namespace {
 // Returns the driver's replies.
 std::string driveGame(const TempDir& game, const std::string& commands, Engine::ViewSize framebuffer,
                       const std::filesystem::path& record, const std::filesystem::path& play = {},
-                      const std::function<void(Engine&)>& setup = {}) {
+                      const std::function<void(Engine&)>& setup = {},
+                      const std::function<void(DevOptions&)>& configure = {}) {
   EngineOptions options;
   options.dev = DevOptions{};
   options.dev.drive = true;
   options.dev.recordDir = record;
   options.dev.playSession = play;
+  if (configure) configure(options.dev);
   if (play.empty()) options.dev.saveDir = game.path() / "save";
   Engine engine(game.path(), ".jm.json", options);
   engine.setFramebufferSize(framebuffer.width, framebuffer.height);  // as the renderer does, starting
@@ -739,4 +741,148 @@ TEST(PlaySession, AHeldFrameShowsTheLastStep) {
   engine.frame(0.0f);
   EXPECT_EQ(engine.frameCount(), 2u);
   EXPECT_EQ(engine.drawFraction(), 1.0f);
+}
+
+namespace {
+
+// A changed game's new script: `does` runs at each update with its count (1 first).
+struct Changed : System {
+  Engine& engine;
+  std::function<void(Engine&, int)> does;
+  int frames = 0;
+  Changed(Engine& e, std::function<void(Engine&, int)> d) : engine(e), does(std::move(d)) {}
+  void update(World&, float) override { does(engine, ++frames); }
+};
+
+void writeTwoSceneGame(TempDir& game) {
+  game.writeFile(".jm.json", R"({"name": "Driven", "entryScene": "scenes/main.scene.json",
+                                "scenes": ["scenes/main.scene.json", "scenes/town.scene.json"], "assets": []})");
+  // An entity each: replays tell the scenes apart by their entities.
+  game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": [{"name": "gate", "components": {}}]})");
+  game.writeFile("scenes/town.scene.json", R"({"name": "town", "entities": [{"name": "well", "components": {}}]})");
+}
+
+}  // namespace
+
+// A resume at a marker (JM_PLAY_MARKER) lands there: where the replay got
+// if that's the marker's scene (its values, changed or not, stand), else the
+// marker's scene loaded with the values then, once the scene has settled.
+// The new play replays the same either way.
+TEST(PlaySession, AResumeLandsAtItsMarker) {
+  TempDir game;
+  writeTwoSceneGame(game);
+  const auto play = game.path() / "play";
+  driveGame(game, "step 3\nscene scenes/town.scene.json\nset score 5\nstep 3\nmarker here\nstep 3\n", {640, 360}, play);
+  std::ifstream meta(play / "session.json");
+  const int marked = nlohmann::json::parse(meta)["markers"][0]["frame"].get<int>();
+  const std::string pastIt = "step " + std::to_string(marked + 60);  // the handover, and a fade after it
+  const auto atMarker = [](const std::filesystem::path& p, int n) {
+    std::ifstream in(p / "session.json");
+    const uint64_t frame = nlohmann::json::parse(in)["markers"][n - 1]["frame"].get<uint64_t>();
+    return [frame, n](DevOptions& dev) {
+      dev.playUntil = frame + 1;
+      dev.playMarker = n;
+      dev.afterReplay = DevOptions::AfterReplay::Live;
+    };
+  };
+  const auto changed = [](std::function<void(Engine&, int)> does) {
+    return [does](Engine& e) { e.getWorld().registerSystem<Changed>(e, does); };
+  };
+  const auto bonus = [](Engine& e, int frame) {
+    if (frame == 1) e.getSession().setJson("bonus", 1);
+  };
+  const auto resume = [&](const std::string& name, const std::function<void(Engine&)>& setup,
+                          const std::filesystem::path& from = {}, int marker = 1) {
+    const auto of = from.empty() ? play : from;
+    return lastReply(driveGame(game, pastIt + "\nstate\n", {640, 360}, game.path() / name, of, setup, atMarker(of, marker)))["state"];
+  };
+  const auto given = [&](const std::string& name) { return fileText(game.path() / name / "inputs.jsonl").find("\"session\"") != std::string::npos; };
+  const auto replays = [&](const std::string& name, const std::function<void(Engine&)>& setup) {
+    const nlohmann::json state = lastReply(driveGame(game, pastIt + "\nstate\n", {640, 360}, {}, game.path() / name, setup))["state"];
+    EXPECT_TRUE(state["replay"]["diverged"].is_null()) << name;
+    return state["scene"];
+  };
+
+  nlohmann::json state = resume("same", {});
+  EXPECT_EQ(state["scene"], "scenes/town.scene.json");
+  EXPECT_EQ(state["session"], (nlohmann::json{{"score", 5}}));
+  EXPECT_FALSE(given("same"));
+
+  state = resume("values", changed(bonus));
+  EXPECT_EQ(state["session"], (nlohmann::json{{"bonus", 1}, {"score", 5}}));  // in its scene: the change is theirs to try
+  EXPECT_FALSE(given("values"));
+
+  // Spelled another way, it's the same scene.
+  resume("spelled", changed([](Engine& e, int frame) {
+    if (frame == 5) e.getSceneManager().loadScene("scenes/./town.scene.json");
+  }));
+  EXPECT_FALSE(given("spelled"));
+
+  // Sent back with a fade still running at the handover.
+  const auto fadesBack = changed([&](Engine& e, int frame) {
+    bonus(e, frame);
+    if (frame == 5) e.getSceneManager().transitionTo("scenes/main.scene.json", {.duration = 0.5f});
+  });
+  auto handedOver = std::make_shared<std::vector<bool>>();  // per frame from the handover: the person's yet?
+  state = resume("faded", [&](Engine& e) {
+    fadesBack(e);
+    e.getWorld().registerSystem<Changed>(e, [&, handedOver](Engine& e, int frame) {
+      if (frame > marked + 1) handedOver->push_back(!e.fastForwarding());  // (driven: always muted)
+    });
+  });
+  ASSERT_GT(handedOver->size(), 2u);
+  EXPECT_FALSE(handedOver->front());  // fading: not theirs till it lands
+  EXPECT_TRUE(handedOver->back());
+  EXPECT_EQ(state["scene"], "scenes/town.scene.json");
+  EXPECT_EQ(state["session"], (nlohmann::json{{"score", 5}}));  // the values then
+  EXPECT_TRUE(given("faded"));
+  EXPECT_EQ(replays("faded", fadesBack), "scenes/town.scene.json");
+
+  // Played, not driven: the person's keys stay muted till it lands.
+  {
+    EngineOptions options;
+    options.dev = DevOptions{};
+    options.dev.fixedDt = 1.0f / 60.0f;
+    options.dev.exitAfterFrames = marked + 60;
+    options.dev.playSession = play;
+    options.dev.recordDir = game.path() / "played";
+    atMarker(play, 1)(options.dev);
+    Engine engine(game.path(), ".jm.json", options);
+    engine.initialize();
+    fadesBack(engine);
+    auto muted = std::make_shared<std::vector<bool>>();
+    auto scene = std::make_shared<std::string>();
+    engine.getWorld().registerSystem<Changed>(engine, [&, muted, scene](Engine& e, int frame) {
+      if (frame > marked + 1) muted->push_back(e.devicesMuted());
+      *scene = e.getSceneManager().getCurrentScenePath();
+    });
+    engine.run();
+    ASSERT_GT(muted->size(), 2u);
+    EXPECT_TRUE(muted->front());
+    EXPECT_FALSE(muted->back());
+    EXPECT_EQ(*scene, "scenes/town.scene.json");
+  }
+
+  // Sent back by a change queued on the last replayed frame (as scripts ask), applied after the handover.
+  state = resume("queued", changed([&](Engine& e, int frame) {
+    if (frame == marked + 1) e.getSceneManager().requestLoad("scenes/main.scene.json");
+  }));
+  EXPECT_EQ(state["scene"], "scenes/town.scene.json");
+
+  // Two markers on one frame: the one asked for.
+  const auto twice = game.path() / "twice";
+  driveGame(game, "step 3\nmarker one\nscene scenes/town.scene.json\nmarker two\nstep 3\n", {640, 360}, twice);
+  EXPECT_EQ(resume("second", {}, twice, 2)["scene"], "scenes/town.scene.json");
+
+  // A marker's scene that no longer loads (the old game's script went there;
+  // the new one doesn't): the recording ends there, replayable.
+  const auto old = game.path() / "old";
+  driveGame(game, "step 6\nmarker there\nstep 3\n", {640, 360}, old, {}, changed([](Engine& e, int frame) {
+    if (frame == 3) e.getSceneManager().loadScene("scenes/town.scene.json");
+  }));
+  game.writeFile("scenes/town.scene.json", "{ not json");
+  resume("broken", {}, old);
+  std::ifstream broken(game.path() / "broken" / "session.json");
+  EXPECT_EQ(nlohmann::json::parse(broken)["frames"], 6);
+  replays("broken", {});
 }

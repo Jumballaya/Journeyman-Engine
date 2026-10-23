@@ -112,6 +112,12 @@ class AgentRun final : public AgentTools {
   std::optional<uint64_t> _divergedAt;           // a replay that didn't match its recording
   std::optional<uint64_t> _matchedAt;            // the last frame it did match at
   std::filesystem::path _replaySaveDir;          // a replay's copy of the player's save, deleted with the run
+  struct Landing {
+    int n;                   // the marker's
+    std::string scene;       // its scene
+    nlohmann::json session;  // its session values
+  };
+  std::optional<Landing> _landing;  // the marker a resume hands over at
   std::vector<nlohmann::json> _driverErrors;
   bool _held = false;          // F8's moment
   bool _stepHeld = false;      // `.`
@@ -128,6 +134,12 @@ class AgentRun final : public AgentTools {
   void startSession();                     // JM_SESSION, or a replay's starting values
   void startReplay();                      // the recording's framebuffer size, before the first frame
   void startRecording();
+  void findLanding();  // JM_PLAY_MARKER's: its scene and values
+  // Replayable up to here, `last` the state its last frame left; F8 says `notice`.
+  void endRecording(const nlohmann::json& last, std::string notice);
+  // The person lands at the marker: where the replay got, if that's in its
+  // scene; else its scene, loaded with the values then (a changed game).
+  void land();
   void replay(const std::vector<nlohmann::json>& events);
   void giveInput(const nlohmann::json& event);  // the driver's set and scene, or a replay of one
   void dumpState(const std::string& name);      // JM_DUMP_DIR/<name>

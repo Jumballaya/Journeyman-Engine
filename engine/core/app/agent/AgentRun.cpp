@@ -63,6 +63,7 @@ void AgentRun::start() {
   }
   trackOrigins();
   startSession();
+  findLanding();
   if (_dev.drive || !_dev.profileOut.empty()) _engine.setProfiling(true);
   startReplay();
   startRecording();
@@ -87,6 +88,38 @@ void AgentRun::startSession() {
   }
   for (const auto& [key, value] : values.items()) session.setJson(key, value);
   JM_LOG_INFO("[Engine] session: {} values from {}", values.size(), path.string());
+}
+
+void AgentRun::findLanding() {
+  if (!_playback || !_dev.playUntil || _dev.playMarker <= 0 || _dev.afterReplay != DevOptions::AfterReplay::Live) return;
+  const int n = _dev.playMarker;
+  std::ifstream in(_dev.playSession / "markers" / (std::to_string(n) + ".json"));
+  const nlohmann::json state = nlohmann::json::parse(in, nullptr, false);
+  if (!state.is_object()) return;  // no checkpoint: the replay's spot is the one
+  _landing = Landing{n, state.value("scene", std::string()), state.value("session", nlohmann::json::object())};
+}
+
+void AgentRun::land() {
+  const Landing landing = *std::exchange(_landing, std::nullopt);
+  // In its scene, the replay's values stand: where they differ, that's the change to try.
+  const auto same = [](const std::filesystem::path& a, const std::filesystem::path& b) {
+    return a.lexically_normal() == b.lexically_normal();
+  };
+  if (same(_engine.getSceneManager().getCurrentScenePath(), landing.scene)) return;
+  JM_LOG_INFO("[Session] the replay didn't reach marker {}'s scene: starting there, with the values then", landing.n);
+  const nlohmann::json before = _engine.stateJson(false);
+  try {
+    // Values first: the scene's scripts start with them, as they did then.
+    giveInput({{"type", "session"}, {"values", landing.session}});
+    giveInput({{"type", "scene"}, {"path", landing.scene}});
+  } catch (const std::exception& e) {
+    // The failed load changed the run as no recorded input can say: the play ends before it.
+    JM_LOG_ERROR("[Session] marker {}'s scene didn't load: {}", landing.n, e.what());
+    endRecording(before, "No marker: the recording ended when marker " + std::to_string(landing.n) + "'s scene didn't load.");
+    return;
+  }
+  _engine.notify("The game changed since this play: you're at marker " + std::to_string(landing.n) +
+                 "'s scene, with your values from then");
 }
 
 void AgentRun::startReplay() {
@@ -183,6 +216,9 @@ void AgentRun::frameDue() {
 
 float AgentRun::stepDue(float dt) {
   const uint64_t frame = _engine.frameCount();
+  // Once the scene settles: a fade can't be cut, and a queued change would undo the landing.
+  const SceneManager& scenes = _engine.getSceneManager();
+  if (_landing && frame >= *_dev.playUntil && !scenes.isTransitioning() && !scenes.changeRequested()) land();
   if (!replayingAt(frame)) return dt;
   // What the driver gave between frames, before the frame starts as it was then.
   replay(_playback->eventsBefore(frame));
@@ -241,13 +277,16 @@ void AgentRun::frameDrawn(uint64_t firstStep) {
 }
 
 void AgentRun::assetsReloaded() {
+  // A replay needs the files the play ran with.
+  if (_recorder) endRecording(_engine.stateJson(false), "No marker: the recording ended at a reload. Play again to record.");
+}
+
+void AgentRun::endRecording(const nlohmann::json& last, std::string notice) {
   if (!_recorder) return;
-  // A replay needs the files the play ran with: the recording ends here, replayable up to now.
-  const auto last = _engine.stateJson(false);
   _recorder->end(&last);
   _recorder.reset();
-  _notRecordingNotice = "No marker: the recording ended at a reload. Play again to record.";
-  JM_LOG_INFO("[Session] the recorded play ends at this reload");
+  JM_LOG_INFO("[Session] the recorded play ends here: {}", notice);
+  _notRecordingNotice = std::move(notice);
 }
 
 void AgentRun::shutdown() {
@@ -276,11 +315,12 @@ void AgentRun::describeState(nlohmann::json& state) {
 }
 
 bool AgentRun::devicesMuted() const {
-  return _dev.drive || !_dev.inputReplay.empty() || _held || replayingAt(_engine.frameCount());
+  return _dev.drive || !_dev.inputReplay.empty() || _held || replayingAt(_engine.frameCount()) || _landing;
 }
 
 bool AgentRun::fastForwarding() const {
-  return _dev.afterReplay == DevOptions::AfterReplay::Live && replayingAt(_engine.frameCount());
+  // Till the landing too: the person takes over at the marker, not on the way there.
+  return _dev.afterReplay == DevOptions::AfterReplay::Live && (replayingAt(_engine.frameCount()) || _landing);
 }
 
 std::optional<bool> AgentRun::windowFocused() const {
@@ -302,7 +342,7 @@ void AgentRun::replay(const std::vector<nlohmann::json>& events) {
     else if (type == "button") bus.emit(EVT_MouseButton, events::MouseButton{e.value("button", 0), e.value("down", false)});
     else if (type == "wheel") bus.emit(EVT_MouseWheel, events::MouseWheel{e.value("dx", 0.0f), e.value("dy", 0.0f)});
     else if (type == "resize") bus.emit(EVT_WindowResize, events::WindowResized{e.value("w", 0), e.value("h", 0)});
-    else if (type == "set" || type == "scene") giveInput(e);
+    else if (type == "set" || type == "scene" || type == "session") giveInput(e);
     else if (type == "key") {
       events::NamedKey key{{}, e.value("down", false)};
       const std::string name = e.value("name", "");
@@ -314,8 +354,17 @@ void AgentRun::replay(const std::vector<nlohmann::json>& events) {
 
 void AgentRun::giveInput(const nlohmann::json& event) {
   // Done, and recorded, the same either way.
-  if (event.value("type", "") == "set") _engine.getSession().setJson(event.value("key", ""), event.value("value", nlohmann::json()));
-  else _engine.getSceneManager().loadScene(event.value("path", ""));
+  const std::string type = event.value("type", "");
+  GameState& session = _engine.getSession();
+  if (type == "set") {
+    session.setJson(event.value("key", ""), event.value("value", nlohmann::json()));
+  } else if (type == "session") {
+    const nlohmann::json values = event.value("values", nlohmann::json::object());  // named: items() would outlive a temporary
+    session.clear();
+    for (const auto& [key, value] : values.items()) session.setJson(key, value);
+  } else {
+    _engine.getSceneManager().loadScene(event.value("path", ""));
+  }
   recordInput(event);
 }
 

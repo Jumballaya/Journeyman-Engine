@@ -124,7 +124,8 @@ func (s *mcpServer) playTools() []mcpTool {
 			}},
 		{Name: "play_resume", Title: "Let the person play on from a moment",
 			Description: "Opens the game for the person at a moment of a recorded play (fast-forwarded there, then theirs to play), " +
-				"recorded as a new play. Use it to hand them the exact spot to try a change: \"play on from your marker 2\".",
+				"recorded as a new play. Use it to hand them the exact spot to try a change: \"play on from your marker 2\". " +
+				"At a marker of a changed game, if the replay doesn't reach the marker's scene, they start at that scene with their values from then.",
 			InputSchema: object(map[string]any{"play": playRefArg, "at": atArg}), Annotations: writes(),
 			Meta:   callableMeta("Opening the game…", "The game is open"),
 			onGame: playResume},
@@ -297,22 +298,28 @@ func resumeIn(c *toolCall, root, in, play, at string) toolResult {
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
-	cmd := exec.Command(self, "plays", "resume", p.ID, fmt.Sprint(f), "--in", in)
+	cmd := exec.Command(self, "plays", "resume", p.ID, at, "--in", in) // at, not f: a marker lands in its scene
 	cmd.Dir = root
 	if err := cmd.Start(); err != nil {
 		return textResult(err.Error(), true)
 	}
 	go func() { _ = cmd.Wait() }()
 	changed := p.DriftFrom(plays.ReadBuild(filepath.Join(in, "build"))) == plays.GameChanged
-	return toolResult{Text: resumedText(p.ID, f, changed), Structured: map[string]any{"play": p.ID, "frame": f, "opened": true, "gameChanged": changed}}
+	return toolResult{Text: resumedText(p, at, f, changed), Structured: map[string]any{"play": p.ID, "frame": f, "opened": true, "gameChanged": changed}}
 }
 
 // resumedText says where the person was put. A changed game replays their
 // inputs differently, so the spot may not be theirs: they should hear that.
-func resumedText(play string, f uint64, changed bool) string {
-	text := fmt.Sprintf("The game is open at frame %d of play %s; what they play from there is recorded as a new play (plays_list).", f, play)
-	if changed {
-		text += " The game changed since that play, so the replay there may have gone differently: tell them it may not be quite their spot (play_verify says by when it differs)."
+// At a marker the engine lands them in its scene if the replay doesn't get there.
+func resumedText(p *plays.Play, at string, f uint64, changed bool) string {
+	text := fmt.Sprintf("The game is open at frame %d of play %s; what they play from there is recorded as a new play (plays_list).", f, p.ID)
+	m, atMarker := p.Marker(at)
+	switch {
+	case !changed:
+	case atMarker:
+		text += fmt.Sprintf(" The game changed since that play: if replaying their inputs doesn't bring them to marker %d's scene, the game starts them there instead (that scene from its start, with their session values from then) and says so on screen. Tell them it may not be quite their spot.", m.N)
+	default:
+		text += " The game changed since that play, so the replay there may have gone differently: tell them it may not be quite their spot (play_verify says by when it differs; resuming at a marker lands them at its scene)."
 	}
 	return text
 }

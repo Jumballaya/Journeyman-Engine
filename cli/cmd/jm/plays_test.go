@@ -115,11 +115,15 @@ func TestPlayReviewOpensAsAThreadEntrypoint(t *testing.T) {
 }
 
 func TestResumingAChangedGameSaysTheSpotMayDiffer(t *testing.T) {
-	if text := resumedText("p", 90, false); strings.Contains(text, "changed") {
+	p := &plays.Play{ID: "p", Meta: plays.Meta{Markers: []plays.Marker{{N: 2, Frame: 90}}}}
+	if text := resumedText(p, "m2", 90, false); strings.Contains(text, "changed") {
 		t.Errorf("an unchanged game warns: %s", text)
 	}
-	if text := resumedText("p", 90, true); !strings.Contains(text, "may not be quite their spot") {
-		t.Errorf("a changed game doesn't warn: %s", text)
+	if text := resumedText(p, "m2", 90, true); !strings.Contains(text, "marker 2's scene") || !strings.Contains(text, "may not be quite their spot") {
+		t.Errorf("a changed game at a marker doesn't say where they land: %s", text)
+	}
+	if text := resumedText(p, "90", 90, true); strings.Contains(text, "marker 2's scene") || !strings.Contains(text, "may not be quite their spot") {
+		t.Errorf("a changed game off a marker: %s", text)
 	}
 }
 

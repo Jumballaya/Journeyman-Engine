@@ -51,6 +51,7 @@ DevOptions DevOptions::fromEnvironment() {
                   : env("JM_PLAY_THEN") == "live" ? AfterReplay::Live
                                                   : AfterReplay::Stop;
   if (auto v = env("JM_PLAY_UNTIL"); !v.empty()) o.playUntil = std::strtoull(v.c_str(), nullptr, 10);
+  o.playMarker = std::atoi(env("JM_PLAY_MARKER").c_str());
   o.netHost = env("JM_NET_HOST");
   o.netJoin = env("JM_NET_JOIN");
   o.netName = env("JM_NET_NAME");

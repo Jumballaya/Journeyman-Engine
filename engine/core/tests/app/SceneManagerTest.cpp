@@ -1104,3 +1104,18 @@ TEST_F(SceneManagerTest, GroupsSpawnOnRequestAndConditionsFilterEntries) {
   sm.spawnGroup("room");
   EXPECT_EQ(count("shard"), 1u);
 }
+
+// A group asked for belongs to the scene that asked: a scene loaded before the
+// request is applied (queued or at once) doesn't get it.
+TEST_F(SceneManagerTest, ASceneChangeDropsTheGroupsAskedFor) {
+  writeScene(dir, "level.scene.json", {{"entities", nlohmann::json::array({{{"name", "slime"}, {"group", "room"}}})}});
+  sm.loadScene("level.scene.json");
+  sm.requestGroup("room", true);
+  sm.loadScene("level.scene.json");
+  sm.tick(0.016f);
+  EXPECT_EQ(world.findWithTag("slime").size(), 0u);
+  sm.requestGroup("room", true);
+  sm.requestLoad("level.scene.json");
+  sm.tick(0.016f);
+  EXPECT_EQ(world.findWithTag("slime").size(), 0u);
+}

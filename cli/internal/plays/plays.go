@@ -520,6 +520,25 @@ var markerSpec = regexp.MustCompile(`^(marker:|m\d)`)
 var timeSpec = regexp.MustCompile(`^(\d+(?:\.\d+)?)s$`)
 var clockSpec = regexp.MustCompile(`^(\d+):(\d{1,2}(?:\.\d+)?)$`)
 
+// Marker is the marker a moment names ("m2", "marker:2"), if it names one the play has.
+func (p *Play) Marker(spec string) (Marker, bool) {
+	n, ok := markerNumber(strings.TrimSpace(spec))
+	for _, m := range p.Meta.Markers {
+		if ok && m.N == n {
+			return m, true
+		}
+	}
+	return Marker{}, false
+}
+
+func markerNumber(spec string) (int, bool) {
+	if !markerSpec.MatchString(spec) {
+		return 0, false
+	}
+	n, err := strconv.Atoi(strings.TrimPrefix(strings.TrimPrefix(spec, "marker:"), "m"))
+	return n, err == nil
+}
+
 // FrameAt resolves a moment in the play to a frame: a frame number ("420"),
 // a time ("12.5s", "1:05"), a marker ("marker:2", "m2"), "start" or "end".
 func (p *Play) FrameAt(spec string) (uint64, error) {
@@ -541,14 +560,12 @@ func (p *Play) FrameAt(spec string) (uint64, error) {
 	case spec == "start":
 		return 0, nil
 	case markerSpec.MatchString(spec):
-		n, err := strconv.Atoi(strings.TrimPrefix(strings.TrimPrefix(spec, "marker:"), "m"))
-		if err != nil {
+		n, ok := markerNumber(spec)
+		if !ok {
 			return 0, fmt.Errorf("bad marker %q (e.g. marker:2)", spec)
 		}
-		for _, m := range p.Meta.Markers {
-			if m.N == n {
-				return inPlay(m.Frame)
-			}
+		if m, ok := p.Marker(spec); ok {
+			return inPlay(m.Frame)
 		}
 		return 0, fmt.Errorf("the play has %d marker(s); no marker %d", len(p.Meta.Markers), n)
 	}

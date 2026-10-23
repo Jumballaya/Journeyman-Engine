@@ -44,6 +44,7 @@ struct DevOptions {
   std::filesystem::path recordDir;           // JM_RECORD_DIR: record this (played) run as a session there (agent/PlaySession.hpp)
   std::filesystem::path playSession;         // JM_PLAY_SESSION: replay a recorded session, exactly
   std::optional<uint64_t> playUntil;         // JM_PLAY_UNTIL=n: the recording ends at frame n (a marker's, say)
+  int playMarker = 0;                        // JM_PLAY_MARKER=n: with JM_PLAY_THEN=live, the player lands at marker n (its scene)
 
   // Networking (docs/networking.md): host or join as the game starts, and
   // trouble on purpose, to see a game cope.

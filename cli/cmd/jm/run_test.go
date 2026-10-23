@@ -232,9 +232,9 @@ func TestAPersonsPlayIsRecordedAndSteerable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.WriteFile(filepath.Join(p, "session.json"), []byte(`{"frames": 60, "seconds": 1, "started": "2000-01-01T00:00:00Z"}`), 0o644) // a second of play
-	os.WriteFile(filepath.Join(p, "frames.bin"), make([]byte, 4*60), 0o644)                                                          // its frames' times (dt 0)
-	for i := range keptPlays {                                                                                                       // newer plays: the resumed one is the oldest, first to be pruned
+	os.WriteFile(filepath.Join(p, "session.json"), []byte(`{"frames": 60, "seconds": 1, "started": "2000-01-01T00:00:00Z", "markers": [{"n": 1, "frame": 30}]}`), 0o644) // a second of play
+	os.WriteFile(filepath.Join(p, "frames.bin"), make([]byte, 4*60), 0o644)                                                                                              // its frames' times (dt 0)
+	for i := range keptPlays {                                                                                                                                           // newer plays: the resumed one is the oldest, first to be pruned
 		later := filepath.Join(plays.Root(root), fmt.Sprintf("2999-01-01_%06d", i))
 		os.MkdirAll(later, 0o755)
 		os.WriteFile(filepath.Join(later, "session.json"), []byte(`{"format":1,"frames":1,"markers":[],"started":"2999-01-01T00:00:00Z"}`), 0o644)
@@ -242,7 +242,17 @@ func TestAPersonsPlayIsRecordedAndSteerable(t *testing.T) {
 	if err := resumePlay(root, root, filepath.Base(p), "0"); err != nil {
 		t.Fatal(err)
 	}
+	if data, _ := os.ReadFile(envFile); strings.Contains(string(data), "JM_PLAY_MARKER=") {
+		t.Error("a resume at a frame lands at a marker")
+	}
 	launched("a resumed play", root)
+	if err := resumePlay(root, root, filepath.Base(p), "m1"); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(envFile); !strings.Contains(string(data), "JM_PLAY_MARKER=1\n") || !strings.Contains(string(data), "JM_PLAY_UNTIL=31\n") {
+		t.Errorf("a resume at a marker doesn't land there: %s", data)
+	}
+	launched("a resume at a marker", root)
 	if _, err := os.Stat(filepath.Join(p, "frames.bin")); err != nil {
 		t.Error("the play a resume replays went with older plays:", err)
 	}
