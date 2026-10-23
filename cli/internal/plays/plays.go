@@ -346,6 +346,15 @@ type noPlays string
 func (e noPlays) Error() string      { return string(e) }
 func (noPlays) Is(target error) bool { return target == ErrNoPlays }
 
+// noneYet is why Find has no play of the person's in projectRoot: ErrNoPlays,
+// unless there are plays it can't read (they may be theirs).
+func noneYet(projectRoot, why string) error {
+	if bad := Unreadable(projectRoot); len(bad) > 0 {
+		return fmt.Errorf("no play of the person's can be read: %s can't (jm plays show <id> says why)", strings.Join(bad, ", "))
+	}
+	return noPlays(why)
+}
+
 func Find(projectRoot, ref string) (*Play, error) {
 	// An exact id can explain a damaged play even when List can't show any.
 	if filepath.IsLocal(ref) && ref != "." && filepath.Base(ref) == ref &&
@@ -359,7 +368,7 @@ func Find(projectRoot, ref string) (*Play, error) {
 		return nil, err
 	}
 	if len(all) == 0 {
-		return nil, noPlays(fmt.Sprintf("no recorded plays in %s: `jm run` records one each time you play", Folder))
+		return nil, noneYet(projectRoot, fmt.Sprintf("no recorded plays in %s: `jm run` records one each time you play", Folder))
 	}
 	var theirs []*Play // the person's: an agent's own runs go by their ids
 	for _, p := range all {
@@ -376,7 +385,7 @@ func Find(projectRoot, ref string) (*Play, error) {
 		}
 		switch {
 		case len(theirs) == 0:
-			return nil, noPlays(fmt.Sprintf("no plays of the person's yet, only an agent's runs (by id, newest %s): `jm run` records one each time they play", all[0].ID))
+			return nil, noneYet(projectRoot, fmt.Sprintf("no plays of the person's yet, only an agent's runs (by id, newest %s): `jm run` records one each time they play", all[0].ID))
 		case back >= len(theirs):
 			return nil, fmt.Errorf("only %d plays of the person's recorded", len(theirs))
 		}

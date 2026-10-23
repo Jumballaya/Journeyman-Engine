@@ -123,7 +123,7 @@ func init() {
 		}
 		return resumePlay(root, in, arg(args, 0), arg(args, 1))
 	}))
-	resume.Flags().String("in", "", "the game to play it in: a variant's or sandbox's folder (default: this game; built as it is)")
+	resume.Flags().String("in", "", "the game to play it in: a variant's or sandbox's folder (default: this game), built first if its build isn't of its files")
 	sub("verify [play]", "Replay a play to its end: does it go the same way?", 1, rooted(func(root string, cmd *cobra.Command, args []string) error {
 		p, b, err := openPlay(root, arg(args, 0))
 		if err != nil {
@@ -651,9 +651,9 @@ func drivePlay(root, ref, at string) error {
 	return nil
 }
 
-// resumePlay hands the game in (root itself, or a variant or sandbox of it) to
-// the person at a moment of root's play: fast-forwarded there, then theirs,
-// recorded as a new play of in's.
+// resumePlay hands the game in (root itself, or a variant or sandbox of it;
+// built first if it needs it) to the person at a moment of root's play:
+// fast-forwarded there, then theirs, recorded as a new play of in's.
 func resumePlay(root, in, ref, at string) error {
 	in, err := filepath.Abs(in) // the engine runs in it: paths from here would be read from there
 	if err != nil {
@@ -665,6 +665,9 @@ func resumePlay(root, in, ref, at string) error {
 	}
 	f, err := p.FrameAt(at)
 	if err != nil {
+		return err
+	}
+	if err := freshBuild(nil, in); err != nil {
 		return err
 	}
 	b := plays.ReadBuild(filepath.Join(in, "build"))

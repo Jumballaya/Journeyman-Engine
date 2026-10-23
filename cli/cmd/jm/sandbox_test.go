@@ -281,6 +281,18 @@ func TestASandboxIsComparedWithTheGameAsItIsNow(t *testing.T) {
 	if list, _ := sandboxesOf(game); len(list) != 1 || list[0].Print == before[0].Print {
 		t.Error("the game changed and the comparison's print didn't")
 	}
+	ignore, _ := os.ReadFile(filepath.Join(game, ".gitignore"))
+	for _, side := range []string{sb.Dir, game} { // listed in its changes, though not built
+		before, _ := sandboxesOf(game)
+		os.WriteFile(filepath.Join(side, ".gitignore"), append(ignore, "x\n"...), 0o644)
+		if list, _ := sandboxesOf(game); len(list) != 1 || list[0].Print == before[0].Print {
+			t.Errorf("a .gitignore changed in %s and the comparison's print didn't", side)
+		}
+	}
+	os.WriteFile(filepath.Join(game, ".gitignore"), ignore, 0o644) // as committed: later sandboxes are copies of that
+	if a, b := comparedPrint(game, sb.Dir), comparedPrint(game, sb.Dir); a != b {
+		t.Error("nothing changed and the print did")
+	}
 	if compareImage(game, "sandbox", "game") == compareImage(game, "game", "game") {
 		t.Error("the sandbox game's frame and the game's are one file")
 	}

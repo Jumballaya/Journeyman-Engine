@@ -3,6 +3,7 @@ package plays
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"math"
 	"os"
 	"path/filepath"
@@ -275,5 +276,17 @@ func TestLatestIsThePersonsPlayNotAnAgentsRun(t *testing.T) {
 	writePlay(t, only, "2026-10-22_000000").writeInfo(Info{By: Agent})
 	if _, err := Find(only, "latest"); err == nil || !strings.Contains(err.Error(), "only an agent's runs (by id, newest 2026-10-22_000000)") {
 		t.Errorf("with only an agent's runs: %v", err)
+	}
+	// A play that can't be read may be theirs: not "not played yet".
+	for _, root := range []string{t.TempDir(), only} {
+		damaged := filepath.Join(Root(root), "2026-10-23_000000")
+		os.MkdirAll(damaged, 0o755)
+		os.WriteFile(filepath.Join(damaged, "session.json"), []byte("{"), 0o644)
+		if _, err := Find(root, "latest"); err == nil || errors.Is(err, ErrNoPlays) || !strings.Contains(err.Error(), "2026-10-23_000000 can't") {
+			t.Errorf("with a damaged play: %v", err)
+		}
+	}
+	if _, err := Find(t.TempDir(), "latest"); !errors.Is(err, ErrNoPlays) {
+		t.Errorf("never played: %v", err)
 	}
 }

@@ -207,4 +207,10 @@ func TestACompareLooksAtThePersonsLastMarker(t *testing.T) {
 	if _, err := compareMoment(broken, "", ""); err == nil {
 		t.Error("an unreadable plays folder compared with no inputs, as if never played")
 	}
+	damaged := t.TempDir()
+	os.MkdirAll(filepath.Join(plays.Root(damaged), "2000-01-03_000000"), 0o755)
+	os.WriteFile(filepath.Join(plays.Root(damaged), "2000-01-03_000000", "session.json"), []byte("{"), 0o644)
+	if _, err := compareMoment(damaged, "", ""); err == nil {
+		t.Error("a play that can't be read compared with no inputs, as if never played")
+	}
 }

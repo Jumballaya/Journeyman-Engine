@@ -300,9 +300,16 @@ func differences(game, copy string) map[string]string {
 }
 
 // comparedPrint is the print of what a comparison of copy with the game shows:
-// both sides' sources (either changing, it may be no longer so).
+// both sides' sources and the files differences lists (a .gitignore isn't
+// built); either changing, it may be no longer so.
 func comparedPrint(game, copy string) string {
-	return sourcesPrint(map[string]string{"game": sourcesPrint(buildSources(game)), "copy": sourcesPrint(buildSources(copy))})
+	files := func(dir string) string {
+		out := map[string]string{}
+		_ = walkProject(dir, func(rel string, info fs.FileInfo) { out[rel] = fmt.Sprint(info.ModTime().UnixNano(), " ", info.Size()) })
+		return sourcesPrint(out)
+	}
+	return sourcesPrint(map[string]string{"game": sourcesPrint(buildSources(game)), "copy": sourcesPrint(buildSources(copy)),
+		"game files": files(game), "copy files": files(copy)})
 }
 
 // runInSandbox runs jm with args in the sandbox, stopped after timeout: its

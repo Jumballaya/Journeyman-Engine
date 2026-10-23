@@ -46,11 +46,11 @@ studioTabs.push((() => {
 
   // The moment to compare at: a play of the game's (the person's latest unless
   // picked) and a marker of it or its end; with no plays, or "none" picked, a frame.
-  // While the plays are read, none; if they can't be, jm's default (play, at: undefined).
+  // While the plays are read (or read again, for a default), none; if they can't be, jm's default (play, at: undefined).
   const named = (at) => /^m\d+$/.test(at) ? `marker ${at.slice(1)}` : at === "end" ? "the end of the play" : at === "start" ? "the start" : /^\d+$/.test(at) ? `frame ${at}` : at;
   const momentOf = (ctx) => {
     const answer = ctx.plays();
-    if (!answer) return null;
+    if (!answer || answer.refreshing && state.play !== "none" && !(state.play && state.at)) return null;  // a newer play or marker may be the default
     if (answer.error) return { plays: [], marks: [] };
     const plays = answer.plays;
     const play = plays.find((p) => p.id === state.play) || (state.play === "none" ? null : plays.find((p) => p.by !== "agent"));
