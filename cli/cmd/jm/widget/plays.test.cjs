@@ -307,15 +307,19 @@ test('the agent\'s at wins over a saved scrub; a replay counts for the build it 
   answer(); await settle(); await settle();  // the same answer again: its replay stands
   assert.equal(replays().length, 1);
   assert.equal(shown(w.app).src, 'data:image/png;base64,B1');
+  answer({ at: 120 }); await settle(); await settle();  // another moment of the same build
+  assert.equal(replays().length, 2);
+  assert.equal(replays()[1].params.arguments.at, '120');
+  image(1, 'data:image/png;base64,B1AT120'); await settle();
 
   // The agent changed the game again (b2) and shows it while a replay of b2 runs, then b3:
   answer({ build: 'b2' }); await settle(); await settle();
-  assert.equal(replays().length, 2);
-  answer({ build: 'b3' }); await settle(); await settle();
-  image(1, 'data:image/png;base64,B2'); await settle(); await settle();
-  assert.notEqual(shown(w.app).src, 'data:image/png;base64,B2', "b2's replay isn't b3's game");
   assert.equal(replays().length, 3);
-  image(2, 'data:image/png;base64,B3'); await settle();
+  answer({ build: 'b3' }); await settle(); await settle();
+  image(2, 'data:image/png;base64,B2'); await settle(); await settle();
+  assert.notEqual(shown(w.app).src, 'data:image/png;base64,B2', "b2's replay isn't b3's game");
+  assert.equal(replays().length, 4);
+  image(3, 'data:image/png;base64,B3'); await settle();
   assert.equal(shown(w.app).src, 'data:image/png;base64,B3');
 
   // A newer build's answer elsewhere (at 120, or none) leaves no older replay passing for current.

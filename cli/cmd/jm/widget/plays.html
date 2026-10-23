@@ -155,7 +155,7 @@
   // asPlayed: the frame showing what they saw, not its replay with the changed game.
   // frames hold each replay's build: one of another build than the answer's
   // (the game changed again) isn't shown. opened: the play, at and build last
-  // gone to; compared: the plays (and builds) whose at was replayed unasked.
+  // gone to; compared: the moments (play, at, build) replayed unasked, once each.
   const state = { play: null, selected: null, frames: {}, pending: null, replaying: null, notice: "", plays: null, picked: null, shared: "", asPlayed: null,
                   opened: "", compared: new Set() };
   try { if (host.widgetState && Number.isFinite(host.widgetState.selected)) state.selected = host.widgetState.selected; } catch (e) {}
@@ -407,7 +407,7 @@
       state.selected = (p.markers && p.markers.length) ? p.markers[0].frame : (d.thumbs.length ? d.thumbs[d.thumbs.length - 1].frame : 0);
     }
     // Opened at a moment of a changed game: replayed with the change, unasked.
-    const comparing = `${playKey(p)}#${p.build || ""}`;
+    const comparing = `${playKey(p)}@${at}#${p.build || ""}`;
     if (p.stale && at !== null && at === state.selected && !state.compared.has(comparing) && !replayOf(p, at) && state.pending === null && host.can("callTool")) {
       state.compared.add(comparing);
       Promise.resolve().then(() => exactFrame(p, at));  // after this render

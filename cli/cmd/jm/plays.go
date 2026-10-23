@@ -344,12 +344,12 @@ type playOverview struct {
 	JM    string  `json:"jm"`
 	By    string  `json:"by,omitempty"`    // "agent": an agent's own run, not the person's
 	At    *uint64 `json:"at,omitempty"`    // the frame play_show opens at
-	Build string  `json:"build,omitempty"` // the build replays are made with now: one of another is of an older game
+	Build string  `json:"build,omitempty"` // what replays are made with now (frameCacheKey): one of another is of an older game
 }
 
 func overviewOf(root string, p *plays.Play, b plays.Build) (playOverview, error) {
 	s, err := p.Summarize()
-	return playOverview{Summary: s, Game: evalOrSelf(root), Dir: p.Dir, Stale: p.DriftFrom(b) == plays.GameChanged, JM: version, By: p.Info().By, Build: b.Game}, err
+	return playOverview{Summary: s, Game: evalOrSelf(root), Dir: p.Dir, Stale: p.DriftFrom(b) == plays.GameChanged, JM: version, By: p.Info().By, Build: frameCacheKey(b.Look)}, err
 }
 
 func (o playOverview) text() string {
