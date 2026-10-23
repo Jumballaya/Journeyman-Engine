@@ -284,12 +284,12 @@ test('opened at a moment of a changed game (the agent\'s "look"), it replays it 
   assert.match(broken.text, /Couldn't replay: no display/);
 });
 
-test('the agent\'s at wins over a saved scrub, and a new answer at the same moment asks again', async () => {
-  const marked = { ...play, stale: true, at: 60, markers: [{ n: 1, frame: 60, time: 1, scene: '' }] };
+test('the agent\'s at wins over a saved scrub; a replay counts for the build it was made with', async () => {
+  const marked = { ...play, stale: true, at: 60, build: 'b1', markers: [{ n: 1, frame: 60, time: 1, scene: '' }] };
   const meta = { ...metadata, 'jm/markers': [{ n: 1, src: 'data:image/jpeg;base64,SAW' }] };
   const calls = [];
-  const callTool = async (name, args) => { calls.push(name); return replayed({ kind: 'replay', drift: 'game' }); };
-  const { app, host } = widget(marked, meta, 120, null, { callTool, setWidgetState() {} });
+  const callTool = async (name) => { calls.push(name); return replayed({ kind: 'replay', drift: 'game' }); };
+  const { app } = widget(marked, meta, 120, null, { callTool, setWidgetState() {} });
   await settle(); await settle();
   assert.match(app.text, /frame 60/);
   assert.equal(calls.filter((n) => n === 'play_frame').length, 1);
@@ -299,22 +299,28 @@ test('the agent\'s at wins over a saved scrub, and a new answer at the same mome
   w.fromHost({ id: init.id, result: { hostCapabilities: { serverTools: {} } } });
   await settle();
   const replays = () => w.sent.filter((m) => m.method === 'tools/call' && m.params.name === 'play_frame');
-  const answer = () => w.fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { ...marked }, _meta: meta } });
+  const answer = (extra) => w.fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { ...marked, ...extra }, _meta: meta } });
+  const image = (n, src) => w.fromHost({ id: replays()[n].id, result: { ...replayed({ kind: 'replay', drift: 'game' }), _meta: { 'jm/image': src } } });
   answer(); await settle(); await settle();
   assert.equal(replays().length, 1);
-  w.fromHost({ id: replays()[0].id, result: replayed({ kind: 'replay', drift: 'game' }) });
-  await settle();
-  answer(); await settle(); await settle();  // the agent changed the game again and shows it again
-  assert.equal(replays().length, 2);
+  image(0, 'data:image/png;base64,B1'); await settle();
+  answer(); await settle(); await settle();  // the same answer again: its replay stands
+  assert.equal(replays().length, 1);
+  assert.equal(shown(w.app).src, 'data:image/png;base64,B1');
 
-  // A newer answer while a replay runs: that replay's picture is the older build's, dropped; the new one is asked for.
-  answer(); await settle(); await settle();
-  w.fromHost({ id: replays()[1].id, result: { ...replayed({ kind: 'replay', drift: 'game' }), _meta: { 'jm/image': 'data:image/png;base64,OLDER' } } });
-  await settle(); await settle();
+  // The agent changed the game again (b2) and shows it while a replay of b2 runs, then b3:
+  answer({ build: 'b2' }); await settle(); await settle();
+  assert.equal(replays().length, 2);
+  answer({ build: 'b3' }); await settle(); await settle();
+  image(1, 'data:image/png;base64,B2'); await settle(); await settle();
+  assert.notEqual(shown(w.app).src, 'data:image/png;base64,B2', "b2's replay isn't b3's game");
   assert.equal(replays().length, 3);
-  w.fromHost({ id: replays()[2].id, result: { ...replayed({ kind: 'replay', drift: 'game' }), _meta: { 'jm/image': 'data:image/png;base64,NEWEST' } } });
-  await settle();
-  assert.equal(shown(w.app).src, 'data:image/png;base64,NEWEST');
+  image(2, 'data:image/png;base64,B3'); await settle();
+  assert.equal(shown(w.app).src, 'data:image/png;base64,B3');
+
+  // A newer build's answer elsewhere (at 120, or none) leaves no older replay passing for current.
+  answer({ build: 'b4', at: undefined }); await settle(); await settle();
+  assert.notEqual(shown(w.app).src, 'data:image/png;base64,B3');
 });
 
 test('a thumbnail fallback is not called exact, and the button stays usable', async () => {
