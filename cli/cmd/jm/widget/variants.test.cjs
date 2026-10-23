@@ -118,10 +118,18 @@ test("an agent's comparison keeps its moment and its other side, and is shown on
 });
 
 test("an agent's comparison of a sandbox outlasts the tab's first listing; one on another game opens that game", async () => {
-  const sb = { ...compared.structuredContent.compared, game: '/g/pip', a: 'sb1', sandbox: true, play: 'p2', at: 'm1' };
-  const s = await studio({ structuredContent: { ...listing.structuredContent, compared: sb }, _meta: compared._meta }, { input: { a: 'sb1', sandbox: true } , answers });
+  const sb = { ...compared.structuredContent.compared, game: '/g/pip', a: 'sb1', sandbox: true, play: 'p2', at: 'm1', print: 'p1' };
+  let print = 'p1';
+  const listed = () => ({ ...sandboxes, structuredContent: { sandboxes: sandboxes.structuredContent.sandboxes.map((x) => ({ ...x, print })) } });
+  const s = await studio({ structuredContent: { ...listing.structuredContent, compared: sb }, _meta: compared._meta },
+    { input: { a: 'sb1', sandbox: true, game: '/g/pip' }, answers: { ...answers, sandboxes: listed } });  // names the open game: opened again, listed again
   await settle(12);
-  assert.match(s.app.text, /sb1 · marker 1 \(frame 30\)/);
+  assert.ok(s.calls().filter((c) => c.name === 'sandboxes').length >= 2, 'listed again after the game opened');
+  assert.match(s.app.text, /sb1 · marker 1 \(frame 30\)/, 'its files as compared: still shown');
+  print = 'p2';  // the agent changed the sandbox
+  await s.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: '/variants?sandbox=sb1' } });
+  await settle(12);
+  assert.doesNotMatch(s.app.text, /frame 30/, 'its files changed: what it showed may be no longer so');
   const bo = await studio({ structuredContent: { ...listing.structuredContent, compared: { ...sb, game: '/g/bo' } }, _meta: compared._meta },
     { input: { a: 'sb1', sandbox: true, game: '/g/bo' }, answers });
   await settle(12);

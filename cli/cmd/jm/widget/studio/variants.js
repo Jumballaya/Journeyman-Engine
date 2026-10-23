@@ -15,9 +15,7 @@ studioTabs.push((() => {
   const loading = kit.latest(() => state);  // an older answer, or another game's, is dropped
   // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
 
-  let lists = 0;  // listings asked so far: a comparison made after one was asked is newer than it
   const load = async (ctx) => {
-    const asked = ++lists;
     const all = await loading(() => Promise.all(["variants", "sandboxes"].map((tool) => kit.answer(() => ctx.call(tool, {})))));
     if (!all) return;
     const [v, s] = all;
@@ -27,10 +25,11 @@ studioTabs.push((() => {
       return Array.isArray(items);
     };
     if (list("variants", v)) state.thumbs = (v._meta && v._meta["jm/thumbs"]) || {};
-    // A sandbox's files may have changed since it was compared (its list can't tell).
     const listed = list("sandboxes", s);
     if (listed) state.sandboxThumbs = (s._meta && s._meta["jm/thumbs"]) || {};
-    if (listed && state.compared && state.compared.kind === "sandbox" && state.compared.result && state.compared.made < asked) state.compared = null;
+    // A sandbox's files changed since it was compared: what it showed may be no longer so.
+    const c = state.compared, compared = c && c.kind === "sandbox" && c.result && !c.result.isError && c.result.structuredContent;
+    if (listed && compared && !state.sandboxes.some((x) => x.name === c.name && x.print === compared.print)) state.compared = null;
     if (!state.picked && state.variants && state.variants.length) state.picked = { kind: "variant", name: state.variants[0].name };
     ctx.rerender();
   };
@@ -77,12 +76,12 @@ studioTabs.push((() => {
     const kind = s.sandbox ? "sandbox" : "variant", frame = ((r._meta && r._meta["jm/frames"]) || [])[0];
     state.picked = { kind, name: s.a };
     if (s.play) Object.assign(state, { play: s.play, at: s.at }); else Object.assign(state, { play: "none", at: null, frame: s.frame });
-    state.compared = { name: s.a, kind, b: s.b || "game", play: s.play || "none", at: s.play ? s.at : String(s.frame), made: lists, result: comparedOf(r) };
+    state.compared = { name: s.a, kind, b: s.b || "game", play: s.play || "none", at: s.play ? s.at : String(s.frame), result: comparedOf(r) };
     if (frame) (kind === "sandbox" ? state.sandboxThumbs : state.thumbs)[s.a] = frame;
   };
 
   const compare = async (ctx, name, kind) => {
-    const { play, at } = momentOf(ctx) || {}, mine = state, c = state.compared = { name, kind, b: "game", play, at, made: lists, result: null };
+    const { play, at } = momentOf(ctx) || {}, mine = state, c = state.compared = { name, kind, b: "game", play, at, result: null };
     ctx.rerender();
     const r = await ctx.call("variant_compare", { a: name, ...(kind === "sandbox" ? { sandbox: true } : {}), play, at }).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
     if (mine !== state) return;  // another game shown meanwhile

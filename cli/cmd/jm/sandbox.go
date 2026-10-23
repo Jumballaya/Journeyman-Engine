@@ -111,6 +111,7 @@ type sandbox struct {
 	Made    int64             `json:"made"`
 	Expires int64             `json:"expires"`
 	Changes map[string]string `json:"changes"`
+	Print   string            `json:"print"` // its sources' print: a comparison of it holds while this does
 	thumb   string            // a picture of it, or ""
 }
 
@@ -144,7 +145,7 @@ func sandboxesOf(root string) ([]sandbox, error) {
 			_ = dropSandbox(root, name)
 			continue
 		}
-		out = append(out, sandbox{Name: name, Dir: dir, Made: m.Made, Expires: m.Expires, Changes: differences(root, dir), thumb: thumbOf(root, copies.Sandbox, name, dir)})
+		out = append(out, sandbox{Name: name, Dir: dir, Made: m.Made, Expires: m.Expires, Changes: differences(root, dir), Print: sourcesPrint(buildSources(dir)), thumb: thumbOf(root, copies.Sandbox, name, dir)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil

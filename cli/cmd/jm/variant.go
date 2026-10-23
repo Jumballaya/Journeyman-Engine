@@ -294,6 +294,7 @@ type comparison struct {
 	Frames  [2]string    `json:"frames"` // image files
 	Errors  [2]string    `json:"errors"`
 	Sandbox bool         `json:"sandbox,omitempty"` // a is a sandbox: Changes are its files that differ from the game's now
+	Print   string       `json:"print,omitempty"`   // a sandbox's sources' print as compared (its listing's while it holds)
 	// Each side's uncommitted files: in its frame, not in Changes (a variant's commits).
 	Uncommitted [2]int `json:"uncommitted"`
 }
@@ -399,7 +400,7 @@ func compareVariants(c *toolCall, root, a, b, play, at string, sandbox bool) (co
 	}
 	marks, before, after := map[string]string{}, func(string) []byte { return nil }, func(string) []byte { return nil }
 	if cmp.Sandbox {
-		marks = differences(root, sides[0].dir)
+		marks, cmp.Print = differences(root, sides[0].dir), sourcesPrint(buildSources(sides[0].dir))
 		before = func(path string) []byte {
 			data, _ := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
 			return data

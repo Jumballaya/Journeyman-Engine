@@ -268,6 +268,14 @@ func TestASandboxIsComparedWithTheGameAsItIsNow(t *testing.T) {
 	if err != nil || !cmp.Sandbox || jsonOf(cmp.Changes) != `[{"path":"scenes/main.scene.json","status":"M","entities":[{"entity":"Bat","change":"added"}]}]` {
 		t.Errorf("compare: %v %+v", err, cmp)
 	}
+	// A comparison holds while the sandbox's files do: its listing's print says.
+	if list, _ := sandboxesOf(game); len(list) != 1 || cmp.Print == "" || list[0].Print != cmp.Print {
+		t.Errorf("print as compared %q, listed %+v", cmp.Print, list)
+	}
+	os.WriteFile(filepath.Join(sb.Dir, "scenes/main.scene.json"), []byte(`{"entities":[]}`), 0o644)
+	if list, _ := sandboxesOf(game); len(list) != 1 || list[0].Print == cmp.Print {
+		t.Error("the sandbox changed and its print didn't")
+	}
 	if compareImage(game, "sandbox", "game") == compareImage(game, "game", "game") {
 		t.Error("the sandbox game's frame and the game's are one file")
 	}
