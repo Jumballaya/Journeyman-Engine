@@ -350,17 +350,17 @@ func Find(projectRoot, ref string) (*Play, error) {
 	if len(all) == 0 {
 		return nil, fmt.Errorf("no recorded plays in %s: `jm run` records one each time you play", Folder)
 	}
+	var theirs []*Play // the person's: an agent's own runs go by their ids
+	for _, p := range all {
+		if !p.ByAgent() {
+			theirs = append(theirs, p)
+		}
+	}
 	if ref == "" || ref == "latest" || strings.HasPrefix(ref, "latest-") {
 		back := 0
 		if n, ok := strings.CutPrefix(ref, "latest-"); ok {
 			if back, err = strconv.Atoi(n); err != nil || back < 0 {
 				return nil, fmt.Errorf("%q isn't a play: latest-N counts back from the latest", ref)
-			}
-		}
-		var theirs []*Play // the person's: an agent's own runs go by their ids
-		for _, p := range all {
-			if !p.ByAgent() {
-				theirs = append(theirs, p)
 			}
 		}
 		switch {
@@ -381,7 +381,10 @@ func Find(projectRoot, ref string) (*Play, error) {
 	case 1:
 		return matches[0], nil
 	case 0:
-		return nil, fmt.Errorf("no play %q (jm plays lists them; latest is %s)", ref, all[0].ID)
+		if len(theirs) == 0 {
+			return nil, fmt.Errorf("no play %q (jm plays lists them)", ref)
+		}
+		return nil, fmt.Errorf("no play %q (jm plays lists them; latest is %s)", ref, theirs[0].ID)
 	default:
 		return nil, fmt.Errorf("%q matches %d plays; give more of the id", ref, len(matches))
 	}

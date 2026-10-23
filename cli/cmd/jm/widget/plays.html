@@ -518,13 +518,13 @@
       ...(isPlace(pk) ? { at: pk.at, area: pk.area, tiles: pk.tiles } : { entity: pk.entity, origin: pk.origin }) }));
     const facts = { play: p.id, game: p.game, frame: m.frame, time: Math.round(m.time * 10) / 10, scene: m.scene,
       ...(m.marker ? { marker: m.marker.n } : {}), ...(picks.length ? { picks } : {}), values,
-      ...(m.then ? { picture: m.asPlayed ? "as played" : "replayed with the current build" } : {}) };
+      ...(m.then ? { picture: m.asPlayed ? "as played" : "replayed with the current build" } : {}), ...(p.by ? { by: p.by } : {}) };
     const compared = m.then ? ` The game changed since; the picture is ${m.asPlayed ? "what they saw then" : "this moment replayed with the current build"} (they can switch).` : "";
     const said = Object.entries(values).map(([k, v]) => `${k} ${fmt(v)}`).join(", ");
     const picked = picks.length ? ` They picked ${picksOf(m).map((pk, i) => `${i + 1} ${pickName(pk)} (${pickText(pk) || "origin unknown"})${pk.note ? `: "${pk.note}"` : ""}`).join("; ")}: ` +
       `play_moment with marker "m${m.marker.n}" shows them outlined.` : "";
     return { where, facts, title: `${p.name || "Play"} at ${clock(m.time)}${m.marker ? ` (marker ${m.marker.n})` : ""}`,
-      text: `Play ${p.id}, ${where}, scene ${short(m.scene) || "?"}${said ? `: ${said}` : ""}.${picked} play_frame / play_state with at: "${m.frame}" show it.${compared}` };
+      text: `${p.by === "agent" ? "Agent run" : "Play"} ${p.id}, ${where}, scene ${short(m.scene) || "?"}${said ? `: ${said}` : ""}.${picked} play_frame / play_state with at: "${m.frame}" show it.${compared}` };
   };
 
   // Into the person's draft where the host can (ChatGPT; target "new": a new

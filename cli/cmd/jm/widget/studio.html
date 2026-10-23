@@ -192,7 +192,7 @@ const studioTabs = [];
   // A run ended (a new play): asked again, the last answer shown meanwhile.
   const playsChanged = () => { if (state.plays) state.plays.visit = -1; render(); };
   // Talking about a play with the agent: a draft the person sends, and the agent shows it (play_show).
-  const reviewPlay = (p) => host.message(`Let's look at my play ${p.id} (${kit.duration(p.seconds)} long, ${p.markers || 0} marker${p.markers === 1 ? "" : "s"}).`, { send: false });
+  const reviewPlay = (p) => host.message(`Let's look at ${p.by === "agent" ? "your run" : "my play"} ${p.id} (${kit.duration(p.seconds)} long, ${p.markers || 0} marker${p.markers === 1 ? "" : "s"}).`, { send: false });
 
   const parse = (url) => {
     const [path, query = ""] = String(url || "/").split("?");

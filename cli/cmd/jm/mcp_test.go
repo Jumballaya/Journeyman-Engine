@@ -195,7 +195,8 @@ func TestDriveFrameShowsTheGameWithNoFileToManage(t *testing.T) {
 
 func TestARecordedRunDrawsWhereItCan(t *testing.T) {
 	t.Setenv("JM_RENDERER", "")
-	t.Setenv("DISPLAY", ":0") // linux CI: a display to draw on
+	t.Setenv("CODEX_SANDBOX", "") // run from inside Codex's sandbox: tested below
+	t.Setenv("DISPLAY", ":0")     // linux CI: a display to draw on
 	if !(gameOptions{Record: true}).draws() {
 		t.Error("a recorded run with a display doesn't draw: its play has no pictures")
 	}

@@ -67,6 +67,16 @@ test('a play picked with no Play tab goes to the composer, unsent', async () => 
   assert.match(m.params.content[0].text, /my play 20261015-101500 \(1:15 long, 2 markers\)/);
 });
 
+test('an agent\'s run is listed as one, and picked it\'s the agent\'s run to talk over', async () => {
+  const theirs = { structuredContent: { plays: [{ id: 'run-1', started: '2026-10-16T10:00:00Z', seconds: 5, markers: 1, by: 'agent' },
+    ...plays.structuredContent.plays] } };
+  const { app, find, sent } = await studio(listing('/g/neon'), { answers: { plays_list: theirs } });
+  assert.match(app.text, /0:05 · 1 marker · an agent's run/);
+  find((e) => e.attributes['data-key'] === 'tree:run-1')[0].fire('click');
+  await settle();
+  assert.match(sent.filter((x) => x.method === 'ui/message').at(-1).params.content[0].text, /look at your run run-1 \(0:05 long, 1 marker\)/);
+});
+
 test('tabs are switched by click and Alt+number; the host reopens the Studio where it was', async () => {
   const s = await studio(listing('/g/neon'));
   s.tab('Games').fire('click');

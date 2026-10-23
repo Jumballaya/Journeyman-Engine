@@ -429,6 +429,18 @@ test('the model is told which picture of a changed game it sees, as the person s
   assert.match(context().content.at(-1).text, /the picture is what they saw then/);
 });
 
+test('the model is told an agent\'s run is one, not the person\'s play', async () => {
+  const w = mcpAppWidget();
+  const init = w.sent.find((m) => m.method === 'ui/initialize');
+  w.fromHost({ id: init.id, result: { hostCapabilities: { updateModelContext: { text: {}, image: {} } } } });
+  await settle();
+  w.fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { ...play, by: 'agent' }, _meta: metadata } });
+  await settle();
+  const context = plain(w.sent.filter((m) => m.method === 'ui/update-model-context').at(-1).params);
+  assert.equal(context.structuredContent.by, 'agent');
+  assert.match(context.content.at(-1).text, /The person is looking at Agent run test-run/);
+});
+
 test('another play is picked from the list and shown in place', async () => {
   const { app, sent, fromHost, last } = await chatgptReview();
   const listing = sent.find((m) => m.method === 'tools/call' && m.params.name === 'plays_list');
