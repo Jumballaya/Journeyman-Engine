@@ -8,6 +8,7 @@ import (
 	"cmp"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -335,6 +336,16 @@ func Load(dir string) (*Play, error) {
 
 // Find resolves a play by reference: an id (or a unique prefix of one), or
 // the person's "latest" (or ""), or "latest-N" for the one N before it.
+// ErrNoPlays is Find's error when the person hasn't played yet (none
+// recorded, or only an agent's runs): a fact about the game, not a failure.
+var ErrNoPlays = errors.New("no plays of the person's yet")
+
+// noPlays is ErrNoPlays saying what there is instead.
+type noPlays string
+
+func (e noPlays) Error() string      { return string(e) }
+func (noPlays) Is(target error) bool { return target == ErrNoPlays }
+
 func Find(projectRoot, ref string) (*Play, error) {
 	// An exact id can explain a damaged play even when List can't show any.
 	if filepath.IsLocal(ref) && ref != "." && filepath.Base(ref) == ref &&
@@ -348,7 +359,7 @@ func Find(projectRoot, ref string) (*Play, error) {
 		return nil, err
 	}
 	if len(all) == 0 {
-		return nil, fmt.Errorf("no recorded plays in %s: `jm run` records one each time you play", Folder)
+		return nil, noPlays(fmt.Sprintf("no recorded plays in %s: `jm run` records one each time you play", Folder))
 	}
 	var theirs []*Play // the person's: an agent's own runs go by their ids
 	for _, p := range all {
@@ -365,7 +376,7 @@ func Find(projectRoot, ref string) (*Play, error) {
 		}
 		switch {
 		case len(theirs) == 0:
-			return nil, fmt.Errorf("no plays of the person's yet, only an agent's runs (by id, newest %s): `jm run` records one each time they play", all[0].ID)
+			return nil, noPlays(fmt.Sprintf("no plays of the person's yet, only an agent's runs (by id, newest %s): `jm run` records one each time they play", all[0].ID))
 		case back >= len(theirs):
 			return nil, fmt.Errorf("only %d plays of the person's recorded", len(theirs))
 		}

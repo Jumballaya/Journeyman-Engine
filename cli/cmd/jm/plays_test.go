@@ -190,4 +190,16 @@ func TestACompareLooksAtThePersonsLastMarker(t *testing.T) {
 	if _, _, err := compareMoment(root, "none", "m1"); err == nil || !strings.Contains(err.Error(), "at is a frame") {
 		t.Errorf("a marker with no play: %v", err)
 	}
+	// Only an agent's runs: not played yet. Plays that can't be read aren't that.
+	agentOnly := t.TempDir()
+	recordedPlay(t, agentOnly, "2000-01-02_000000", 300, plays.Agent, 50)
+	if p, f, err := compareMoment(agentOnly, "", ""); err != nil || p != nil || f != 120 {
+		t.Errorf("only an agent's run: %v %d %v", p, f, err)
+	}
+	broken := t.TempDir()
+	os.MkdirAll(filepath.Dir(plays.Root(broken)), 0o755)
+	os.WriteFile(plays.Root(broken), []byte("not a folder"), 0o644)
+	if _, _, err := compareMoment(broken, "", ""); err == nil {
+		t.Error("an unreadable plays folder compared with no inputs, as if never played")
+	}
 }

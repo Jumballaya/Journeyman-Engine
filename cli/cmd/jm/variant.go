@@ -334,7 +334,8 @@ func compareMoment(root, play, at string) (*plays.Play, uint64, error) {
 	var p *plays.Play
 	if play != "none" {
 		var err error
-		if p, err = plays.Find(root, play); err != nil && play != "" {
+		// Not played yet: no inputs, by default. Plays that can't be read say so.
+		if p, err = plays.Find(root, play); err != nil && (play != "" || !errors.Is(err, plays.ErrNoPlays)) {
 			return nil, 0, err
 		}
 	}
