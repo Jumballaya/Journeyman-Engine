@@ -3,9 +3,8 @@
 // (what the person picked), each a way into its tab or a chat.
 studioTabs.push((() => {
   "use strict";
-  // plays: the open game's plays_list answer ({ path, plays } or { path, error }), asked again each visit.
   // moment: the one shown ({ game, key, r: play_moment's answer, or error }).
-  const state = { plays: null, asking: "", picked: null, folded: new Set(), moment: null };
+  const state = { picked: null, folded: new Set(), moment: null };
 
   // A moment: its picture with the picks outlined, from play_moment.
   const showMoment = async (ctx, game, play, n) => {
@@ -35,20 +34,6 @@ studioTabs.push((() => {
       ctx.ask({ title, thumb: src, text, question: `Look at what I picked in moment ${s.marker.n} of my play ${s.play} in ${which}: what's going on there?` }));
   };
 
-  const askPlays = async (ctx, path) => {
-    const asked = state.asking;  // this game and visit: a later ask (another game, a new visit) wins
-    let plays;
-    try {
-      const r = await ctx.call("plays_list", { game: path });  // this game's, whichever is open by then
-      const s = r && r.structuredContent;
-      if (s && s.game && s.game !== path) return;  // about another game
-      plays = s && Array.isArray(s.plays) ? { path, plays: s.plays } : { path, error: (r && r.content && r.content[0] && r.content[0].text) || "No plays." };
-    } catch (e) { plays = { path, error: String(e && e.message || e) }; }
-    if (state.asking !== asked) return;
-    state.plays = plays;
-    ctx.rerender();
-  };
-
   // scenes/levels/a.scene.json → a tree by folder (scenes/ left out when every scene is in it).
   const sceneTree = (scenes) => {
     const root = { children: [] };
@@ -68,20 +53,12 @@ studioTabs.push((() => {
     return root.children;
   };
 
-  const length = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
-  const when = (iso) => { const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" }); };
-
-  // To the composer, to ask about it (play_show opens its review).
-  const openPlay = (ctx, p) => {
-    ctx.host.message(`Let's look at my play ${p.id} (${length(p.seconds)} long, ${p.markers} marker${p.markers === 1 ? "" : "s"}).`, { send: false });
-  };
 
   const render = (ctx) => {
     const { kit, game } = ctx, { el } = kit;
     const can = ctx.host.can("callTool");
-    if (can && state.asking !== game.path + "#" + ctx.visit) { state.asking = game.path + "#" + ctx.visit; askPlays(ctx, game.path); }
+    const plays = ctx.plays();
     const thumb = ctx.games.thumbs[game.path];
-    const plays = state.plays && state.plays.path === game.path ? state.plays : null;
     const picked = state.picked && state.picked.game === game.path ? state.picked : null;
     if (picked) ctx.share(`The person is looking at ${picked.what} of ${game.name} in Journeyman Studio.`, { picked: picked.what },
       { title: picked.what.split("/").pop(), text: `${picked.what}, a scene of ${game.name} (${game.path})` });
@@ -96,9 +73,9 @@ studioTabs.push((() => {
       : el("div", { class: "meta" }, "No scenes yet."));
     const playList = kit.section("Recent plays", !plays ? el("div", { class: "meta" }, can ? "Reading the plays…" : "")
       : plays.error ? el("div", { class: "meta" }, plays.error)
-      : plays.plays.length ? kit.tree({ label: "Recent plays", items: plays.plays.slice(0, 12).map((p) => ({ id: p.id, title: p.id, label: when(p.started),
-          meta: `${length(p.seconds)}${p.markers ? ` · ${p.markers} marker${p.markers === 1 ? "" : "s"}` : ""}${p.stale ? " · older build" : ""}` })),
-          onPick: (item) => openPlay(ctx, plays.plays.find((p) => p.id === item.id)) })
+      : plays.plays.length ? kit.tree({ label: "Recent plays", items: plays.plays.slice(0, 12).map((p) => ({ id: p.id, title: p.id, label: kit.started(p.started),
+          meta: `${kit.duration(p.seconds)}${p.markers ? ` · ${p.markers} marker${p.markers === 1 ? "" : "s"}` : ""}${p.stale ? " · older build" : ""}` })),
+          onPick: (item) => ctx.reviewPlay(plays.plays.find((p) => p.id === item.id)) })
       : el("div", { class: "meta" }, "No plays yet: Play records one."));
     // The latest moments, newest first (plays come newest first): markers the person picked things in.
     const moments = (plays && plays.plays || []).flatMap((p) => [...(p.moments || [])].reverse().map((n) => ({ play: p.id, n,
@@ -125,7 +102,7 @@ studioTabs.push((() => {
       el("div", { class: "stats" }, stat((game.scenes || []).length, "scenes"),
         count !== null ? stat(count, count === 1 ? "play" : "plays") : null,
         count !== null ? stat(marked, marked === 1 ? "moment" : "moments") : null,
-        count ? stat(length(plays.plays[0].seconds), "last play") : null),
+        count ? stat(kit.duration(plays.plays[0].seconds), "last play") : null),
       kit.split("overview", scenes, el("div", {}, playList, momentList), { ratio: 0.5 }));
   };
 

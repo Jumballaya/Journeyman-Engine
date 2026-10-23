@@ -171,7 +171,26 @@ const studioTabs = [];
   // shown and actions done (a tab asks for its data again on a new one). nav:
   // counts pages gone to only (a route's link is followed once per nav, not per action).
   const state = { route: null, seen: { link: null, input: null }, want: null, listed: null, here: null, notice: "", pending: null,
-                  visit: 0, nav: 0, shared: "", sharing: false, refused: false, context: null, call: null, kept: null };
+                  visit: 0, nav: 0, shared: "", sharing: false, refused: false, context: null, call: null, kept: null, plays: null };
+
+  // The game's recorded plays (plays_list), asked once a visit and shared by
+  // the tabs: { plays } newest first, or { error }; the last answer, or null, while asking.
+  const playsOf = (path) => {
+    const s = state.plays;
+    if (s && s.path === path && s.visit === state.visit) return s.answer;
+    const asked = state.plays = { path, visit: state.visit, answer: s && s.path === path ? s.answer : null };
+    if (!host.can("callTool")) return asked.answer;
+    host.callTool("plays_list", { game: path }).then((r) => {
+      const out = r && r.structuredContent;
+      if (out && out.game && out.game !== path) return null;  // about another game
+      return out && Array.isArray(out.plays) ? { plays: out.plays } : { error: said(r) || "No plays." };
+    }, (e) => ({ error: String(e && e.message || e) })).then((answer) => {
+      if (answer && state.plays === asked) { asked.answer = answer; render(); }
+    });
+    return asked.answer;
+  };
+  // Talking about a play with the agent: a draft the person sends, and the agent shows it (play_show).
+  const reviewPlay = (p) => host.message(`Let's look at my play ${p.id} (${kit.duration(p.seconds)} long, ${p.markers || 0} marker${p.markers === 1 ? "" : "s"}).`, { send: false });
 
   const parse = (url) => {
     const [path, query = ""] = String(url || "/").split("?");
@@ -462,6 +481,7 @@ const studioTabs = [];
     const ctx = {
       host, kit, params, game, copy, games: g, go, current: tab.id, busy: state.pending !== null, visit: state.visit, nav: state.nav,
       call: (name, args) => host.callTool(name, aimed(name, args)),
+      plays: () => game ? playsOf(game.path) : null, reviewPlay,
       act: (label, name, args, done) => act(label, name, aimed(name, args), done),
       say: (text) => { state.notice = text; render(); },
       has: (id) => tabs.some((t) => t.id === id),

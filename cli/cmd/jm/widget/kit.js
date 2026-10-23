@@ -248,9 +248,12 @@ const kit = (() => {
   // A picture's place when there's none: the kind's icon on a plain tile.
   const nothumb = (d) => el("span", { class: "nothumb" }, icon(d));
   const plural = (n, one, many = one + "s") => `${n} ${n === 1 ? one : many}`;
+  // A play's length, "1:05"; when it started, in the person's words.
+  const duration = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  const started = (iso) => { const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" }); };
 
   const empty = (text, ...kids) => el("div", { class: "empty" }, el("div", {}, text), kids);
   const section = (title, ...kids) => el("section", { class: "section" }, el("h2", {}, title), kids);
 
-  return { el, theme, ago, tree, grid, split, empty, section, focusKey, edits, jsonFile, said, answer, latest, icon, nothumb, plural };
+  return { el, theme, ago, tree, grid, split, empty, section, focusKey, edits, jsonFile, said, answer, latest, icon, nothumb, plural, duration, started };
 })();
