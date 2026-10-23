@@ -159,7 +159,7 @@ func playShow(root string, a toolArgs) toolResult {
 	}
 	text := o.text() + "play_frame shows any moment; play_state gives the state there."
 	if o.At != nil && o.Stale {
-		text += fmt.Sprintf(" The person sees frame %d replayed with the current build, beside what they saw.", *o.At)
+		text += fmt.Sprintf(" The timeline opens at frame %d and, where the host lets it, replays it with the current build beside what they saw.", *o.At)
 	}
 	o.Thumbs = nil // a path per second of play: the widget's images say it
 	return toolResult{Text: text, Structured: o, Meta: map[string]any{"jm/thumbs": thumbs, "jm/markers": markers}}

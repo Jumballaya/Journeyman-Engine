@@ -284,6 +284,30 @@ test('opened at a moment of a changed game (the agent\'s "look"), it replays it 
   assert.match(broken.text, /Couldn't replay: no display/);
 });
 
+test('the agent\'s at wins over a saved scrub, and a new answer at the same moment asks again', async () => {
+  const marked = { ...play, stale: true, at: 60, markers: [{ n: 1, frame: 60, time: 1, scene: '' }] };
+  const meta = { ...metadata, 'jm/markers': [{ n: 1, src: 'data:image/jpeg;base64,SAW' }] };
+  const calls = [];
+  const callTool = async (name, args) => { calls.push(name); return replayed({ kind: 'replay', drift: 'game' }); };
+  const { app, host } = widget(marked, meta, 120, null, { callTool, setWidgetState() {} });
+  await settle(); await settle();
+  assert.match(app.text, /frame 60/);
+  assert.equal(calls.filter((n) => n === 'play_frame').length, 1);
+
+  const w = mcpAppWidget();
+  const init = w.sent.find((m) => m.method === 'ui/initialize');
+  w.fromHost({ id: init.id, result: { hostCapabilities: { serverTools: {} } } });
+  await settle();
+  const replays = () => w.sent.filter((m) => m.method === 'tools/call' && m.params.name === 'play_frame');
+  const answer = () => w.fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { ...marked }, _meta: meta } });
+  answer(); await settle(); await settle();
+  assert.equal(replays().length, 1);
+  w.fromHost({ id: replays()[0].id, result: replayed({ kind: 'replay', drift: 'game' }) });
+  await settle();
+  answer(); await settle(); await settle();  // the agent changed the game again and shows it again
+  assert.equal(replays().length, 2);
+});
+
 test('a thumbnail fallback is not called exact, and the button stays usable', async () => {
   const app = await exactFrameAnswers(replayed({ kind: 'thumbnail', frame: 60 }));
   assert.equal(shown(app).badge, null);
