@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -189,6 +190,29 @@ func TestDriveFrameShowsTheGameWithNoFileToManage(t *testing.T) {
 	})
 	if r := s.driveFrame(nil); !r.Failed || !strings.Contains(r.Text, "gl: true") {
 		t.Errorf("without GL: %s", r.Text)
+	}
+}
+
+func TestARecordedRunDrawsWhereItCan(t *testing.T) {
+	t.Setenv("JM_RENDERER", "")
+	t.Setenv("CODEX_SANDBOX", "") // run from inside Codex's sandbox: tested below
+	t.Setenv("DISPLAY", ":0")     // linux CI: a display to draw on
+	if !(gameOptions{Record: true}).draws() {
+		t.Error("a recorded run with a display doesn't draw: its play has no pictures")
+	}
+	if (gameOptions{}).draws() {
+		t.Error("a plain driven run draws: it should stay headless unless asked (gl)")
+	}
+	t.Setenv("JM_RENDERER", "none")
+	if (gameOptions{Record: true}).draws() {
+		t.Error("a recorded run draws where nothing can")
+	}
+	if runtime.GOOS == "darwin" {
+		t.Setenv("JM_RENDERER", "")
+		t.Setenv("CODEX_SANDBOX", "seatbelt")
+		if (gameOptions{Record: true}).draws() {
+			t.Error("a recorded run draws in Codex's sandbox, where GL hangs or aborts")
+		}
 	}
 }
 

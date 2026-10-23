@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -108,5 +110,38 @@ func TestPlayReviewOpensAsAThreadEntrypoint(t *testing.T) {
 	result := replies[2]["result"].(map[string]any)
 	if result["isError"] == true || result["structuredContent"].(map[string]any)["id"] != "2000-01-02_000000" {
 		t.Errorf("play_show {}: %v", result)
+	}
+}
+
+func TestResumingAChangedGameSaysTheSpotMayDiffer(t *testing.T) {
+	if text := resumedText("p", 90, false); strings.Contains(text, "changed") {
+		t.Errorf("an unchanged game warns: %s", text)
+	}
+	if text := resumedText("p", 90, true); !strings.Contains(text, "may not be quite their spot") {
+		t.Errorf("a changed game doesn't warn: %s", text)
+	}
+}
+
+// play_show at a moment opens there; a moment the play doesn't have is an error, not the first marker.
+func TestPlayShowOpensAtTheMomentAsked(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(plays.Root(root), "2000-01-01_000000")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "session.json"), []byte(`{"format":1,"frames":300,"markers":[
+		{"n":1,"frame":180,"time":3,"scene":"s"},{"n":2,"frame":240,"time":4,"scene":"s"}]}`), 0o644)
+	frames := make([]byte, 300*4)
+	for i := range 300 {
+		binary.LittleEndian.PutUint32(frames[i*4:], math.Float32bits(1.0/60))
+	}
+	os.WriteFile(filepath.Join(dir, "frames.bin"), frames, 0o644)
+	r := playShow(root, toolArgs{"at": "m2"})
+	if o, ok := r.Structured.(playOverview); r.Failed || !ok || o.At == nil || *o.At != 240 {
+		t.Fatalf("at m2: %+v", r)
+	}
+	if r := playShow(root, toolArgs{}); r.Structured.(playOverview).At != nil {
+		t.Error("with no at, the widget picks the moment")
+	}
+	if r := playShow(root, toolArgs{"at": "m9"}); !r.Failed {
+		t.Errorf("a marker the play doesn't have: %+v", r.Text)
 	}
 }

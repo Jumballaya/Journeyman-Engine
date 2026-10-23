@@ -112,7 +112,7 @@ func TestALookOnlyChangeIsTheLookNotTheGame(t *testing.T) {
 	os.WriteFile(filepath.Join(build, "game.json"), []byte(`{"speed":1}`), 0o644)
 	os.WriteFile(filepath.Join(build, "hud.png"), []byte("red pixels"), 0o644)
 	os.WriteFile(filepath.Join(build, "hud.css"), []byte(`.hp { color: red }`), 0o644)
-	dir, err := Create(root, ReadBuild(build), "test")
+	dir, err := Create(root, ReadBuild(build), "test", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestALookOnlyChangeIsTheLookNotTheGame(t *testing.T) {
 
 func TestPlaysAreNeverCommitted(t *testing.T) {
 	root := t.TempDir()
-	if _, err := Create(root, Build{}, "test"); err != nil {
+	if _, err := Create(root, Build{}, "test", ""); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := os.ReadFile(filepath.Join(root, ".jm", ".gitignore"))
@@ -144,8 +144,8 @@ func TestPlaysAreNeverCommitted(t *testing.T) {
 		t.Fatalf(".jm/.gitignore: %q, %v", raw, err)
 	}
 	os.WriteFile(filepath.Join(root, ".jm", ".gitignore"), []byte("plays/\n"), 0o644)
-	a, _ := Create(root, Build{}, "test")
-	b, _ := Create(root, Build{}, "test")
+	a, _ := Create(root, Build{}, "test", "")
+	b, _ := Create(root, Build{}, "test", "")
 	if raw, _ := os.ReadFile(filepath.Join(root, ".jm", ".gitignore")); string(raw) != "plays/\n" {
 		t.Errorf("a project's own .jm/.gitignore was replaced: %q", raw)
 	}

@@ -224,6 +224,127 @@ test('a replay is labeled by how far the game drifted', async () => {
     assert.equal(button(app, 'Exact frame').attributes.disabled, '');
   }
 });
+test('a marker replayed with a changed game shows what they saw and what it does now, a switch apart', async () => {
+  const marked = { ...play, stale: true, markers: [{ n: 1, frame: 60, time: 1, scene: '', note: 'too floaty' }] };
+  const meta = { ...metadata, 'jm/markers': [{ n: 1, src: 'data:image/jpeg;base64,SAW' }] };
+  const viewerSwitch = (app) => child(child(app, 'viewer'), 'then-now');
+  for (const [drift, compared] of [['game', true], ['same', false], ['look', false]]) {
+    const callTool = async () => replayed({ kind: 'replay', drift });
+    const { app } = widget(marked, meta, 60, null, { callTool });
+    assert.equal(viewerSwitch(app), undefined, 'nothing to compare before the replay');
+    button(app, 'See it now').listeners.click();
+    await settle();
+    assert.equal(!!viewerSwitch(app), compared, drift);
+    if (!compared) continue;
+    const [asPlayed, now] = viewerSwitch(app).children;
+    assert.deepEqual(shown(app), { src: 'data:image/png;base64,replayed', badge: 'replayed with the current build' });
+    assert.equal(now.attributes['aria-pressed'], 'true');
+    asPlayed.listeners.click();
+    assert.deepEqual(shown(app), { src: 'data:image/jpeg;base64,SAW', badge: 'what you saw' });
+    assert.equal(viewerSwitch(app).children[0].attributes['aria-pressed'], 'true');
+    viewerSwitch(app).children[1].listeners.click();
+    assert.equal(shown(app).src, 'data:image/png;base64,replayed');
+  }
+});
+test('an agent\'s run says so, so it isn\'t taken for the person\'s play', async () => {
+  assert.doesNotMatch(widget(play, metadata).app.text, /an agent's run/);
+  const run = { ...play, by: 'agent', markers: [{ n: 1, frame: 60, time: 1, scene: '', note: 'look here' }] };
+  const sent = [];
+  const { app } = widget(run, { ...metadata, 'jm/markers': [{ n: 1, src: 'data:image/jpeg;base64,RUN' }] }, 60, null,
+    { sendFollowUpMessage: async (m) => { sent.push(m); } });
+  assert.match(app.text, /an agent's run/);
+  assert.equal(shown(app).badge, "the agent's run, as it went");
+  button(app, 'Ask about this').listeners.click();
+  await settle();
+  assert.match(JSON.stringify(sent), /of your run test-run/);
+});
+test('opened at a moment of a changed game (the agent\'s "look"), it replays it with the change unasked, once', async () => {
+  const marked = { ...play, stale: true, at: 60, markers: [{ n: 1, frame: 30, time: 0.5, scene: '' }, { n: 2, frame: 60, time: 1, scene: '' }] };
+  const meta = { ...metadata, 'jm/markers': [{ n: 2, src: 'data:image/jpeg;base64,SAW' }] };
+  const calls = [];
+  const callTool = async (name, args) => { calls.push({ name, args }); return replayed({ kind: 'replay', drift: 'game' }); };
+  const { app } = widget(marked, meta, null, null, { callTool });
+  await settle(); await settle();
+  assert.match(app.text, /0:01.0 · frame 60/);
+  assert.deepEqual(calls.filter((c) => c.name === 'play_frame').map((c) => c.args.at), ['60']);
+  assert.equal(child(child(app, 'viewer'), 'then-now').children.length, 2);
+  // Scrubbing back to it doesn't replay it again.
+  await settle();
+  assert.equal(calls.filter((c) => c.name === 'play_frame').length, 1);
+
+  const fresh = [];
+  widget({ ...marked, stale: false }, meta, null, null, { callTool: async (name, args) => { fresh.push(name); return replayed({ kind: 'replay', drift: 'same' }); } });
+  await settle(); await settle();
+  assert.equal(fresh.filter((n) => n === 'play_frame').length, 0, 'an unchanged game has nothing to compare');
+
+  let failed = 0;
+  const { app: broken } = widget(marked, meta, null, null, { callTool: async (name) => { if (name === 'play_frame') failed++; return { isError: true, content: [{ type: 'text', text: 'no display' }] }; } });
+  for (let i = 0; i < 4; i++) await settle();
+  assert.equal(failed, 1, 'a replay that fails is not tried again on its own');
+  assert.match(broken.text, /Couldn't replay: no display/);
+});
+
+test('the agent\'s at wins over a saved scrub; a replay counts for the build it was made with', async () => {
+  const marked = { ...play, stale: true, at: 60, build: 'b1', markers: [{ n: 1, frame: 60, time: 1, scene: '' }] };
+  const meta = { ...metadata, 'jm/markers': [{ n: 1, src: 'data:image/jpeg;base64,SAW' }] };
+  const calls = [];
+  const callTool = async (name) => { calls.push(name); return replayed({ kind: 'replay', drift: 'game' }); };
+  const { app } = widget(marked, meta, 120, null, { callTool, setWidgetState() {} });
+  await settle(); await settle();
+  assert.match(app.text, /frame 60/);
+  assert.equal(calls.filter((n) => n === 'play_frame').length, 1);
+
+  const w = mcpAppWidget();
+  const init = w.sent.find((m) => m.method === 'ui/initialize');
+  w.fromHost({ id: init.id, result: { hostCapabilities: { serverTools: {} } } });
+  await settle();
+  const replays = () => w.sent.filter((m) => m.method === 'tools/call' && m.params.name === 'play_frame');
+  const answer = (extra) => w.fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { ...marked, ...extra }, _meta: meta } });
+  const image = (n, src) => w.fromHost({ id: replays()[n].id, result: { ...replayed({ kind: 'replay', drift: 'game' }), _meta: { 'jm/image': src } } });
+  answer(); await settle(); await settle();
+  assert.equal(replays().length, 1);
+  image(0, 'data:image/png;base64,B1'); await settle();
+  answer(); await settle(); await settle();  // the same answer again: its replay stands
+  assert.equal(replays().length, 1);
+  assert.equal(shown(w.app).src, 'data:image/png;base64,B1');
+  answer({ at: 120 }); await settle(); await settle();  // another moment of the same build
+  assert.equal(replays().length, 2);
+  assert.equal(replays()[1].params.arguments.at, '120');
+  image(1, 'data:image/png;base64,B1AT120'); await settle();
+
+  // The agent changed the game again (b2) and shows it while a replay of b2 runs, then b3:
+  answer({ build: 'b2' }); await settle(); await settle();
+  assert.equal(replays().length, 3);
+  answer({ build: 'b3' }); await settle(); await settle();
+  image(2, 'data:image/png;base64,B2'); await settle(); await settle();
+  assert.notEqual(shown(w.app).src, 'data:image/png;base64,B2', "b2's replay isn't b3's game");
+  assert.equal(replays().length, 4);
+  image(3, 'data:image/png;base64,B3'); await settle();
+  assert.equal(shown(w.app).src, 'data:image/png;base64,B3');
+
+  // Asked for the same moment again after scrubbing away: it goes back there.
+  const line = child(w.app, 'timeline');
+  line.listeners.pointerdown({ pointerId: 1, clientX: 800 }); line.listeners.pointerup({ pointerId: 1 });
+  assert.match(w.app.text, /frame 120/);
+  answer({ build: 'b3' }); await settle(); await settle();
+  assert.match(w.app.text, /frame 60/);
+  assert.equal(shown(w.app).src, 'data:image/png;base64,B3');
+
+  // A newer build's answer elsewhere (at 120, or none) leaves no older replay passing for current.
+  answer({ build: 'b4', at: undefined }); await settle(); await settle();
+  assert.notEqual(shown(w.app).src, 'data:image/png;base64,B3');
+
+  // A rebuild between the answer and its replay: the replay says its build, and isn't the answer's.
+  answer({ build: 'b5' }); await settle(); await settle();
+  const n = replays().length - 1;
+  w.fromHost({ id: replays()[n].id, result: { ...replayed({ kind: 'replay', drift: 'game' }),
+    structuredContent: { play: 'test-run', frame: 60, time: 1, path: 'f.png', source: { kind: 'replay', drift: 'game' }, build: 'b6' },
+    _meta: { 'jm/image': 'data:image/png;base64,B6' } } });
+  await settle(); await settle();
+  assert.notEqual(shown(w.app).src, 'data:image/png;base64,B6');
+  assert.equal(replays().length, n + 1, 'and it is not retried on its own');
+});
+
 test('a thumbnail fallback is not called exact, and the button stays usable', async () => {
   const app = await exactFrameAnswers(replayed({ kind: 'thumbnail', frame: 60 }));
   assert.equal(shown(app).badge, null);
@@ -367,6 +488,44 @@ test('an exact frame the same size as its thumbnail still reaches the model', as
                                     structuredContent: { play: 'test-run', game: '/g/void', frame: 120, time: 2, path: 'f.png', source: { kind: 'replay', drift: 'same' } } } });
   await settle();
   assert.equal(plain(last('ui/update-model-context').params).content[0].data, 'END');
+});
+
+test('the model is told which picture of a changed game it sees, as the person switches', async () => {
+  const w = mcpAppWidget();
+  const init = w.sent.find((m) => m.method === 'ui/initialize');
+  w.fromHost({ id: init.id, result: { hostCapabilities: { serverTools: {}, updateModelContext: { text: {}, image: {} } } } });
+  await settle();
+  const marked = { ...play, stale: true, markers: [{ n: 1, frame: 60, time: 1, scene: '', note: '' }] };
+  w.fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: marked,
+    _meta: { ...metadata, 'jm/markers': [{ n: 1, src: 'data:image/jpeg;base64,SAW' }] } } });
+  await settle();
+  const context = () => plain(w.sent.filter((m) => m.method === 'ui/update-model-context').at(-1).params);
+  assert.equal(context().structuredContent.picture, undefined);
+  button(w.app, 'See it now').listeners.click();
+  await settle();
+  const call = w.sent.filter((m) => m.method === 'tools/call' && m.params.name === 'play_frame').at(-1);
+  w.fromHost({ id: call.id, result: { content: [], _meta: { 'jm/image': 'data:image/png;base64,NOW' },
+    structuredContent: { play: 'test-run', frame: 60, time: 1, path: 'f.png', source: { kind: 'replay', drift: 'game' } } } });
+  await settle();
+  assert.equal(context().structuredContent.picture, 'replayed with the current build');
+  assert.match(context().content.at(-1).text, /the picture is this moment replayed with the current build \(they can switch\)/);
+  child(child(w.app, 'viewer'), 'then-now').children[0].listeners.click();
+  await settle();
+  assert.equal(context().structuredContent.picture, 'as played');
+  assert.equal(context().content[0].data, 'SAW');
+  assert.match(context().content.at(-1).text, /the picture is what they saw then/);
+});
+
+test('the model is told an agent\'s run is one, not the person\'s play', async () => {
+  const w = mcpAppWidget();
+  const init = w.sent.find((m) => m.method === 'ui/initialize');
+  w.fromHost({ id: init.id, result: { hostCapabilities: { updateModelContext: { text: {}, image: {} } } } });
+  await settle();
+  w.fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { ...play, by: 'agent' }, _meta: metadata } });
+  await settle();
+  const context = plain(w.sent.filter((m) => m.method === 'ui/update-model-context').at(-1).params);
+  assert.equal(context.structuredContent.by, 'agent');
+  assert.match(context.content.at(-1).text, /The person is looking at Agent run test-run/);
 });
 
 test('another play is picked from the list and shown in place', async () => {

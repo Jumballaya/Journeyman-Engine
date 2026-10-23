@@ -46,6 +46,9 @@
   .viewer .empty { display: grid; place-items: center; color: #aaa; width: 100%; min-height: 220px; }
   .viewer .exact { position: absolute; top: 8px; left: 8px; font-size: 11px; color: #fff; background: rgba(0,0,0,.55);
     padding: 2px 7px; border-radius: 6px; }
+  .viewer .then-now { position: absolute; top: 8px; right: 8px; display: flex; border-radius: 6px; overflow: hidden; background: rgba(0,0,0,.55); }
+  .viewer .then-now button { font-size: 11px; color: #fff; background: none; border: 0; border-radius: 0; padding: 3px 9px; cursor: pointer; }
+  .viewer .then-now button[aria-pressed="true"] { background: #fff; color: #111; }
   /* Replaying runs at the game's speed: the viewer says so, with how long it should take. */
   .viewer .replaying { position: absolute; inset: 0; display: grid; place-content: center; gap: 10px; justify-items: center;
     background: rgba(0,0,0,.55); color: #fff; font-size: 13px; text-align: center; padding: 12px; }
@@ -140,7 +143,7 @@
     // A failed call's own words (e.g. "no plays yet"), when the host passes them on.
     const said = out && Array.isArray(out.content)
       ? out.content.filter((c) => c && c.type === "text").map((c) => c.text).join(" ") : "";
-    return { play, loading, unreadable, said, server: (out && out.structuredContent && out.structuredContent.jm) || "",
+    return { answer: out, play, loading, unreadable, said, server: (out && out.structuredContent && out.structuredContent.jm) || "",
              thumbs: metadata["jm/thumbs"] || [], markerImages: metadata["jm/markers"] || [] };
   };
 
@@ -148,8 +151,13 @@
   // "resume", "pick"), which the buttons wait for; notice: what the last call
   // said; play: whose they are (another play's answer starts over); plays: its
   // game's listing to pick from; picked: a play_show answer the picker got, and the
-  // host's answer it covers; shared: the moment last given to the model.
-  const state = { play: null, selected: null, frames: {}, pending: null, replaying: null, notice: "", plays: null, picked: null, shared: "" };
+  // host's answer it covers; shared: the moment last given to the model;
+  // asPlayed: the frame showing what they saw, not its replay with the changed game.
+  // frames hold each replay's build: one of another build than the answer's
+  // (the game changed again) isn't shown. opened: the answer whose at was gone
+  // to; compared: the moments (play, at, build) replayed unasked, once an answer.
+  const state = { play: null, selected: null, frames: {}, pending: null, replaying: null, notice: "", plays: null, picked: null, shared: "", asPlayed: null,
+                  opened: null, compared: new Set() };
   try { if (host.widgetState && Number.isFinite(host.widgetState.selected)) state.selected = host.widgetState.selected; } catch (e) {}
   const save = () => { try { host.setWidgetState({ selected: state.selected }); } catch (e) {} };
 
@@ -159,18 +167,26 @@
     document.documentElement.dataset.mode = host.displayMode || "inline";
   };
 
+  // A replay of frame, if it's of the build the answer was about.
+  const replayOf = (p, frame) => { const r = state.frames[frame]; return r && r.build === (p.build || "") ? r : null; };
+
   // The moment shown: a frame and the picture we have of it.
   const momentAt = (d, frame) => {
     const p = d.play;
     const marker = (p.markers || []).find((m) => m.frame === frame);
     const thumb = nearestThumb(d.thumbs, frame);
     const markerImage = marker && d.markerImages.find((m) => m.n === marker.n);
-    const replayed = state.frames[frame];
+    const replayed = replayOf(p, frame);
     const time = marker ? marker.time : thumb && thumb.frame === frame ? thumb.time : timeOf(p, frame);
+    // The person's own play, or a run an agent drove to show them something.
+    const saw = !markerImage ? null : p.by === "agent" ? "the agent's run, as it went"
+      : marker.picks && marker.picks.length ? "what you saw · what you picked" : "what you saw";
+    // The game changed since and the marker was replayed with it: then and now, a switch apart.
+    const then = replayed && replayed.drift === "game" && markerImage ? markerImage.src : null;
+    if (then && state.asPlayed === frame) return { frame, time, marker, src: then, badge: saw, then, asPlayed: true, scene: sceneAt(p, frame) };
     // A thumbnail (the nearest second) goes unlabeled.
-    const badge = replayed ? replayed.label : markerImage ? (marker.picks && marker.picks.length ? "what you saw · what you picked" : "what you saw") : null;
     return { frame, time, marker, src: (replayed && replayed.src) || (markerImage && markerImage.src) || (thumb && thumb.src) || null,
-      badge, scene: sceneAt(p, frame) };
+      badge: replayed ? replayed.label : saw, then, asPlayed: false, scene: sceneAt(p, frame) };
   };
   const nearestThumb = (thumbs, frame) => {
     let best = null;
@@ -214,6 +230,7 @@
       picker(p),
       p.ended && p.ended !== "quit" ? $("span", { class: "badge" }, p.ended === "running" ? "still running (or crashed)" : p.ended) : null,
       p.stale ? $("span", { class: "badge", title: "The game changed since: replays may go differently" }, "older build") : null,
+      p.by === "agent" ? $("span", { class: "badge", title: "An agent drove this run to show you something; not a play of yours" }, "an agent's run") : null,
       $("span", { class: "spacer" }),
       // Expanded already (the host says so), or a host that can't: nothing to expand.
       host.can("displayMode") && host.displayMode === "inline" && (!host.displayModes || host.displayModes.includes("fullscreen"))
@@ -227,7 +244,7 @@
     const when = (q) => q.started ? new Date(q.started).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : q.id;
     return $("select", { class: "plays", title: "Another play", disabled: state.pending !== null, onchange: (e) => pick(p, e.target.value) },
       list.map((q) => $("option", { value: q.id, selected: q.id === p.id },
-        `${when(q)} · ${clock(q.seconds)}${q.markers ? ` · ${q.markers} marker${q.markers > 1 ? "s" : ""}` : ""}`)));
+        `${when(q)} · ${clock(q.seconds)}${q.markers ? ` · ${q.markers} marker${q.markers > 1 ? "s" : ""}` : ""}${q.by === "agent" ? " · an agent's run" : ""}`)));
   };
 
   // How long a replay to frame takes: as long as the game took to get there.
@@ -236,6 +253,9 @@
   const viewer = (p, m) => $("div", { class: viewerAspect ? "viewer boxed" : "viewer", style: viewerAspect ? `aspect-ratio: ${viewerAspect}` : null },
     m.src ? $("img", { src: m.src, alt: `Frame ${m.frame}`, onload: (e) => boxViewer(e.target) }) : $("div", { class: "empty" }, "No picture of this moment yet"),
     m.badge ? $("div", { class: "exact" }, m.badge) : null,
+    m.then ? $("div", { class: "then-now", role: "group", "aria-label": "Compare" },
+      $("button", { "aria-pressed": String(m.asPlayed), onclick: () => { state.asPlayed = m.frame; render(); } }, "As played"),
+      $("button", { "aria-pressed": String(!m.asPlayed), onclick: () => { state.asPlayed = null; render(); } }, "Now")) : null,
     state.pending === "exact" && state.replaying === `${playKey(p)}#${m.frame}` ? $("div", { class: "replaying", role: "status" }, $("i", {}),
       `Replaying to frame ${m.frame}… about ${clock(replaySeconds(p, m.frame)).replace(/\.\d$/, "")}, at the game's own speed`,
       $("div", { class: "bar" }, $("b", { style: `animation-duration: ${replaySeconds(p, m.frame)}s` }))) : null);
@@ -247,7 +267,8 @@
       $("span", { class: "meta" }, short(m.scene)),
       m.marker ? $("span", { class: "note" }, `marker ${m.marker.n}${m.marker.note ? ": " + m.marker.note : ""}`) : null,
       $("span", { class: "spacer" }),
-      host.can("callTool") ? $("button", { disabled: busy || !!state.frames[m.frame], onclick: () => exactFrame(p, m.frame) }, "Exact frame") : null,
+      host.can("callTool") ? $("button", { disabled: busy || !!replayOf(p, m.frame), onclick: () => exactFrame(p, m.frame),
+        title: p.stale ? "Replay this moment with the game as it is now, beside what they saw" : null }, p.stale ? "See it now" : "Exact frame") : null,
       host.can("message") ? $("button", { disabled: busy, onclick: () => ask(p, m, "active") }, "Ask about this") : null,
       host.can("openai/message") ? $("button", { disabled: busy, title: "A new chat about this moment (a bug, say)", onclick: () => ask(p, m, "new") }, "New chat") : null,
       host.can("callTool") ? $("button", { class: "primary", disabled: busy, onclick: () => resume(p, m.frame) }, "Play from here") : null);
@@ -372,10 +393,25 @@
     const p = d.play;
     if (state.play !== playKey(p)) {
       if (state.play !== null) state.selected = null;
-      Object.assign(state, { play: playKey(p), frames: {}, notice: "" });
+      Object.assign(state, { play: playKey(p), frames: {}, notice: "", asPlayed: null });
+    }
+    // An answer with at (the agent's "look here") opens there over any saved
+    // scrub, and asks afresh: the game may have changed again since.
+    const at = Number.isFinite(p.at) && p.at >= 0 && p.at < p.frames ? p.at : null;
+    // (The bridge gives a new answer only when the host does.)
+    if (at !== null && state.opened !== d.answer) {
+      Object.assign(state, { opened: d.answer, selected: at, asPlayed: null });
+      state.compared.delete(`${playKey(p)}@${at}#${p.build || ""}`);  // asked again: tried again
+      save();
     }
     if (!Number.isFinite(state.selected) || state.selected < 0 || state.selected >= p.frames) {
       state.selected = (p.markers && p.markers.length) ? p.markers[0].frame : (d.thumbs.length ? d.thumbs[d.thumbs.length - 1].frame : 0);
+    }
+    // Opened at a moment of a changed game: replayed with the change, unasked.
+    const comparing = `${playKey(p)}@${at}#${p.build || ""}`;
+    if (p.stale && at !== null && at === state.selected && !state.compared.has(comparing) && !replayOf(p, at) && state.pending === null && host.can("callTool")) {
+      state.compared.add(comparing);
+      Promise.resolve().then(() => exactFrame(p, at));  // after this render
     }
     const m = momentAt(d, state.selected);
     const mismatch = versionMismatch(d.server);
@@ -482,7 +518,9 @@
       else if (source.kind === "thumbnail") {
         state.notice = `Nothing here can replay it (${source.why || "no display"}): the nearest thumbnail is frame ${source.frame ?? "?"}.`;
       } else if (state.play === playKey(p)) {  // still this play's: another may show by now
-        state.frames[frame] = { src, label: REPLAY_LABELS[source.drift] || REPLAY_LABELS.same };
+        // The build jm replayed it with (a rebuild may have come between), else the answer's.
+        const build = (r.structuredContent && r.structuredContent.build) || p.build || "";
+        state.frames[frame] = { src, build, drift: source.drift, label: REPLAY_LABELS[source.drift] || REPLAY_LABELS.same };
         state.notice = "";
         shown = true;
       }
@@ -503,12 +541,14 @@
     const picks = picksOf(m).map((pk, i) => ({ n: i + 1, name: pickName(pk), ...(pk.note ? { note: pk.note } : {}),
       ...(isPlace(pk) ? { at: pk.at, area: pk.area, tiles: pk.tiles } : { entity: pk.entity, origin: pk.origin }) }));
     const facts = { play: p.id, game: p.game, frame: m.frame, time: Math.round(m.time * 10) / 10, scene: m.scene,
-      ...(m.marker ? { marker: m.marker.n } : {}), ...(picks.length ? { picks } : {}), values };
+      ...(m.marker ? { marker: m.marker.n } : {}), ...(picks.length ? { picks } : {}), values,
+      ...(m.then ? { picture: m.asPlayed ? "as played" : "replayed with the current build" } : {}), ...(p.by ? { by: p.by } : {}) };
+    const compared = m.then ? ` The game changed since; the picture is ${m.asPlayed ? "what they saw then" : "this moment replayed with the current build"} (they can switch).` : "";
     const said = Object.entries(values).map(([k, v]) => `${k} ${fmt(v)}`).join(", ");
     const picked = picks.length ? ` They picked ${picksOf(m).map((pk, i) => `${i + 1} ${pickName(pk)} (${pickText(pk) || "origin unknown"})${pk.note ? `: "${pk.note}"` : ""}`).join("; ")}: ` +
       `play_moment with marker "m${m.marker.n}" shows them outlined.` : "";
     return { where, facts, title: `${p.name || "Play"} at ${clock(m.time)}${m.marker ? ` (marker ${m.marker.n})` : ""}`,
-      text: `Play ${p.id}, ${where}, scene ${short(m.scene) || "?"}${said ? `: ${said}` : ""}.${picked} play_frame / play_state with at: "${m.frame}" show it.` };
+      text: `${p.by === "agent" ? "Agent run" : "Play"} ${p.id}, ${where}, scene ${short(m.scene) || "?"}${said ? `: ${said}` : ""}.${picked} play_frame / play_state with at: "${m.frame}" show it.${compared}` };
   };
 
   // Into the person's draft where the host can (ChatGPT; target "new": a new
@@ -517,7 +557,8 @@
     const it = describe(p, m);
     const content = [host.text(`${it.text}\n${JSON.stringify(it.facts)}`, { title: it.title })];
     if (m.src) content.push(host.image(m.src, { title: it.title }));
-    const question = picksOf(m).length ? `Look at what I picked at ${it.where} of my play ${p.id}: what's going on there?` : `Look at ${it.where} of my play ${p.id}: what's going on there?`;
+    const whose = p.by === "agent" ? "your run" : "my play";
+    const question = picksOf(m).length ? `Look at what I picked at ${it.where} of ${whose} ${p.id}: what's going on there?` : `Look at ${it.where} of ${whose} ${p.id}: what's going on there?`;
     host.message(content, { send: false, target, instead: question }).catch(() => {});
   };
 

@@ -333,8 +333,8 @@ func Load(dir string) (*Play, error) {
 	return p, nil
 }
 
-// Find resolves a play by reference: an id (or a unique prefix of one),
-// "latest" (or "" ), or "latest-N" for the one N before it.
+// Find resolves a play by reference: an id (or a unique prefix of one), or
+// the person's "latest" (or ""), or "latest-N" for the one N before it.
 func Find(projectRoot, ref string) (*Play, error) {
 	// An exact id can explain a damaged play even when List can't show any.
 	if filepath.IsLocal(ref) && ref != "." && filepath.Base(ref) == ref &&
@@ -350,18 +350,26 @@ func Find(projectRoot, ref string) (*Play, error) {
 	if len(all) == 0 {
 		return nil, fmt.Errorf("no recorded plays in %s: `jm run` records one each time you play", Folder)
 	}
-	if ref == "" || ref == "latest" {
-		return all[0], nil
+	var theirs []*Play // the person's: an agent's own runs go by their ids
+	for _, p := range all {
+		if !p.ByAgent() {
+			theirs = append(theirs, p)
+		}
 	}
-	if n, ok := strings.CutPrefix(ref, "latest-"); ok {
-		back, err := strconv.Atoi(n)
-		if err != nil || back < 0 {
-			return nil, fmt.Errorf("%q isn't a play: latest-N counts back from the latest", ref)
+	if ref == "" || ref == "latest" || strings.HasPrefix(ref, "latest-") {
+		back := 0
+		if n, ok := strings.CutPrefix(ref, "latest-"); ok {
+			if back, err = strconv.Atoi(n); err != nil || back < 0 {
+				return nil, fmt.Errorf("%q isn't a play: latest-N counts back from the latest", ref)
+			}
 		}
-		if back >= len(all) {
-			return nil, fmt.Errorf("only %d plays recorded", len(all))
+		switch {
+		case len(theirs) == 0:
+			return nil, fmt.Errorf("no plays of the person's yet, only an agent's runs (by id, newest %s): `jm run` records one each time they play", all[0].ID)
+		case back >= len(theirs):
+			return nil, fmt.Errorf("only %d plays of the person's recorded", len(theirs))
 		}
-		return all[back], nil
+		return theirs[back], nil
 	}
 	var matches []*Play
 	for _, p := range all {
@@ -373,7 +381,10 @@ func Find(projectRoot, ref string) (*Play, error) {
 	case 1:
 		return matches[0], nil
 	case 0:
-		return nil, fmt.Errorf("no play %q (jm plays lists them; latest is %s)", ref, all[0].ID)
+		if len(theirs) == 0 {
+			return nil, fmt.Errorf("no play %q (jm plays lists them)", ref)
+		}
+		return nil, fmt.Errorf("no play %q (jm plays lists them; latest is %s)", ref, theirs[0].ID)
 	default:
 		return nil, fmt.Errorf("%q matches %d plays; give more of the id", ref, len(matches))
 	}

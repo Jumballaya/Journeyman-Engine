@@ -31,7 +31,7 @@ var timeline = widget{name: "journeyman-plays", title: "Play timeline", html: pl
 	description: "A recorded play: scrub its moments, see what the player saw, ask about one or play on from it."}
 
 func (s *mcpServer) playTools() []mcpTool {
-	playArg := strArg(`which play: an id, a unique start of one, "latest" (default), or "latest-1", "latest-2" for earlier ones`)
+	playArg := strArg(`which play: an id, a unique start of one, "latest" (default: the person's newest), or "latest-1", "latest-2" for earlier ones; your own runs go by id`)
 	moment := `a moment: a frame ("420"), a time ("12.5s", "1:05"), a marker ("m2" or "marker:2"), `
 	atArg, fromArg := strArg(moment+`"start" or "end" (default)`), strArg(moment+`"start" (default) or "end"`)
 	return []mcpTool{
@@ -53,10 +53,11 @@ func (s *mcpServer) playTools() []mcpTool {
 			Description: "Call first whenever the person talks about playing the game: how it felt, a bug, a death, a marker, \"just now\", " +
 				"or how the game is going. Shows the person their play as a timeline they can scrub (latest play by default), " +
 				"and gives you what happened: scenes over time, values that changed (lives, score, ...), and the moments they marked with F8 (what they meant is in what they tell you). " +
-				"Then play_frame / play_state at a marker.",
-			InputSchema: object(map[string]any{"play": playArg}), Annotations: readOnly(),
-			Meta:   timeline.toolMeta("Opening the play…", "The play", entrypoint("thread")),
-			onGame: playShow},
+				"Then play_frame / play_state at a marker. After a change, at opens it at their moment and replays it with the change beside what they saw: show them, don't just tell them.",
+			InputSchema: object(map[string]any{"play": playArg, "at": strArg(moment + `"start" or "end": open the timeline there (default: its first marker)`)}),
+			Annotations: readOnly(),
+			Meta:        timeline.toolMeta("Opening the play…", "The play", entrypoint("thread")),
+			onGame:      playShow},
 		{Name: "play_frame", Title: "See a moment of a play",
 			Description: "An image of a moment in a recorded play, replayed exactly (or the nearest thumbnail where nothing can draw: source says which). " +
 				"Use it to see what the person saw, e.g. at: \"m1\" for their first marker.",
@@ -104,7 +105,8 @@ func (s *mcpServer) playTools() []mcpTool {
 		{Name: "play_verify", Title: "Does a play still replay the same?",
 			Description: "After you change the game: replays the person's play (latest by default) with the current build and says whether it goes the same way, " +
 				"and if not, by when and how its end differs (session values). Run it after build to check a change against how they actually played, " +
-				"and tell the person both: after a change their play is expected to go differently; how it ends says what the change did.",
+				"and tell the person both: after a change their play is expected to go differently; how it ends says what the change did. " +
+				"To let them see it, play_show the play: at a marker, its \"See it now\" replays the moment with the change, beside what they saw.",
 			InputSchema: object(map[string]any{"play": playArg}), Annotations: readOnly(), Meta: callableMeta("", ""),
 			onGame: func(root string, a toolArgs) toolResult {
 				p, b, err := openPlay(root, a.str("play"))
@@ -135,6 +137,13 @@ func playShow(root string, a toolArgs) toolResult {
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
+	if at := a.str("at"); at != "" {
+		f, err := p.FrameAt(at)
+		if err != nil {
+			return textResult(err.Error(), true)
+		}
+		o.At = &f
+	}
 	// The pictures go to the widget only (_meta): the model reads the summary.
 	thumbs := []map[string]any{}
 	for _, t := range thumbsToShow(o.Thumbs, 48) {
@@ -149,6 +158,9 @@ func playShow(root string, a toolArgs) toolResult {
 		}
 	}
 	text := o.text() + "play_frame shows any moment; play_state gives the state there."
+	if o.At != nil && o.Stale {
+		text += fmt.Sprintf(" The timeline opens at frame %d and, where the host lets it, replays it with the current build beside what they saw.", *o.At)
+	}
 	o.Thumbs = nil // a path per second of play: the widget's images say it
 	return toolResult{Text: text, Structured: o, Meta: map[string]any{"jm/thumbs": thumbs, "jm/markers": markers}}
 }
@@ -261,7 +273,7 @@ func momentSummary(p *plays.Play, m plays.Marker) string {
 }
 
 func playResume(root string, a toolArgs) toolResult {
-	p, _, f, err := openMoment(root, a.str("play"), a.str("at"))
+	p, b, f, err := openMoment(root, a.str("play"), a.str("at"))
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
@@ -276,8 +288,18 @@ func playResume(root string, a toolArgs) toolResult {
 		return textResult(err.Error(), true)
 	}
 	go func() { _ = cmd.Wait() }()
-	return toolResult{Text: fmt.Sprintf("The game is open at frame %d of play %s; what they play from there is recorded as a new play (plays_list).", f, p.ID),
-		Structured: map[string]any{"play": p.ID, "frame": f, "opened": true}}
+	changed := p.DriftFrom(b) == plays.GameChanged
+	return toolResult{Text: resumedText(p.ID, f, changed), Structured: map[string]any{"play": p.ID, "frame": f, "opened": true, "gameChanged": changed}}
+}
+
+// resumedText says where the person was put. A changed game replays their
+// inputs differently, so the spot may not be theirs: they should hear that.
+func resumedText(play string, f uint64, changed bool) string {
+	text := fmt.Sprintf("The game is open at frame %d of play %s; what they play from there is recorded as a new play (plays_list).", f, play)
+	if changed {
+		text += " The game changed since that play, so the replay there may have gone differently: tell them it may not be quite their spot (play_verify says by when it differs)."
+	}
+	return text
 }
 
 // jpegOf reads an image and gives it back as a JPEG at most maxWidth wide.

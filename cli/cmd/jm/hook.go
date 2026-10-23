@@ -34,8 +34,7 @@ func sessionStart(in io.Reader, out io.Writer) error {
 	}
 	text := fmt.Sprintf("This folder is the Journeyman game %s (%s). jm's MCP tools work on the open game: call open_game with %q first, "+
 		"and read its AGENTS.md before changing it.", gameName(dir), dir, dir)
-	if list, _ := plays.List(dir); len(list) > 0 {
-		p := list[0]
+	if p, err := plays.Find(dir, "latest"); err == nil {
 		text += fmt.Sprintf(" The person's latest play is %s (%d markers): when they talk about playing, play_show it first.", p.ID, len(p.Meta.Markers))
 	}
 	text += keepInMind(dir) + planned(dir)

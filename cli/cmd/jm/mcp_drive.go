@@ -24,7 +24,7 @@ func (s *mcpServer) driveTools() []mcpTool {
 				"gl":      boolArg("render with OpenGL, so drive_frame can show the game (needs a display)"),
 				"play":    strArg("start at a moment of a recorded play instead (plays_list): replayed exactly up to there, then yours to drive"),
 				"at":      strArg(`with play: the moment, e.g. "m2", "12.5s", a frame (default: its end)`),
-				"record":  boolArg("record this run as a play (drive_stop gives its id)"),
+				"record":  boolArg("record this run as a play (drive_stop gives its id), drawn like the person's so it has thumbnails and marker pictures"),
 				"seed":    intArg("the run's random seed (default: a new one; a play replays its own)"),
 				"visible": boolArg("show the game in a window as you drive it, so the person can watch (implies gl)"),
 			}),

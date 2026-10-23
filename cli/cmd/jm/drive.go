@@ -25,11 +25,15 @@ type gameOptions struct {
 	Seed    *uint64        // the run's randomness (default: a new seed)
 	Scene   string         // start here instead of the entry scene
 	Session map[string]any // game state set before the first frame
-	Record  bool           // keep the run as a new play
+	Record  bool           // keep the run as a new play (drawn where it can be: see draws)
 
 	// Stop kills it when it ends (its tool call was cancelled); nil: never.
 	Stop context.Context
 }
+
+// draws is whether the run renders. A recorded run is a play like the
+// person's, so it draws wherever something can: its thumbnails and marker pictures.
+func (o gameOptions) draws() bool { return o.GL || o.Visible || o.Record && canDraw() }
 
 // replyTimeout is how long a command may take (a long step, a slow capture)
 // before the game is taken to be stuck; readyTimeout how long it may take to
@@ -100,7 +104,7 @@ func startGame(root string, o gameOptions) (*drivenGame, error) {
 	}
 	if !o.Visible {
 		env = append(env, "JM_HEADLESS=1")
-		if !o.GL {
+		if !o.draws() {
 			env = append(env, "JM_RENDERER=none")
 		}
 	}
@@ -120,7 +124,7 @@ func startGame(root string, o gameOptions) (*drivenGame, error) {
 	}
 	if o.Record {
 		var recording []string
-		if g.play, recording, err = newPlay(root, plays.ReadBuild(build)); err != nil {
+		if g.play, recording, err = newPlay(root, plays.ReadBuild(build), plays.Agent); err != nil {
 			return fail(err)
 		}
 		env = append(env, recording...)

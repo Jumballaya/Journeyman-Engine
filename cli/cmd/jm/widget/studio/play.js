@@ -29,7 +29,13 @@ studioTabs.push((() => {
     }
     return true;
   };
-  const lose = () => { state.live = null; state.speedAsked = undefined; if (state.run) { state.run = ""; state.gen++; } };  // gone: the next run is found anew
+  // Gone: the next run is found anew. One that was running left a play behind.
+  const lose = () => {
+    const ended = !!state.live;
+    state.live = null; state.speedAsked = undefined;
+    if (state.run) { state.run = ""; state.gen++; }
+    if (ended && state.ctx) state.ctx.playsChanged();
+  };
 
   const { said } = kit;
 
@@ -166,16 +172,37 @@ studioTabs.push((() => {
         el("div", { style: { background: "var(--accent)", height: "8px", borderRadius: "4px", width: `${Math.max(2, 100 * x.avgMs / most)}%` } }))));
   };
 
+  // Nothing running: the way back in. The last play, to talk over with the
+  // agent or play on from (its last marker, else its end), or a fresh start.
+  const idle = (ctx) => {
+    const { kit } = ctx, { el } = kit;
+    const start = (label, primary) => el("button", { class: primary ? "primary" : null, "data-key": "start", disabled: ctx.busy,
+      onclick: () => ctx.act("Starting the game", "project_play", {}, () => "The game is open in its own window: what you play is recorded.") }, label);
+    const answer = ctx.plays(), last = answer && answer.plays && answer.plays.find((p) => p.by !== "agent");  // theirs, not an agent's run
+    if (!last) return kit.empty("The game isn't running. Play it in its own window and follow it here.", start("Play", true));
+    const marks = last.marks || [];  // "m2 0:07.0: walked into town", in order
+    const at = last.markers ? `m${last.markers}` : "";
+    const resume = el("button", { class: "primary", "data-key": "resume", disabled: ctx.busy,
+      title: "Opens the game at that moment, replayed exactly; what you play from there is recorded as a new play",
+      onclick: () => ctx.act("Opening the game there", "play_resume", { play: last.id, ...(at ? { at } : {}) },
+        () => "The game is open where you left off: what you play from there is recorded." +
+          (last.stale ? " The game changed since, so it may not be quite the same spot." : "")) },
+      at ? `Play on from marker ${last.markers}` : "Play on from the end");
+    return el("div", { class: "last-play" },
+      kit.section("Your last play",
+        el("div", { class: "meta" }, `${kit.started(last.started)} · ${kit.duration(last.seconds)}${last.stale ? " · the game changed since" : ""}`),
+        marks.length ? el("ol", { class: "marks" }, marks.map((line) => el("li", {}, line))) : el("div", { class: "meta" }, "No markers: F8 marks a moment as you play."),
+        el("div", { class: "actions" }, resume,
+          el("button", { "data-key": "review", onclick: () => ctx.reviewPlay(last) }, "Talk it over"),
+          start("Play from the start", false))));
+  };
+
   const view = (ctx) => {
     forGame(ctx);
     const { kit } = ctx, { el } = kit;
     const live = state.live;
     if (live === undefined) return kit.empty("Looking for the game…");
-    if (!live) {
-      return kit.empty("The game isn't running. Play it in its own window and follow it here.",
-        el("button", { class: "primary", "data-key": "start", disabled: ctx.busy, onclick: () => ctx.act("Starting the game", "project_play", {},
-          () => "The game is open in its own window: what you play is recorded.") }, "Play"));
-    }
+    if (!live) return idle(ctx);
     const s = live.status || {};
     ctx.share(`The person is playing ${ctx.game.name}: ${s.scene}, frame ${s.frame}${s.paused ? ", paused" : ""}.`, { live: s });
     // Beside the chat (the host's picture-in-picture): the game and its controls only, as the person talks.

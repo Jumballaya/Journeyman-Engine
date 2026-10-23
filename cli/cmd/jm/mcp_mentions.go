@@ -51,16 +51,19 @@ func (s *mcpServer) mentionTools() []mcpTool {
 }
 
 // mentionables are the game's parts in the order an empty query shows them:
-// the latest play and its markers, scenes, prefabs, scripts, entities, older plays.
+// the person's latest play and its markers, scenes, prefabs, scripts,
+// entities, then older plays and an agent's runs.
 func mentionables(root string) []mention {
 	all, _ := plays.List(root)
 	var latest, older []mention
-	for i, p := range all {
+	for _, p := range all {
 		started := strings.Replace(p.Meta.Started, "T", " ", 1)
-		ms := append([]mention{{"play", "play " + p.ID, playLink(p.ID, 0), "text/plain",
-			fmt.Sprintf("%s, %s long, %d markers", started[:min(len(started), 16)], clock(p.Meta.Seconds), len(p.Meta.Markers))}},
-			markerMentions(p)...)
-		if i == 0 {
+		about := fmt.Sprintf("%s, %s long, %d markers", started[:min(len(started), 16)], clock(p.Meta.Seconds), len(p.Meta.Markers))
+		if p.ByAgent() {
+			about = "an agent's run: " + about
+		}
+		ms := append([]mention{{"play", "play " + p.ID, playLink(p.ID, 0), "text/plain", about}}, markerMentions(p)...)
+		if latest == nil && !p.ByAgent() {
 			latest = ms
 		} else {
 			older = append(older, ms...)
