@@ -182,7 +182,7 @@ studioTabs.push((() => {
     if (!last) return kit.empty("The game isn't running. Play it in its own window and follow it here.", start("Play", true));
     const marks = last.marks || [];  // "m2 0:07.0: walked into town", in order
     const at = last.markers ? `m${last.markers}` : "";
-    const resume = el("button", { class: "primary", "data-key": "resume", disabled: ctx.busy,
+    const resume = el("button", { class: "primary", "data-key": "resume", disabled: ctx.busy || !!answer.refreshing,  // a newer play may be the last
       title: "Opens the game at that moment, replayed exactly; what you play from there is recorded as a new play",
       onclick: () => ctx.act("Opening the game there", "play_resume", { play: last.id, ...(at ? { at } : {}) },
         () => "The game is open where you left off: what you play from there is recorded." + (!last.stale ? ""

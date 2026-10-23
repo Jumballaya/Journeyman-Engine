@@ -174,11 +174,12 @@ const studioTabs = [];
                   visit: 0, nav: 0, shared: "", sharing: false, refused: false, context: null, call: null, kept: null, plays: null };
 
   // The game's recorded plays (plays_list), asked once a visit and shared by
-  // the tabs: { plays } newest first, or { error }; the last answer, or null, while asking.
+  // the tabs: { plays } newest first, or { error }; while asking, null or the
+  // last answer with refreshing: true (a default picked from it may be no longer so).
   const playsOf = (path) => {
     const s = state.plays;
     if (s && s.path === path && s.visit === state.visit) return s.answer;
-    const asked = state.plays = { path, visit: state.visit, answer: s && s.path === path ? s.answer : null };
+    const asked = state.plays = { path, visit: state.visit, answer: s && s.path === path && s.answer ? { ...s.answer, refreshing: true } : null };
     if (!host.can("callTool")) return asked.answer;
     host.callTool("plays_list", { game: path }).then((r) => {
       const out = r && r.structuredContent;

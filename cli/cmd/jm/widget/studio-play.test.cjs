@@ -161,6 +161,23 @@ test('when the game followed ends, its new play becomes the last play without le
   assert.deepEqual(plain(s.calls().find((c) => c.name === 'play_resume').arguments), { play: 'new', at: 'm3', game: '/g/pip' });
 });
 
+test('back on the tab, play on waits for the plays read again: a newer play may be the last', async () => {
+  const held = [], plays = (id, markers) => ({ structuredContent: { game: '/g/pip', plays: [{ id, started: '2026-10-22T10:10:10Z', seconds: 30, markers, marks: ['m1 0:10.0', 'm2 0:20.0'].slice(0, markers) }] } });
+  let first = plays('old', 1);
+  const s = await studio(games, { widgetState: { route: '/play' }, answers: { play_live: { isError: true, content: [{ type: 'text', text: "The game isn't running" }] },
+    plays_list: () => first || new Promise((resolve) => held.push(resolve)) } });
+  await tick(); await settle(6);
+  first = null;
+  s.tab('Variants').fire('click'); await settle(6);
+  s.tab('Play').fire('click'); await settle(6);
+  assert.equal(s.button('Play on from marker 1').attributes.disabled, '', 'not from the play read before');
+  held.forEach((resolve) => resolve(plays('new', 2)));
+  await settle(6);
+  s.button('Play on from marker 2').fire('click');
+  await settle(6);
+  assert.deepEqual(plain(s.calls().find((c) => c.name === 'play_resume').arguments), { play: 'new', at: 'm2', game: '/g/pip' });
+});
+
 test('a run that ended isn\'t followed: the next one is found', async () => {
   let run = '1';
   const s = await studio(games, { widgetState: { route: '/play' }, answers: { play_live: (args) => (args.run && args.run !== run

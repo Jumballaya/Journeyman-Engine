@@ -76,6 +76,39 @@ test("while the plays are read, compare waits; if they can't be, jm picks the mo
   assert.deepEqual(s.calls().find((c) => c.name === 'variant_compare').arguments, { a: 'floaty', game: '/g/pip' }, "jm's default: not no inputs");
 });
 
+test('back on the tab, compare waits for the plays read again: a newer play or marker is the default', async () => {
+  const held = [], plays = (list) => ({ structuredContent: { plays: list } });
+  let first = plays([{ id: 'p1', started: '2026-10-14T10:15:00Z', seconds: 20, marks: ['m1 0:03.0'] }]);
+  const s = await open_({ plays_list: () => first || new Promise((resolve) => held.push(resolve)) });
+  first = null;
+  const args = () => s.calls().filter((c) => c.name === 'variant_compare').at(-1).arguments;
+  const back = async () => { s.tab('Play').fire('click'); await settle(8); s.tab('Variants').fire('click'); await settle(8); };
+  const compare = async () => { s.find((e) => e.tag === 'form').at(-1).fire('submit'); await settle(8); };
+  for (const [list, want] of [
+    [[{ id: 'p2', started: '2026-10-15T10:15:00Z', seconds: 75, marks: ['m1 0:03.0', 'm2 0:40.0'] }], { play: 'p2', at: 'm2' }],  // a newer play
+    [[{ id: 'p2', started: '2026-10-15T10:15:00Z', seconds: 75, marks: ['m1 0:03.0', 'm2 0:40.0', 'm3 0:50.0'] }], { play: 'p2', at: 'm3' }]]) {  // a new marker
+    await back();
+    assert.equal(s.button('Compare').attributes.disabled, '', 'not at the moment the last read picked');
+    held.forEach((resolve) => resolve(plays(list)));
+    held.length = 0;
+    await settle(8);
+    await compare();
+    assert.deepEqual(args(), { a: 'floaty', ...want, game: '/g/pip' });
+  }
+  // A moment picked stands while the plays are read again.
+  const select = (label, value) => s.find((e) => e.tag === 'select' && e.attributes['aria-label'] === label)[0].fire('change', { target: { value } });
+  select('Play', 'p2');
+  select('Moment', 'm1');
+  await back();
+  assert.notEqual(s.button('Compare').attributes.disabled, '', 'a play and its marker, picked');
+  await compare();
+  assert.deepEqual(args(), { a: 'floaty', play: 'p2', at: 'm1', game: '/g/pip' });
+  held.length = 0;
+  select('Play', 'none');
+  await back();
+  assert.notEqual(s.button('Compare').attributes.disabled, '', 'no input, picked');
+});
+
 test("the agent's compare opens here: the variant, both frames at the person's marker, and Play from there", async () => {
   const theirs = { ...compared.structuredContent.compared, game: '/g/pip', a: 'floaty', play: 'p2', at: 'm2' };
   const plays = { structuredContent: { plays: [{ id: 'p2', started: '2026-10-15T10:15:00Z', seconds: 75, marks: ['m1 0:03.0', 'm2 0:40.0'] }] } };
