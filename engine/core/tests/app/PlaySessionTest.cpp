@@ -838,6 +838,31 @@ TEST(PlaySession, AResumeLandsAtItsMarker) {
   EXPECT_TRUE(given("faded"));
   EXPECT_EQ(replays("faded", fadesBack), "scenes/town.scene.json");
 
+  // Played, not driven: the person's keys stay muted till it lands.
+  {
+    EngineOptions options;
+    options.dev = DevOptions{};
+    options.dev.fixedDt = 1.0f / 60.0f;
+    options.dev.exitAfterFrames = marked + 60;
+    options.dev.playSession = play;
+    options.dev.recordDir = game.path() / "played";
+    atMarker(play, 1)(options.dev);
+    Engine engine(game.path(), ".jm.json", options);
+    engine.initialize();
+    fadesBack(engine);
+    auto muted = std::make_shared<std::vector<bool>>();
+    auto scene = std::make_shared<std::string>();
+    engine.getWorld().registerSystem<Changed>(engine, [&, muted, scene](Engine& e, int frame) {
+      if (frame > marked + 1) muted->push_back(e.devicesMuted());
+      *scene = e.getSceneManager().getCurrentScenePath();
+    });
+    engine.run();
+    ASSERT_GT(muted->size(), 2u);
+    EXPECT_TRUE(muted->front());
+    EXPECT_FALSE(muted->back());
+    EXPECT_EQ(*scene, "scenes/town.scene.json");
+  }
+
   // Sent back by a change queued on the last replayed frame (as scripts ask), applied after the handover.
   state = resume("queued", changed([&](Engine& e, int frame) {
     if (frame == marked + 1) e.getSceneManager().requestLoad("scenes/main.scene.json");
