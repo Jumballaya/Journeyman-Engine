@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
+	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -103,6 +104,18 @@ func TestSessionStartNamesTheGame(t *testing.T) {
 		!strings.Contains(raw["hookSpecificOutput"]["additionalContext"], "open_game") ||
 		!strings.Contains(raw["hookSpecificOutput"]["additionalContext"], "[canon] Neon Vow is set in 2089.") {
 		t.Errorf("said: %s", out.String())
+	}
+	// An agent's newer run isn't "the person's latest play".
+	for id, by := range map[string]string{"2000-01-01_000000": "", "2000-01-02_000000": "agent"} {
+		dir := filepath.Join(plays.Root(game), id)
+		os.MkdirAll(dir, 0o755)
+		os.WriteFile(filepath.Join(dir, "session.json"), []byte(`{"format":1,"frames":60}`), 0o644)
+		os.WriteFile(filepath.Join(dir, "jm.json"), []byte(`{"by":"`+by+`"}`), 0o644)
+	}
+	out.Reset()
+	sessionStart(strings.NewReader(`{"cwd": `+jsonOf(game)+`}`), &out)
+	if !strings.Contains(out.String(), "The person's latest play is 2000-01-01_000000") {
+		t.Errorf("with an agent's newer run: %s", out.String())
 	}
 	out.Reset()
 	sessionStart(strings.NewReader(`{"cwd": `+jsonOf(t.TempDir())+`}`), &out)

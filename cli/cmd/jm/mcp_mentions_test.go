@@ -56,6 +56,23 @@ func TestMentionsOfferTheLatestPlayFirst(t *testing.T) {
 	}
 }
 
+func TestMentionsOfferThePersonsLatestPlayNotAnAgentsRun(t *testing.T) {
+	mentionGame(t)
+	dir := filepath.Join(plays.Root("."), "2000-01-03_000000")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "session.json"), []byte(`{"format":1,"frames":60,"seconds":1,"started":"2000-01-03T00:00:00"}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "jm.json"), []byte(`{"by":"agent"}`), 0o644)
+	found := searchMentions(mentionables(here(t)), "", mentionLimit)
+	want := "play:play 2000-01-02_000000,marker:marker 1: too floaty,scene:level1,prefab:coin,script:player," +
+		"entity:Brick,entity:Player,play:play 2000-01-03_000000,play:play 2000-01-01_000000"
+	if got := mentionNames(found); got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+	if run := found[len(found)-2]; !strings.HasPrefix(run.where, "an agent's run: ") {
+		t.Errorf("the agent's run isn't said to be one: %+v", run)
+	}
+}
+
 func TestMentionsMatchNamesFirst(t *testing.T) {
 	mentionGame(t)
 	for query, want := range map[string]string{
