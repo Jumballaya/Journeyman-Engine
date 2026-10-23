@@ -107,7 +107,9 @@ studioTabs.push((() => {
         // Seen it there: now play it there.
         kind === "variant" && c.play !== "none" ? el("div", { class: "head" }, el("button", { disabled: ctx.busy,
           onclick: () => ctx.act("Starting the variant", "variant_play", { name: item.name, play: c.play, at: c.at }, () => `Variant ${item.name} is open at ${where(c)}.`) }, `Play ${item.name} from there`)) : null,
-        kind === "sandbox" ? null : (s.changes || []).length ? changesList(el, s.changes) : el("div", { class: "meta" }, "Its commits changed no files since it split from the game."));
+        kind === "sandbox" ? null : (s.changes || []).length ? changesList(el, s.changes) : el("div", { class: "meta" }, "Its commits changed no files since it split from the game."),
+        // Each frame runs its files as they are: say when uncommitted work, not the list, is part of the difference.
+        kind === "sandbox" ? null : [item.name, "the game"].map((label, i) => (s.uncommitted || [])[i] ? el("div", { class: "meta" }, `${label} has ${s.uncommitted[i]} uncommitted files: its frame shows them, the list doesn't.`) : null));
     }
     const form = el("form", { class: "head", onsubmit: (e) => { e.preventDefault(); compare(ctx, item.name, kind); } },
       el("span", { class: "meta" }, "Against the game"), playPick ? [el("span", { class: "meta" }, "with"), playPick] : null,
@@ -212,7 +214,7 @@ studioTabs.push((() => {
       .var-ab { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
       @media (max-width: 700px) { .var-ab { grid-template-columns: 1fr; } }
       .var-ab figure { margin: 0; display: grid; gap: 4px; } .var-ab img { width: 100%; border-radius: var(--radius); image-rendering: pixelated; background: #000; }
-      .var-ab figcaption { color: var(--muted); font-size: 12px; } .var-noframe { aspect-ratio: 16 / 9; display: grid; place-items: center; background: var(--raised); border-radius: var(--radius); padding: 8px; text-align: center; }
+      .var-ab figcaption { color: var(--muted); font-size: 12px; } .var-noframe { aspect-ratio: 16 / 9; display: grid; place-items: center; overflow-wrap: anywhere; background: var(--raised); border-radius: var(--radius); padding: 8px; text-align: center; }
       .var-compare, .var-changes { display: grid; gap: 6px; } .var-path { font: 12px ui-monospace, Menlo, monospace; } .var-entity { padding-left: 14px; }`));
   };
 

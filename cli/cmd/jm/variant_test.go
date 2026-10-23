@@ -56,6 +56,12 @@ func TestAVariantIsTriedComparedAndMerged(t *testing.T) {
 	if err != nil || jsonOf(cmp.Changes) != `[{"path":"scenes/main.scene.json","status":"M","entities":[{"entity":"Bat","change":"added"}]}]` || cmp.Errors[0] == "" {
 		t.Errorf("compare: %v %+v", err, cmp)
 	}
+	// The game's frame runs its uncommitted work too: the comparison says so.
+	os.WriteFile(filepath.Join(game, "draft.md"), []byte("x"), 0o644)
+	if cmp, _ := compareVariants(nil, game, "floaty", "game", "none", "60", false); cmp.Uncommitted != [2]int{0, 1} || !strings.Contains(cmp.text(), "game has 1 uncommitted files") {
+		t.Errorf("uncommitted: %v\n%s", cmp.Uncommitted, cmp.text())
+	}
+	os.Remove(filepath.Join(game, "draft.md"))
 	m, err := mergeVariant(game, "floaty")
 	if err != nil || m.Subject != "Merge variant floaty" {
 		t.Fatalf("merge: %+v %v", m, err)

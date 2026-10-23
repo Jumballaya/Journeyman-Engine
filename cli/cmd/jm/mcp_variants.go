@@ -74,7 +74,7 @@ func (s *mcpServer) variantTools() []mcpTool {
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				result := toolResult{Text: cmp.text(), Structured: map[string]any{"a": cmp.A, "b": cmp.B, "play": cmp.Play, "frame": cmp.Frame, "changes": cmp.Changes, "errors": cmp.Errors, "sandbox": cmp.Sandbox}}
+				result := toolResult{Text: cmp.text(), Structured: map[string]any{"a": cmp.A, "b": cmp.B, "play": cmp.Play, "frame": cmp.Frame, "changes": cmp.Changes, "errors": cmp.Errors, "sandbox": cmp.Sandbox, "uncommitted": cmp.Uncommitted}}
 				frames := []string{}
 				for _, f := range cmp.Frames {
 					uri := ""

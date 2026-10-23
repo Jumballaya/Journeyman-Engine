@@ -7,7 +7,7 @@ const variants = { structuredContent: { variants: [{ name: 'floaty', dir: '/g/pi
   _meta: { 'jm/thumbs': { floaty: 'data:image/jpeg;base64,f' } } };
 const sandboxes = { structuredContent: { sandboxes: [{ name: 'sb1', dir: '/g/pip/.jm/sandboxes/sb1', made: 1, expires: 1792200000, changes: { 'scenes/main.scene.json': 'M' } }] },
   _meta: { 'jm/thumbs': { sb1: 'data:image/jpeg;base64,s' } } };
-const compared = { structuredContent: { a: 'floaty', b: 'game', frame: 30, errors: ['', ''],
+const compared = { structuredContent: { a: 'floaty', b: 'game', frame: 30, errors: ['', ''], uncommitted: [0, 3],
   changes: [{ path: 'scenes/main.scene.json', status: 'M', entities: [{ entity: 'Player', change: 'changed', changed: ['VelocityComponent'] }] }] },
   _meta: { 'jm/frames': ['data:image/jpeg;base64,a', 'data:image/jpeg;base64,b'] } };
 const answers = { variants, sandboxes, variant_compare: compared };
@@ -37,6 +37,8 @@ test('compare shows both frames side by side and what differs', async () => {
   assert.deepEqual(s.find((e) => e.tag === 'img' && e.attributes.alt && e.attributes.alt.includes('frame 30')).map((e) => e.attributes.src),
     ['data:image/jpeg;base64,a', 'data:image/jpeg;base64,b']);
   assert.match(s.app.text, /changed Player: VelocityComponent/);
+  assert.match(s.app.text, /the game has 3 uncommitted files: its frame shows them/);
+  assert.doesNotMatch(s.app.text, /floaty has \d+ uncommitted/);
 });
 
 test("compare goes to the person's last marker of their latest play, and plays the variant from there", async () => {

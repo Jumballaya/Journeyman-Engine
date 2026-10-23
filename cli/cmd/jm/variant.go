@@ -293,6 +293,8 @@ type comparison struct {
 	Frames  [2]string    `json:"frames"` // image files
 	Errors  [2]string    `json:"errors"`
 	Sandbox bool         `json:"sandbox,omitempty"` // a is a sandbox: Changes are its files that differ from the game's now
+	// Each side's uncommitted files: in its frame, not in Changes (a variant's commits).
+	Uncommitted [2]int `json:"uncommitted"`
 }
 
 func (c comparison) text() string {
@@ -303,6 +305,11 @@ func (c comparison) text() string {
 		fmt.Fprintf(&b, "%s changed %d files since it split from %s.\n", c.A, len(c.Changes), c.B)
 	}
 	b.WriteString(changesText(c.Changes))
+	for i, name := range []string{c.A, c.B} {
+		if n := c.Uncommitted[i]; n > 0 {
+			fmt.Fprintf(&b, "%s has %d uncommitted files: its frame has them, the list above doesn't.\n", name, n)
+		}
+	}
 	for i, name := range []string{c.A, c.B} {
 		if c.Errors[i] != "" {
 			fmt.Fprintf(&b, "%s couldn't run: %s\n", name, c.Errors[i])
@@ -404,6 +411,9 @@ func compareVariants(c *toolCall, root, a, b, play, at string, sandbox bool) (co
 			c.Entities = sceneChanges(before(path), after(path))
 		}
 		cmp.Changes = append(cmp.Changes, c)
+	}
+	if !cmp.Sandbox {
+		cmp.Uncommitted = [2]int{len(vcs.Status(sides[0].dir)), len(vcs.Status(sides[1].dir))}
 	}
 	sort.Slice(cmp.Changes, func(i, j int) bool { return cmp.Changes[i].Path < cmp.Changes[j].Path })
 	p, frame, err := compareMoment(root, play, at)
