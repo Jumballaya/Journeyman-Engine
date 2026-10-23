@@ -306,6 +306,15 @@ test('the agent\'s at wins over a saved scrub, and a new answer at the same mome
   await settle();
   answer(); await settle(); await settle();  // the agent changed the game again and shows it again
   assert.equal(replays().length, 2);
+
+  // A newer answer while a replay runs: that replay's picture is the older build's, dropped; the new one is asked for.
+  answer(); await settle(); await settle();
+  w.fromHost({ id: replays()[1].id, result: { ...replayed({ kind: 'replay', drift: 'game' }), _meta: { 'jm/image': 'data:image/png;base64,OLDER' } } });
+  await settle(); await settle();
+  assert.equal(replays().length, 3);
+  w.fromHost({ id: replays()[2].id, result: { ...replayed({ kind: 'replay', drift: 'game' }), _meta: { 'jm/image': 'data:image/png;base64,NEWEST' } } });
+  await settle();
+  assert.equal(shown(w.app).src, 'data:image/png;base64,NEWEST');
 });
 
 test('a thumbnail fallback is not called exact, and the button stays usable', async () => {

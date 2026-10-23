@@ -153,10 +153,11 @@
   // game's listing to pick from; picked: a play_show answer the picker got, and the
   // host's answer it covers; shared: the moment last given to the model;
   // asPlayed: the frame showing what they saw, not its replay with the changed game.
-  // opened: the answer whose at was last gone to; compared: the plays whose at
+  // opened: the answer whose at was last gone to (answers counts them: a
+  // replay asked before a newer one is dropped); compared: the plays whose at
   // (a changed game's) was replayed on its own, once each until an answer asks again.
   const state = { play: null, selected: null, frames: {}, pending: null, replaying: null, notice: "", plays: null, picked: null, shared: "", asPlayed: null,
-                  opened: null, compared: new Set() };
+                  opened: null, answers: 0, compared: new Set() };
   try { if (host.widgetState && Number.isFinite(host.widgetState.selected)) state.selected = host.widgetState.selected; } catch (e) {}
   const save = () => { try { host.setWidgetState({ selected: state.selected }); } catch (e) {} };
 
@@ -395,7 +396,7 @@
     // scrub, and asks afresh: the game may have changed again since.
     const at = Number.isFinite(p.at) && p.at >= 0 && p.at < p.frames ? p.at : null;
     if (at !== null && state.opened !== p) {
-      Object.assign(state, { opened: p, selected: at, asPlayed: null });
+      Object.assign(state, { opened: p, answers: state.answers + 1, selected: at, asPlayed: null });
       delete state.frames[at];
       state.compared.delete(playKey(p));
       save();
@@ -502,6 +503,7 @@
   const onGame = (p, name, args) => host.callTool(name, p.game ? { ...args, game: p.game } : args);
   const exactFrame = async (p, frame) => {
     let shown = false;
+    const answer = state.answers;
     state.pending = "exact"; state.replaying = `${playKey(p)}#${frame}`; state.notice = "Replaying to that frame…"; render();
     try {
       const r = await onGame(p, "play_frame", { play: p.id, at: String(frame) });
@@ -512,7 +514,7 @@
       else if (!src) state.notice = "No image came back.";
       else if (source.kind === "thumbnail") {
         state.notice = `Nothing here can replay it (${source.why || "no display"}): the nearest thumbnail is frame ${source.frame ?? "?"}.`;
-      } else if (state.play === playKey(p)) {  // still this play's: another may show by now
+      } else if (state.play === playKey(p) && answer === state.answers) {  // still this play's, for this answer: another may show by now
         state.frames[frame] = { src, drift: source.drift, label: REPLAY_LABELS[source.drift] || REPLAY_LABELS.same };
         state.notice = "";
         shown = true;
