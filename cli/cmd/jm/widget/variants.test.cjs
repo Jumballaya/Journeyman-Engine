@@ -94,6 +94,40 @@ test("the agent's compare opens here: the variant, both frames at the person's m
   assert.doesNotMatch(other.app.text, /frame 30/, "another game's comparison isn't shown as this one's");
 });
 
+test("an agent's comparison keeps its moment and its other side, and is shown once", async () => {
+  const plays = { structuredContent: { plays: [{ id: 'p2', started: '2026-10-15T10:15:00Z', seconds: 75, marks: ['m1 0:03.0'] }] } };
+  let open = '/g/pip';
+  const games = () => ({ structuredContent: { open, games: [{ name: 'Pip', path: '/g/pip', opened: 1, scenes: [] }, { name: 'Bo', path: '/g/bo', opened: 1, scenes: [] }] } });
+  const theirs = { ...compared.structuredContent.compared, game: '/g/pip', a: 'floaty', b: 'heavy', play: 'p2', at: '1:05', changes: [] };
+  const s = await studio({ structuredContent: { ...games().structuredContent, compared: theirs }, _meta: compared._meta },
+    { input: { a: 'floaty', b: 'heavy', at: '1:05' }, answers: { ...answers, games, plays_list: plays,
+      open_game: (g) => { open = g.game; return { content: [{ type: 'text', text: 'ok' }] }; } } });
+  await settle(8);
+  assert.match(s.app.text, /heavy · 1:05 \(frame 30\)/, 'against heavy, at the moment it named');
+  assert.match(s.app.text, /since it split from heavy\.[\s\S]*heavy has 3 uncommitted files/);
+  assert.equal(s.find((e) => e.tag === 'select' && e.attributes['aria-label'] === 'Moment')[0].children.find((o) => o.attributes.selected !== undefined).attributes.value, '1:05');
+  s.find((e) => e.tag === 'form').at(-1).fire('submit');
+  await settle(8);
+  assert.equal(s.calls().find((c) => c.name === 'variant_compare').arguments.at, '1:05', 'compared again at that moment, not the last marker');
+  for (const game of ['/g/bo', '/g/pip']) {  // the person goes to Bo's variants and back, the page's result still the agent's
+    await s.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: `/variants?game=${game}` } });
+    await settle(12);
+  }
+  assert.deepEqual(s.calls().filter((c) => c.name === 'open_game').map((c) => c.arguments.game), ['/g/bo', '/g/pip']);
+  assert.doesNotMatch(s.app.text, /1:05 \(frame 30\)/, 'back on its game: not shown again over what came after');
+});
+
+test("an agent's comparison of a sandbox outlasts the tab's first listing; one on another game opens that game", async () => {
+  const sb = { ...compared.structuredContent.compared, game: '/g/pip', a: 'sb1', sandbox: true, play: 'p2', at: 'm1' };
+  const s = await studio({ structuredContent: { ...listing.structuredContent, compared: sb }, _meta: compared._meta }, { input: { a: 'sb1', sandbox: true } , answers });
+  await settle(12);
+  assert.match(s.app.text, /sb1 · marker 1 \(frame 30\)/);
+  const bo = await studio({ structuredContent: { ...listing.structuredContent, compared: { ...sb, game: '/g/bo' } }, _meta: compared._meta },
+    { input: { a: 'sb1', sandbox: true, game: '/g/bo' }, answers });
+  await settle(12);
+  assert.deepEqual(bo.calls().find((c) => c.name === 'open_game').arguments, { game: '/g/bo' });
+});
+
 test('merge and drop ask first; a new variant is made from its name', async () => {
   const s = await open();
   s.button('Merge').fire('click');
