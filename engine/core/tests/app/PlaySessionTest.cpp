@@ -746,7 +746,8 @@ TEST(PlaySession, AHeldFrameShowsTheLastStep) {
 namespace {
 
 // What a changed game's new scripts might do: set "bonus" on the first
-// frame; with `sendsBack`, also go back to the main scene on the fifth.
+// frame; with `sendsBack`, also fade back to the main scene from the fifth
+// (still fading at the handover).
 struct Changed : System {
   Engine& engine;
   bool sendsBack;
@@ -754,7 +755,7 @@ struct Changed : System {
   Changed(Engine& e, bool back) : engine(e), sendsBack(back) {}
   void update(World&, float) override {
     if (++frames == 1) engine.getSession().setJson("bonus", 1);
-    if (frames == 5 && sendsBack) engine.getSceneManager().loadScene("scenes/main.scene.json");
+    if (frames == 5 && sendsBack) engine.getSceneManager().transitionTo("scenes/main.scene.json", {.duration = 0.5f});
   }
 };
 
@@ -777,7 +778,7 @@ TEST(PlaySession, AResumeLandsAtItsMarker) {
   driveGame(game, "step 3\nscene scenes/town.scene.json\nset score 5\nstep 3\nmarker here\nstep 3\n", {640, 360}, play);
   std::ifstream meta(play / "session.json");
   const uint64_t marked = nlohmann::json::parse(meta)["markers"][0]["frame"].get<uint64_t>();
-  const std::string pastIt = "step " + std::to_string(marked + 2);  // the handover is before frame marked + 1
+  const std::string pastIt = "step " + std::to_string(marked + 60);  // the handover, and a fade after it
   const auto resumeAtMarker = [&](DevOptions& dev) {
     dev.playUntil = marked + 1;
     dev.afterReplay = DevOptions::AfterReplay::Live;

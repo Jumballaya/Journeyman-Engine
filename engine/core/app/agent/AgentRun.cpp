@@ -214,7 +214,8 @@ void AgentRun::frameDue() {
 
 float AgentRun::stepDue(float dt) {
   const uint64_t frame = _engine.frameCount();
-  if (_landing && frame == *_dev.playUntil) land();
+  // A scene can't change mid-transition: the landing waits for it to end.
+  if (_landing && frame >= *_dev.playUntil && !_engine.getSceneManager().isTransitioning()) land();
   if (!replayingAt(frame)) return dt;
   // What the driver gave between frames, before the frame starts as it was then.
   replay(_playback->eventsBefore(frame));
