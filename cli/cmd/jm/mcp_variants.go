@@ -56,19 +56,20 @@ func (s *mcpServer) variantTools() []mcpTool {
 			}},
 		{Name: "variant_compare", Meta: callableMeta("Comparing…", "Compared"), Title: "Compare a variant",
 			Description: "A variant beside the game (or another variant): the files a's commits changed since it split from b (a scene's per entity) and a frame of each at the same moment, " +
-				"both run headless with GL, with a recorded play's inputs if given. With sandbox: true, a is a sandbox: the files it differs in from the game now. Show the person both frames.",
+				"both run headless with GL on the person's latest play's inputs to its last marker (their moment, so the change shows where they meant). With sandbox: true, a is a sandbox: the files it differs in from the game now. Show the person both frames.",
 			Annotations: writes(), InputSchema: object(map[string]any{"a": strArg("the variant's name (or the sandbox's)"), "sandbox": boolArg("a is a sandbox, compared with the game"), "b": strArg(`another variant, or "game" (default)`),
-				"frame": intArg("the frame to show both at (default 120)"), "play": strArg("replay this recorded play's inputs in both (plays_list)")}, "a"),
+				"play": strArg(`replay this recorded play's inputs in both (default: the person's latest; "none": no input)`),
+				"at":   strArg(`the moment to show both at: of the play, a marker ("m2"), time or frame (default: its last marker, else its end); with no play, a frame (default 120)`)}, "a"),
 			onGame: func(root string, a toolArgs) toolResult {
 				b := a.str("b")
 				if b == "" {
 					b = "game"
 				}
-				cmp, err := compareVariants(a.call(), root, a.str("a"), b, int(a.num("frame", 120, 1, 1e6)), a.str("play"), a.flag("sandbox"))
+				cmp, err := compareVariants(a.call(), root, a.str("a"), b, a.str("play"), a.str("at"), a.flag("sandbox"))
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				result := toolResult{Text: cmp.text(), Structured: map[string]any{"a": cmp.A, "b": cmp.B, "frame": cmp.Frame, "changes": cmp.Changes, "errors": cmp.Errors, "sandbox": cmp.Sandbox}}
+				result := toolResult{Text: cmp.text(), Structured: map[string]any{"a": cmp.A, "b": cmp.B, "play": cmp.Play, "frame": cmp.Frame, "changes": cmp.Changes, "errors": cmp.Errors, "sandbox": cmp.Sandbox}}
 				frames := []string{}
 				for _, f := range cmp.Frames {
 					uri := ""

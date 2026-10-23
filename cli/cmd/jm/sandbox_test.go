@@ -264,7 +264,7 @@ func TestASandboxIsComparedWithTheGameAsItIsNow(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(sb.Dir, "scenes/main.scene.json"), []byte(`{"entities":[{"name":"Bat","components":{}}]}`), 0o644)
-	cmp, err := compareVariants(nil, game, "game", "game", 60, "", true)
+	cmp, err := compareVariants(nil, game, "game", "game", "none", "60", true)
 	if err != nil || !cmp.Sandbox || jsonOf(cmp.Changes) != `[{"path":"scenes/main.scene.json","status":"M","entities":[{"entity":"Bat","change":"added"}]}]` {
 		t.Errorf("compare: %v %+v", err, cmp)
 	}
@@ -280,7 +280,7 @@ func TestASandboxIsComparedWithTheGameAsItIsNow(t *testing.T) {
 	if err := dropSandbox(game, "game"); err != nil || exists(compareImage(game, "sandbox", "game")) {
 		t.Errorf("drop: %v", err)
 	}
-	if _, err := compareVariants(nil, game, "game", "other", 60, "", true); err == nil {
+	if _, err := compareVariants(nil, game, "game", "other", "none", "60", true); err == nil {
 		t.Error("a sandbox compared with a variant")
 	}
 	red, err := newSandbox(game, "red", time.Hour)
@@ -291,10 +291,10 @@ func TestASandboxIsComparedWithTheGameAsItIsNow(t *testing.T) {
 	if _, err := newVariant(game, "red", ""); err != nil { // the same name as the sandbox: each is still itself
 		t.Fatal(err)
 	}
-	if cmp, err := compareVariants(nil, game, "red", "game", 60, "", true); err != nil || len(cmp.Changes) != 1 {
+	if cmp, err := compareVariants(nil, game, "red", "game", "none", "60", true); err != nil || len(cmp.Changes) != 1 {
 		t.Errorf("the sandbox beside a same-named variant: %v %+v", err, cmp)
 	}
-	if cmp, err := compareVariants(nil, game, "red", "game", 60, "", false); err != nil || cmp.Sandbox || len(cmp.Changes) != 0 {
+	if cmp, err := compareVariants(nil, game, "red", "game", "none", "60", false); err != nil || cmp.Sandbox || len(cmp.Changes) != 0 {
 		t.Errorf("the variant beside a same-named sandbox: %v %+v", err, cmp)
 	}
 }

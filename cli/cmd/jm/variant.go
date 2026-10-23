@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/copies"
@@ -25,7 +26,7 @@ import (
 // the game without touching it. Merge one that works; drop one that doesn't.
 
 var variantFrom, variantPlay string
-var variantFrame int
+var variantAt string
 var variantSandbox bool
 
 var variantCmd = &cobra.Command{
@@ -97,7 +98,7 @@ func init() {
 		if len(args) == 2 {
 			b = args[1]
 		}
-		cmp, err := compareVariants(nil, root, args[0], b, variantFrame, variantPlay, variantSandbox)
+		cmp, err := compareVariants(nil, root, args[0], b, variantPlay, variantAt, variantSandbox)
 		if err != nil {
 			return err
 		}
@@ -107,9 +108,9 @@ func init() {
 		fmt.Fprint(w, cmp.text())
 		return nil
 	})
-	c.Flags().IntVar(&variantFrame, "frame", 120, "the frame to show both at")
+	c.Flags().StringVar(&variantAt, "at", "", "the moment to show both at: of the play, a marker (m2), time or frame (default: its last marker, else its end); with no play, a frame (default 120)")
 	c.Flags().BoolVar(&variantSandbox, "sandbox", false, "a is a sandbox (b: the game): its files that differ from the game's now")
-	c.Flags().StringVar(&variantPlay, "play", "", "replay this recorded play's inputs in both (plays list; default: none)")
+	c.Flags().StringVar(&variantPlay, "play", "", `replay this recorded play's inputs in both (default: your latest; "none": no input)`)
 	sub("merge <name>", "Commit what a variant has and merge it into the game", cobra.ExactArgs(1), func(w io.Writer, root string, args []string) error {
 		m, err := mergeVariant(root, args[0])
 		if err == nil {
@@ -287,7 +288,8 @@ func playGame(c *toolCall, dir string, flags ...string) error {
 type comparison struct {
 	A, B    string       `json:"-"`
 	Changes []fileChange `json:"changes"`
-	Frame   int          `json:"frame"`
+	Play    string       `json:"play,omitempty"` // whose inputs drove both: a recorded play's id ("": none)
+	Frame   uint64       `json:"frame"`
 	Frames  [2]string    `json:"frames"` // image files
 	Errors  [2]string    `json:"errors"`
 	Sandbox bool         `json:"sandbox,omitempty"` // a is a sandbox: Changes are its files that differ from the game's now
@@ -305,18 +307,53 @@ func (c comparison) text() string {
 		if c.Errors[i] != "" {
 			fmt.Fprintf(&b, "%s couldn't run: %s\n", name, c.Errors[i])
 		} else {
-			fmt.Fprintf(&b, "%s at frame %d: %s\n", name, c.Frame, c.Frames[i])
+			fmt.Fprintf(&b, "%s at frame %d%s: %s\n", name, c.Frame, c.inputs(), c.Frames[i])
 		}
 	}
 	return b.String()
+}
+
+func (c comparison) inputs() string {
+	if c.Play == "" {
+		return " (no input)"
+	}
+	return " of play " + c.Play
+}
+
+// compareMoment is where a comparison looks: play's inputs (the person's
+// latest by default, none with "none") up to at, a moment of it (its last
+// marker by default, else its end); with no play, at is a frame (120).
+func compareMoment(root, play, at string) (*plays.Play, uint64, error) {
+	var p *plays.Play
+	if play != "none" {
+		var err error
+		if p, err = plays.Find(root, play); err != nil && play != "" {
+			return nil, 0, err
+		}
+	}
+	if p == nil {
+		if at == "" {
+			return nil, 120, nil
+		}
+		f, err := strconv.ParseUint(at, 10, 64)
+		if err != nil || f == 0 {
+			return nil, 0, fmt.Errorf("with no play's inputs, at is a frame (1 or more), not %q", at)
+		}
+		return nil, f, nil
+	}
+	if at == "" && len(p.Meta.Markers) > 0 {
+		at = fmt.Sprintf("m%d", p.Meta.Markers[len(p.Meta.Markers)-1].N)
+	}
+	f, err := p.FrameAt(at)
+	return p, max(f, 1), err
 }
 
 // compareVariants compares variant a with b ("game": the game itself): what
 // a's commits changed since they split, uncommitted work aside, and a frame
 // of each. A sandbox a is compared with the game's files as they are now: it
 // is a copy of them, not a branch.
-func compareVariants(c *toolCall, root, a, b string, frame int, play string, sandbox bool) (comparison, error) {
-	cmp := comparison{A: a, B: b, Frame: max(frame, 1), Sandbox: sandbox}
+func compareVariants(c *toolCall, root, a, b, play, at string, sandbox bool) (comparison, error) {
+	cmp := comparison{A: a, B: b, Sandbox: sandbox}
 	if sandbox && b != "game" {
 		return cmp, fmt.Errorf("a sandbox is compared with the game, not %s", b)
 	}
@@ -369,18 +406,19 @@ func compareVariants(c *toolCall, root, a, b string, frame int, play string, san
 		cmp.Changes = append(cmp.Changes, c)
 	}
 	sort.Slice(cmp.Changes, func(i, j int) bool { return cmp.Changes[i].Path < cmp.Changes[j].Path })
-	var err error
-	var p *plays.Play
-	if play != "" {
-		if p, err = plays.Find(root, play); err != nil {
-			return cmp, err
-		}
+	p, frame, err := compareMoment(root, play, at)
+	if err != nil {
+		return cmp, err
+	}
+	cmp.Frame = frame
+	if p != nil {
+		cmp.Play = p.ID
 	}
 	if _, err := jmfolder.Make(root, "compare"); err != nil {
 		return cmp, err
 	}
 	for i, s := range sides {
-		cmp.Frames[i], err = frameOf(c, i, s.dir, uint64(cmp.Frame), p, compareImage(root, s.kind, []string{a, b}[i]))
+		cmp.Frames[i], err = frameOf(c, i, s.dir, cmp.Frame, p, compareImage(root, s.kind, []string{a, b}[i]))
 		if err != nil {
 			cmp.Errors[i] = err.Error()
 		}

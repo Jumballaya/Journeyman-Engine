@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -125,15 +126,7 @@ func TestResumingAChangedGameSaysTheSpotMayDiffer(t *testing.T) {
 // play_show at a moment opens there; a moment the play doesn't have is an error, not the first marker.
 func TestPlayShowOpensAtTheMomentAsked(t *testing.T) {
 	root := t.TempDir()
-	dir := filepath.Join(plays.Root(root), "2000-01-01_000000")
-	os.MkdirAll(dir, 0o755)
-	os.WriteFile(filepath.Join(dir, "session.json"), []byte(`{"format":1,"frames":300,"markers":[
-		{"n":1,"frame":180,"time":3,"scene":"s"},{"n":2,"frame":240,"time":4,"scene":"s"}]}`), 0o644)
-	frames := make([]byte, 300*4)
-	for i := range 300 {
-		binary.LittleEndian.PutUint32(frames[i*4:], math.Float32bits(1.0/60))
-	}
-	os.WriteFile(filepath.Join(dir, "frames.bin"), frames, 0o644)
+	recordedPlay(t, root, "2000-01-01_000000", 300, "", 180, 240)
 	r := playShow(root, toolArgs{"at": "m2"})
 	if o, ok := r.Structured.(playOverview); r.Failed || !ok || o.At == nil || *o.At != 240 {
 		t.Fatalf("at m2: %+v", r)
@@ -143,5 +136,57 @@ func TestPlayShowOpensAtTheMomentAsked(t *testing.T) {
 	}
 	if r := playShow(root, toolArgs{"at": "m9"}); !r.Failed {
 		t.Errorf("a marker the play doesn't have: %+v", r.Text)
+	}
+}
+
+// recordedPlay writes a play of frames frames at 60 a second, by (plays.Agent
+// or "" for the person), with a marker at each of markers.
+func recordedPlay(t *testing.T, root, id string, frames int, by string, markers ...uint64) {
+	t.Helper()
+	dir := filepath.Join(plays.Root(root), id)
+	os.MkdirAll(dir, 0o755)
+	var marks []string
+	for i, f := range markers {
+		marks = append(marks, fmt.Sprintf(`{"n":%d,"frame":%d,"time":%g,"scene":"s"}`, i+1, f, float64(f)/60))
+	}
+	os.WriteFile(filepath.Join(dir, "session.json"), fmt.Appendf(nil, `{"format":1,"frames":%d,"markers":[%s]}`, frames, strings.Join(marks, ",")), 0o644)
+	data := make([]byte, frames*4)
+	for i := range frames {
+		binary.LittleEndian.PutUint32(data[i*4:], math.Float32bits(1.0/60))
+	}
+	os.WriteFile(filepath.Join(dir, "frames.bin"), data, 0o644)
+	os.WriteFile(filepath.Join(dir, "jm.json"), fmt.Appendf(nil, `{"by":%q}`, by), 0o644)
+}
+
+// A comparison looks where the person meant: their latest play's last marker.
+func TestACompareLooksAtThePersonsLastMarker(t *testing.T) {
+	root := t.TempDir()
+	if p, f, err := compareMoment(root, "", ""); err != nil || p != nil || f != 120 {
+		t.Errorf("no plays: %v %d %v", p, f, err)
+	}
+	recordedPlay(t, root, "2000-01-01_000000", 300, "", 90, 200)
+	recordedPlay(t, root, "2000-01-02_000000", 300, plays.Agent, 50)
+	for _, c := range []struct {
+		play, at string
+		id       string
+		frame    uint64
+	}{
+		{"", "", "2000-01-01_000000", 200},  // the person's, not the agent's newer run; its last marker
+		{"", "m1", "2000-01-01_000000", 90}, // another moment of it
+		{"2000-01-02_000000", "", "2000-01-02_000000", 50},
+		{"none", "", "", 120},
+		{"none", "45", "", 45},
+	} {
+		p, f, err := compareMoment(root, c.play, c.at)
+		id := ""
+		if p != nil {
+			id = p.ID
+		}
+		if err != nil || id != c.id || f != c.frame {
+			t.Errorf("%q %q: %s %d %v; want %s %d", c.play, c.at, id, f, err, c.id, c.frame)
+		}
+	}
+	if _, _, err := compareMoment(root, "none", "m1"); err == nil || !strings.Contains(err.Error(), "at is a frame") {
+		t.Errorf("a marker with no play: %v", err)
 	}
 }
