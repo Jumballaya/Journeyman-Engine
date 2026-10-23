@@ -58,14 +58,31 @@ studioTabs.push((() => {
     return { plays, play: play.id, at, marks };
   };
 
+  // variant_compare's answer as a comparison: its result is the Studio's (games and all), the comparison in it.
+  const comparedOf = (r) => !r || r.isError || !r.structuredContent || !r.structuredContent.compared ? (r && r.isError ? r : { isError: true })
+    : { structuredContent: r.structuredContent.compared, _meta: r._meta };
+
+  // A comparison the agent made (variant_compare opened the Studio): shown as if
+  // compared here, with the form at its moment.
+  const adopt = (ctx) => {
+    const r = ctx.host.result, s = r && r.structuredContent && r.structuredContent.compared;
+    if (!s || r === state.adopted) return;
+    state.adopted = r;
+    const kind = s.sandbox ? "sandbox" : "variant", frame = ((r._meta && r._meta["jm/frames"]) || [])[0];
+    state.picked = { kind, name: s.a };
+    if (s.play) Object.assign(state, { play: s.play, at: s.at }); else Object.assign(state, { play: "none", at: null, frame: s.frame });
+    state.compared = { name: s.a, kind, play: s.play || "none", at: s.play ? s.at : String(s.frame), result: comparedOf(r) };
+    if (frame) (kind === "sandbox" ? state.sandboxThumbs : state.thumbs)[s.a] = frame;
+  };
+
   const compare = async (ctx, name, kind) => {
     const { play, at } = momentOf(ctx) || {}, mine = state, c = state.compared = { name, kind, play, at, result: null };
     ctx.rerender();
     const r = await ctx.call("variant_compare", { a: name, ...(kind === "sandbox" ? { sandbox: true } : {}), play, at }).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
     if (mine !== state) return;  // another game shown meanwhile
-    const frame = r && !r.isError && r._meta && (r._meta["jm/frames"] || [])[0];
+    const result = comparedOf(r), frame = !result.isError && ((result._meta && result._meta["jm/frames"]) || [])[0];
     if (frame) (kind === "sandbox" ? state.sandboxThumbs : state.thumbs)[name] = frame;  // its picture now, as the next list says
-    if (state.compared === c) c.result = r || { isError: true };
+    if (state.compared === c) c.result = result;
     ctx.rerender();
   };
 
@@ -239,6 +256,7 @@ studioTabs.push((() => {
     if (state.asking !== String(ctx.visit)) { state.asking = String(ctx.visit); load(ctx); }
     const route = ctx.params.variant || ctx.params.sandbox ? ctx.params : null;  // /variants?variant=floaty
     if (route && state.routed !== route) { state.routed = route; state.picked = ctx.params.variant ? { kind: "variant", name: ctx.params.variant } : { kind: "sandbox", name: ctx.params.sandbox }; }
+    adopt(ctx);
     if (!state.variants && !state.failed.variants) return kit.empty("Reading the variants…");  // both lists come back together
     const variants = state.variants || [];
     const failing = (key) => state.failed[key] ? el("div", { class: "meta" }, `${state.failed[key]}${state[key] ? " (this list may be out of date)" : ""} `,

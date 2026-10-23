@@ -45,7 +45,7 @@ func (s *mcpServer) variantTools() []mcpTool {
 			Description: "Open a variant in its own window for the person to play (built first if it needs it). " +
 				"With at, it opens at that moment of one of their plays of the game (fast-forwarded there with the variant), " +
 				"so they try the variant from the spot they marked: \"play the variant from your marker 2\".",
-			Annotations: writes(), InputSchema: object(map[string]any{"name": nameArg, "play": playRefArg, "at": strArg(moment + `"start" or "end"; the play's (default: play it from the start)`)}, "name"),
+			Annotations: writes(), InputSchema: object(map[string]any{"name": nameArg, "play": playRefArg, "at": strArg(momentArgText + `"start" or "end"; the play's (default: play it from the start)`)}, "name"),
 			onGame: func(root string, a toolArgs) toolResult {
 				v, err := findVariant(root, a.str("name"))
 				if err == nil && a.str("at") != "" {
@@ -59,9 +59,10 @@ func (s *mcpServer) variantTools() []mcpTool {
 				}
 				return textResult("Variant "+v.Name+" is open for the person to play.", false)
 			}},
-		{Name: "variant_compare", Meta: callableMeta("Comparing…", "Compared"), Title: "Compare a variant",
+		{Name: "variant_compare", Meta: studio.toolMeta("Comparing…", "Compared"), Title: "Compare a variant",
 			Description: "A variant beside the game (or another variant): the files a's commits changed since it split from b (a scene's per entity) and a frame of each at the same moment, " +
-				"both run headless with GL on the person's latest play's inputs to its last marker (their moment, so the change shows where they meant). With sandbox: true, a is a sandbox: the files it differs in from the game now. Show the person both frames.",
+				"both run headless with GL on the person's latest play's inputs to its last marker (their moment, so the change shows where they meant). With sandbox: true, a is a sandbox: the files it differs in from the game now. " +
+				"It shows the person both frames in Journeyman Studio, with a button to play the variant from that moment.",
 			Annotations: writes(), InputSchema: object(map[string]any{"a": strArg("the variant's name (or the sandbox's)"), "sandbox": boolArg("a is a sandbox, compared with the game"), "b": strArg(`another variant, or "game" (default)`),
 				"play": strArg(`replay this recorded play's inputs in both (default: the person's latest; "none": no input)`),
 				"at":   strArg(`the moment to show both at: of the play, a marker ("m2"), time or frame (default: its last marker, else its end); with no play, a frame (default 120)`)}, "a"),
@@ -74,7 +75,11 @@ func (s *mcpServer) variantTools() []mcpTool {
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				result := toolResult{Text: cmp.text(), Structured: map[string]any{"a": cmp.A, "b": cmp.B, "play": cmp.Play, "frame": cmp.Frame, "changes": cmp.Changes, "errors": cmp.Errors, "sandbox": cmp.Sandbox, "uncommitted": cmp.Uncommitted}}
+				// The Studio around it (its Variants tab shows the comparison), and the comparison itself.
+				result := s.listGames(gamesHome())
+				result.Text = cmp.text()
+				compared := map[string]any{"a": cmp.A, "b": cmp.B, "play": cmp.Play, "at": cmp.At, "frame": cmp.Frame, "changes": cmp.Changes, "errors": cmp.Errors, "sandbox": cmp.Sandbox, "uncommitted": cmp.Uncommitted}
+				result.Structured.(map[string]any)["compared"] = compared
 				frames := []string{}
 				for _, f := range cmp.Frames {
 					uri := ""
@@ -86,7 +91,7 @@ func (s *mcpServer) variantTools() []mcpTool {
 					}
 					frames = append(frames, uri)
 				}
-				result.Meta = map[string]any{"jm/frames": frames}
+				result.Meta["jm/frames"] = frames
 				return result
 			}},
 		{Name: "variant_merge", Meta: callableMeta("Merging…", "Merged"), Title: "Merge a variant",

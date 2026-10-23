@@ -302,8 +302,9 @@ const studioTabs = [];
     const kept = state.kept || {};
     const link = host.deepLink, input = host.input;
     if (link && link !== state.seen.link) { state.seen.link = link; follow(link); return true; }
-    // A call's page: studio's route, or file_view's file (a host's, or a path).
+    // A call's page: studio's route, variant_compare's comparison, or file_view's file (a host's, or a path).
     const page = !input ? null : typeof input.route === "string" ? input.route
+      : typeof input.a === "string" ? `/variants?${input.sandbox ? "sandbox" : "variant"}=${encodeURIComponent(input.a)}`  // variant_compare's
       : input.file || input.path ? "/file" + (typeof input.path === "string" ? "?path=" + encodeURIComponent(input.path) : "") : null;
     if (page && input !== state.call) {  // each call is a new input object; reopened, the first is the old call's
       const key = JSON.stringify(input), again = state.call === null && kept.input === key;

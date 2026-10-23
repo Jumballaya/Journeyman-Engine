@@ -139,7 +139,7 @@ test('an upload finished after another game opened still goes to the game it was
 
 test('a merge confirmed in the modal clears the comparison shown', async () => {
   const variants = { structuredContent: { variants: [{ name: 'floaty', dir: '/d', branch: 'variant/floaty', ahead: 1, behind: 0, changed: 0, subject: 'x' }] } };
-  const compared = { structuredContent: { a: 'floaty', b: 'game', frame: 120, errors: ['', ''], changes: [] }, _meta: { 'jm/frames': ['data:image/jpeg;base64,a', 'data:image/jpeg;base64,b'] } };
+  const compared = { structuredContent: { compared: { a: 'floaty', b: 'game', frame: 120, errors: ['', ''], changes: [] } }, _meta: { 'jm/frames': ['data:image/jpeg;base64,a', 'data:image/jpeg;base64,b'] } };
   const s = await studio(listing, { answers: { ...answers, variants, sandboxes: { structuredContent: { sandboxes: [] } }, variant_compare: compared },
     openai: { requestModal: async () => {}, requestClose() {} } });
   s.tab('Variants').fire('click');
