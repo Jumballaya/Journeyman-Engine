@@ -410,7 +410,7 @@ func TestTheAgentsCompareShowsInTheStudio(t *testing.T) {
 	r := tool.run(toolArgs{"game": game, "a": "floaty", "play": "none", "at": "60"})
 	sc, _ := r.Structured.(map[string]any)
 	compared, _ := sc["compared"].(map[string]any)
-	if r.Failed || sc["games"] == nil || compared == nil || compared["a"] != "floaty" || compared["at"] != "60" || r.Meta["jm/frames"] == nil {
+	if r.Failed || sc["games"] == nil || compared == nil || compared["a"] != "floaty" || compared["game"] != evalOrSelf(game) || compared["at"] != "60" || r.Meta["jm/frames"] == nil {
 		t.Errorf("the Studio's answer with the comparison: %+v", r)
 	}
 }

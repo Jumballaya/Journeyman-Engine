@@ -77,7 +77,7 @@ test("while the plays are read, compare waits; if they can't be, jm picks the mo
 });
 
 test("the agent's compare opens here: the variant, both frames at the person's marker, and Play from there", async () => {
-  const theirs = { ...compared.structuredContent.compared, a: 'floaty', play: 'p2', at: 'm2' };
+  const theirs = { ...compared.structuredContent.compared, game: '/g/pip', a: 'floaty', play: 'p2', at: 'm2' };
   const plays = { structuredContent: { plays: [{ id: 'p2', started: '2026-10-15T10:15:00Z', seconds: 75, marks: ['m1 0:03.0', 'm2 0:40.0'] }] } };
   const s = await studio({ structuredContent: { ...listing.structuredContent, compared: theirs }, _meta: compared._meta },
     { input: { a: 'floaty', at: 'm2' }, answers: { ...answers, plays_list: plays } });
@@ -88,6 +88,10 @@ test("the agent's compare opens here: the variant, both frames at the person's m
   s.button('Play floaty from there').fire('click');
   await settle(8);
   assert.deepEqual(s.calls().find((c) => c.name === 'variant_play').arguments, { name: 'floaty', play: 'p2', at: '30', game: '/g/pip' });
+  const other = await studio({ structuredContent: { ...listing.structuredContent, compared: { ...theirs, game: '/g/other' } }, _meta: compared._meta },
+    { input: { a: 'floaty', at: 'm2' }, answers: { ...answers, plays_list: plays } });
+  await settle(8);
+  assert.doesNotMatch(other.app.text, /frame 30/, "another game's comparison isn't shown as this one's");
 });
 
 test('merge and drop ask first; a new variant is made from its name', async () => {

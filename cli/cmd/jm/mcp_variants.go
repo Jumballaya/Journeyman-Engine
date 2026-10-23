@@ -78,7 +78,7 @@ func (s *mcpServer) variantTools() []mcpTool {
 				// The Studio around it (its Variants tab shows the comparison), and the comparison itself.
 				result := s.listGames(gamesHome())
 				result.Text = cmp.text()
-				compared := map[string]any{"a": cmp.A, "b": cmp.B, "play": cmp.Play, "at": cmp.At, "frame": cmp.Frame, "changes": cmp.Changes, "errors": cmp.Errors, "sandbox": cmp.Sandbox, "uncommitted": cmp.Uncommitted}
+				compared := map[string]any{"game": root, "a": cmp.A, "b": cmp.B, "play": cmp.Play, "at": cmp.At, "frame": cmp.Frame, "changes": cmp.Changes, "errors": cmp.Errors, "sandbox": cmp.Sandbox, "uncommitted": cmp.Uncommitted}
 				result.Structured.(map[string]any)["compared"] = compared
 				frames := []string{}
 				for _, f := range cmp.Frames {

@@ -66,7 +66,7 @@ studioTabs.push((() => {
   // compared here, with the form at its moment.
   const adopt = (ctx) => {
     const r = ctx.host.result, s = r && r.structuredContent && r.structuredContent.compared;
-    if (!s || r === state.adopted) return;
+    if (!s || r === state.adopted || s.game !== state.game) return;  // another game's: not this tab's to show
     state.adopted = r;
     const kind = s.sandbox ? "sandbox" : "variant", frame = ((r._meta && r._meta["jm/frames"]) || [])[0];
     state.picked = { kind, name: s.a };
