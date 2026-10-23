@@ -315,11 +315,12 @@ void AgentRun::describeState(nlohmann::json& state) {
 }
 
 bool AgentRun::devicesMuted() const {
-  return _dev.drive || !_dev.inputReplay.empty() || _held || replayingAt(_engine.frameCount());
+  return _dev.drive || !_dev.inputReplay.empty() || _held || replayingAt(_engine.frameCount()) || _landing;
 }
 
 bool AgentRun::fastForwarding() const {
-  return _dev.afterReplay == DevOptions::AfterReplay::Live && replayingAt(_engine.frameCount());
+  // Till the landing too: the person takes over at the marker, not on the way there.
+  return _dev.afterReplay == DevOptions::AfterReplay::Live && (replayingAt(_engine.frameCount()) || _landing);
 }
 
 std::optional<bool> AgentRun::windowFocused() const {

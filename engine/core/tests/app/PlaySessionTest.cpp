@@ -823,7 +823,16 @@ TEST(PlaySession, AResumeLandsAtItsMarker) {
     bonus(e, frame);
     if (frame == 5) e.getSceneManager().transitionTo("scenes/main.scene.json", {.duration = 0.5f});
   });
-  state = resume("faded", fadesBack);
+  auto handedOver = std::make_shared<std::vector<bool>>();  // per frame from the handover: the person's yet?
+  state = resume("faded", [&](Engine& e) {
+    fadesBack(e);
+    e.getWorld().registerSystem<Changed>(e, [&, handedOver](Engine& e, int frame) {
+      if (frame > marked + 1) handedOver->push_back(!e.fastForwarding());  // (driven: always muted)
+    });
+  });
+  ASSERT_GT(handedOver->size(), 2u);
+  EXPECT_FALSE(handedOver->front());  // fading: not theirs till it lands
+  EXPECT_TRUE(handedOver->back());
   EXPECT_EQ(state["scene"], "scenes/town.scene.json");
   EXPECT_EQ(state["session"], (nlohmann::json{{"score", 5}}));  // the values then
   EXPECT_TRUE(given("faded"));

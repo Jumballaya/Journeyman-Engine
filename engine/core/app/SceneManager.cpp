@@ -39,6 +39,7 @@ void SceneManager::changeScene(const std::filesystem::path& scenePath, std::opti
   const AssetHandle from = _currentSceneHandle;
   const std::string fromPath = _currentScenePath;
   if (hasScene()) unload();
+  _groupRequests.clear();  // group changes belong to the scene that asked
 
   std::vector<EntityId> created;
   try {
@@ -81,7 +82,7 @@ void SceneManager::tick(float dt) {
     if (!_transition) request.swap(_request);
     groups.swap(_groupRequests);
   }
-  // Group changes belong to the scene that asked; a scene change drops them.
+  // A scene change drops the groups asked for (changeScene).
   if (request) {
     try {
       changeScene(request->path, std::move(request->transition));
