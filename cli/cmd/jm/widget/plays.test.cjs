@@ -232,7 +232,7 @@ test('a marker replayed with a changed game shows what they saw and what it does
     const callTool = async () => replayed({ kind: 'replay', drift });
     const { app } = widget(marked, meta, 60, null, { callTool });
     assert.equal(viewerSwitch(app), undefined, 'nothing to compare before the replay');
-    button(app, 'Exact frame').listeners.click();
+    button(app, 'See it now').listeners.click();
     await settle();
     assert.equal(!!viewerSwitch(app), compared, drift);
     if (!compared) continue;
@@ -402,7 +402,7 @@ test('the model is told which picture of a changed game it sees, as the person s
   await settle();
   const context = () => plain(w.sent.filter((m) => m.method === 'ui/update-model-context').at(-1).params);
   assert.equal(context().structuredContent.picture, undefined);
-  button(w.app, 'Exact frame').listeners.click();
+  button(w.app, 'See it now').listeners.click();
   await settle();
   const call = w.sent.filter((m) => m.method === 'tools/call' && m.params.name === 'play_frame').at(-1);
   w.fromHost({ id: call.id, result: { content: [], _meta: { 'jm/image': 'data:image/png;base64,NOW' },

@@ -104,7 +104,8 @@ func (s *mcpServer) playTools() []mcpTool {
 		{Name: "play_verify", Title: "Does a play still replay the same?",
 			Description: "After you change the game: replays the person's play (latest by default) with the current build and says whether it goes the same way, " +
 				"and if not, by when and how its end differs (session values). Run it after build to check a change against how they actually played, " +
-				"and tell the person both: after a change their play is expected to go differently; how it ends says what the change did.",
+				"and tell the person both: after a change their play is expected to go differently; how it ends says what the change did. " +
+				"To let them see it, play_show the play: at a marker, its \"See it now\" replays the moment with the change, beside what they saw.",
 			InputSchema: object(map[string]any{"play": playArg}), Annotations: readOnly(), Meta: callableMeta("", ""),
 			onGame: func(root string, a toolArgs) toolResult {
 				p, b, err := openPlay(root, a.str("play"))

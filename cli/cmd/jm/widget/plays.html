@@ -257,7 +257,8 @@
       $("span", { class: "meta" }, short(m.scene)),
       m.marker ? $("span", { class: "note" }, `marker ${m.marker.n}${m.marker.note ? ": " + m.marker.note : ""}`) : null,
       $("span", { class: "spacer" }),
-      host.can("callTool") ? $("button", { disabled: busy || !!state.frames[m.frame], onclick: () => exactFrame(p, m.frame) }, "Exact frame") : null,
+      host.can("callTool") ? $("button", { disabled: busy || !!state.frames[m.frame], onclick: () => exactFrame(p, m.frame),
+        title: p.stale ? "Replay this moment with the game as it is now, beside what they saw" : null }, p.stale ? "See it now" : "Exact frame") : null,
       host.can("message") ? $("button", { disabled: busy, onclick: () => ask(p, m, "active") }, "Ask about this") : null,
       host.can("openai/message") ? $("button", { disabled: busy, title: "A new chat about this moment (a bug, say)", onclick: () => ask(p, m, "new") }, "New chat") : null,
       host.can("callTool") ? $("button", { class: "primary", disabled: busy, onclick: () => resume(p, m.frame) }, "Play from here") : null);
